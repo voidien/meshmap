@@ -2,17 +2,14 @@ services:
   meshmap:
     build: .
     image: meshmap:v0
-    ports:
-      - "9091:8080"   # host port 9091 -> container 8080; put a TLS-terminating proxy (Caddy, Traefik, Cloudflare) in front for public hosting
+    container_name: meshmap
     restart: unless-stopped
-    networks:
-      default:
-        # stable name other stacks (e.g. deploy/tailscale) use to reach the app
-        aliases: [meshmap-web]
+    ports:
+      - "${MESHMAP_PORT:-9091}:8080"   # host port -> nginx in the container
     read_only: true
     tmpfs:
       - /tmp
-
-networks:
-  default:
-    name: meshmap-net   # fixed name so deploy/tailscale/docker-compose.yml can join it
+    deploy:
+      resources:
+        limits:
+          memory: 128M

@@ -53,7 +53,8 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
 ## Docker
 
 ```bash
-docker compose up --build        # http://localhost:9091
+cp .env.example .env              # optional: change MESHMAP_PORT (default 9091)
+docker compose up --build -d     # http://localhost:9091
 # or
 docker build -t meshmap:v0 . && docker run --rm -p 9091:8080 meshmap:v0
 ```
@@ -63,37 +64,14 @@ Multi-stage build: Rust tests + WASM build, then web tests + production build, t
 For public hosting put TLS in front (Caddy, Traefik, a cloud load balancer) and replace the OSM basemap first.
 Any static host (Netlify, S3 + CDN, GitHub Pages) also works with just the contents of `web/dist`.
 
-### Tailscale (optional, separate compose project)
+### HTTPS through Tailscale (optional)
 
-`deploy/tailscale/` is its own compose project that publishes meshmap on your tailnet over HTTPS, with no ports opened.
-It joins meshmap's Docker network (`meshmap-net`), so start meshmap first.
-
-```bash
-docker compose up --build -d              # in the repo root: meshmap
-cd deploy/tailscale
-cp .env.example .env                      # set TS_AUTHKEY (and optionally TS_HOSTNAME, TS_MODE)
-docker compose up -d
-docker compose logs -f                    # the HTTPS cert takes ~30-60 s on first start
-```
-
-Then open `https://<TS_HOSTNAME>.<your-tailnet>.ts.net`. The container runs in userspace mode (no `NET_ADMIN`/TUN) and keeps its
-identity in the `tailscale-state` volume. The local port 9091 keeps working; drop the `ports:` mapping in the root
-`docker-compose.yml` for tailnet-only access.
-
-- Prerequisites: HTTPS certificates enabled in the Tailscale admin console (DNS page).
-- `TS_MODE=serve` (default): reachable only from your tailnet.
-- `TS_MODE=funnel`: reachable from the **public internet** via Tailscale Funnel (needs the `funnel` node attribute in your
-  tailnet policy). meshmap has no login, so anyone with the URL can use it; prefer `serve`.
-
-Stop them independently: `docker compose down` in `deploy/tailscale`, then in the repo root (stop the sidecar first,
-otherwise the network is still in use).
-
-Troubleshooting (run in `deploy/tailscale`):
+Same approach as the Loom project: Tailscale runs on the host and `tailscale serve` fronts the published port.
 
 ```bash
-docker compose exec tailscale tailscale serve status                      # https://<host>.ts.net -> http://meshmap-web:8080
-docker compose exec tailscale wget -qO- http://meshmap-web:8080/healthz   # should print "ok"
+tailscale serve --bg 9091          # use your MESHMAP_PORT if you changed it
 ```
 
-Upgrading from the earlier profile-based setup: run `docker compose down --remove-orphans` in the repo root and
-`docker volume rm meshmap_tailscale-state`, delete the old `meshmap` machine in the Tailscale admin console, then follow the steps above.
+Then open `https://<machine>.<tailnet>.ts.net` from any device on your tailnet (HTTPS certificates must be enabled in the
+Tailscale admin console, DNS page). `tailscale serve status` shows what is published and `tailscale serve reset` removes it.
+meshmap has no login, so keep it on `serve` (tailnet only) rather than Funnel (public internet).
