@@ -19,4 +19,4 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G           # coverage jobs hold terrain tiles and result rasters in memory

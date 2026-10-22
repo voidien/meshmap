@@ -167,7 +167,7 @@ pub(crate) fn radial_margins(
 }
 
 pub fn compute_node(p: &NodeParams, terrain: &dyn Elevation, progress: &Progress) -> Result<Raster, CoverageError> {
-    if !(p.radius_m > 0.0) || !(p.resolution_m > 0.0) || p.radius_m / p.resolution_m < 4.0 {
+    if p.radius_m.is_nan() || p.resolution_m.is_nan() || p.radius_m <= 0.0 || p.resolution_m <= 0.0 || p.radius_m / p.resolution_m < 4.0 {
         return Err(CoverageError::Model("radius must be at least a few cells wide".into()));
     }
     let cos_lat = p.lat.to_radians().cos().max(0.05);

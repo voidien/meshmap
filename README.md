@@ -3,7 +3,7 @@
 Planner for large LoRa mesh networks (Meshtastic / MeshCore style) in the US, 915 MHz.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-v5 delivery ladder.
 
-**Current release: v2** - a web app with accounts, server-side projects and sharing. Estimates only: bare-earth terrain from
+**Current release: v3** - accounts, shared projects, and **coverage heatmaps** computed on the server as background jobs. Estimates only: bare-earth terrain from
 public ~30 m tiles and the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see
 [`docs/validation.md`](docs/validation.md)). No clutter (trees, buildings) yet.
 
@@ -14,6 +14,7 @@ crates/meshmap-core   pure RF/terrain math (geodesy, FSPL, Fresnel, curvature, l
 crates/meshmap-itm    Longley-Rice / ITM point-to-point model (port of the NTIA reference)
 tools/itm_reference   builds the NTIA C++ reference and regenerates the validation vectors
 crates/meshmap-wasm   wasm-bindgen wrapper
+crates/meshmap-coverage coverage heatmaps: radial Longley-Rice predictions rasterized for the web map
 crates/meshmap-server accounts, passkeys, project storage (SQLite) and the static web app (Axum)
 web/                  React + TypeScript + MapLibre app
 scripts/build-wasm.sh builds the WASM module into web/src/wasm/pkg
@@ -65,6 +66,28 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
   `docker compose exec meshmap /app/meshmap-server backup /app/data/backups/meshmap-$(date +%F).db`
   (lands in `./data/backups/`), and copy that file somewhere safe.
 
+## Coverage heatmaps (background jobs)
+
+- **Coverage heatmaps** panel: *Predict selected node* draws signal margin around one node; *Predict whole network* combines all
+  nodes into the best margin per spot and a second view showing how many nodes reach each spot ("Nodes covering").
+  Margin is the predicted signal at a client device minus the receiver sensitivity of the node's preset, so anything drawn
+  is a place where a client of that height and gain should reach the node (nothing is drawn below 0 dB).
+  The client's height is each node's *Client height* (MeshCore's antenna B height); client gain/cable loss, the radius
+  (1-100 km) and the resolution (60-500 m) are in *Project settings*.
+- Jobs run on the **server** in the background (one at a time; each uses all CPU cores, roughly 1 s for a 30 km node at 100 m).
+  The panel shows progress ("downloading terrain 12/42 tiles", "Node 3/9: predicting coverage"), a **Cancel** button, and
+  survives closing the tab: the job keeps running and the result is there when you come back.
+- **Cached and incremental:** results are stored under a hash of everything that affects them. Asking again for the same inputs
+  is instant (in any project, by anyone); a network prediction after moving one node recomputes only that node. A layer whose
+  nodes or settings changed is marked *out of date* with a *Recompute* button. Layers are remembered per project and
+  restored from the cache on return.
+- The first prediction in an area downloads the public terrain tiles from the server (cached in `data/terrain/`), so the
+  server needs outbound internet; set `MESHMAP_TERRAIN_URL=file:///.../{z}/{x}/{y}.png` to use your own tiles offline.
+  Results live in `data/cache/` and are trimmed to `MESHMAP_CACHE_MB` (default 2000).
+- The terrain is the same ~30 m bare-earth data as the links use, and the same Longley-Rice model, but a heatmap samples the
+  ground every 100 m by default (a link profile every 40 m), so a cell can differ a little from the same spot analysed as a link.
+  As everywhere: estimates, no trees or buildings yet.
+
 ## What to verify
 
 1. **Add nodes**: "+ Add node", click the map; edit height, TX power, gain, cable loss, preset, status, notes.
@@ -82,12 +105,14 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
    differences (nodes matched by MeshCore letter, else name).
 8. **ITM**: click a link: the table shows the Longley-Rice loss and regime, the knife-edge cross-check and the model used. Project settings
    has the ITM environment (climate, ground, refractivity, polarization) and reliability / confidence; 90 / 90 is a design margin.
-9. **Node management**: the Nodes panel lists every node (status dot, MeshCore letter, link count, best margin) with search and
+9. **Heatmaps**: open a project with a few nodes, *Predict whole network*, watch the progress, then switch between *Best signal margin* and
+   *Nodes covering*; move a node and see the layer marked out of date; *Recompute* only redoes that node.
+10. **Node management**: the Nodes panel lists every node (status dot, MeshCore letter, link count, best margin) with search and
    sorting; click a row to select and zoom to it, tick several for bulk edits (height, client height, TX power, gain,
    cable loss, preset, status; only filled-in fields change) or bulk delete, or add a node by typing coordinates.
    A selected node shows its connections (click one to open its terrain profile), plus Zoom to / Duplicate / Delete.
    The "Names" button toggles name labels on the map.
-10. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+11. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

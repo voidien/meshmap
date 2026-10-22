@@ -14,6 +14,9 @@ pub const DEFAULT_URL: &str = "https://s3.amazonaws.com/elevation-tiles-prod/ter
 
 /// Decoded elevations of one 256x256 tile, row-major, metres.
 pub type TileData = Arc<Vec<f32>>;
+type TileKey = (u32, u32, u32);
+/// Recently used decoded tiles with their insertion order.
+type TileCache = (HashMap<TileKey, TileData>, Vec<TileKey>);
 
 pub trait TileSource: Send + Sync {
     fn tile(&self, z: u32, x: u32, y: u32) -> Result<TileData, String>;
@@ -43,7 +46,7 @@ pub struct HttpTiles {
     template: String,
     cache_dir: PathBuf,
     agent: ureq::Agent,
-    mem: Mutex<(HashMap<(u32, u32, u32), TileData>, Vec<(u32, u32, u32)>)>,
+    mem: Mutex<TileCache>,
 }
 
 const MEM_TILES: usize = 400;

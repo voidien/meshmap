@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectSync } from "./useProjectSync";
+import { useCoverage } from "./useCoverage";
+import { CoveragePanel } from "./components/CoveragePanel";
 import type { AuthContext } from "./auth/AuthGate";
 import { AccountMenu } from "./components/AccountMenu";
 import { AdminPanel } from "./components/AdminPanel";
@@ -99,6 +101,20 @@ export function App({ auth }: { auth: AuthContext }) {
   const ghostLinks = useMemo(() => (other ? otherAllLinks.filter((l) => l.class !== "none") : []), [other, otherAllLinks]);
 
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
+
+  const cov = useCoverage(project.id, project.nodes, project.settings, dataReady);
+  const coverageImages = useMemo(
+    () =>
+      cov.layers
+        .filter((l) => l.visible && l.result)
+        .map((l) => ({
+          id: l.key.replace(":", "-"),
+          url: l.mode === "count" && l.result!.images.count ? l.result!.images.count : l.result!.images.margin,
+          bounds: l.result!.bounds,
+          opacity: l.opacity,
+        })),
+    [cov.layers],
+  );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
   const selLink = selectedLink ? links.find((l) => l.key === selectedLink) ?? null : null;
   const counts = useMemo(() => {
@@ -344,7 +360,7 @@ export function App({ auth }: { auth: AuthContext }) {
       <aside className="side">
         <header>
           <h1>meshmap</h1>
-          <span className="ver">v2 · estimates only</span>
+          <span className="ver">v3 · estimates only</span>
         </header>
         <div className="userbar">
           <span className="who" title={auth.user.username}>
@@ -429,6 +445,18 @@ export function App({ auth }: { auth: AuthContext }) {
           busy={otherStatus.busy}
           onChange={setCompareId}
         />
+        <CoveragePanel
+          layers={cov.layers}
+          staleKeys={cov.staleKeys}
+          selectedNode={sel}
+          nodeCount={project.nodes.length}
+          radiusKm={project.settings.coverageRadiusKm}
+          resolutionM={project.settings.coverageResolutionM}
+          onRun={(kind, nodeId) => void cov.run(kind, nodeId)}
+          onCancel={(k) => void cov.cancel(k)}
+          onRemove={cov.remove}
+          onChange={cov.patch}
+        />
         <fieldset className="plain" disabled={readOnly}>
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
         </fieldset>
@@ -484,6 +512,7 @@ export function App({ auth }: { auth: AuthContext }) {
           selectedNodeId={selectedNode}
           checkedIds={checked}
           showLabels={showLabels}
+          coverageImages={coverageImages}
           readOnly={readOnly}
           focus={focus}
           selectedLinkKey={selectedLink}

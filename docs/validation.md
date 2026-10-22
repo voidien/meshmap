@@ -49,6 +49,22 @@ tools/itm_reference/build_and_run.sh /tmp/itm 1000            # regenerates gold
 Unit and property tests cover distance/bearing, free-space loss, Fresnel radius, earth-curvature bulge, a known ridge profile,
 the margin arithmetic, the headline-model selection and its fallbacks (see `cargo test -p meshmap-core`).
 
+## Coverage heatmaps: `crates/meshmap-coverage`
+
+- **A heatmap cell is a link analysis.** For every distance along a radial the engine runs ITM on exactly the terrain profile from
+  the node out to that distance. A unit test checks the per-distance values against a direct `p2p_cr` call on the same profile
+  (equal to within 0.001 dB), and that very short distances fall back to free space.
+- Behavioural tests: flat ground gives a round footprint that fades with distance and is direction-independent (within 1.5 dB);
+  a 300 m ridge east of the node leaves the ground behind it at least 10 dB weaker than the same distance on the open side;
+  cancelling stops a job; progress reaches 1; combining nodes counts overlaps and takes the best margin; oversized requests are refused.
+- Server tests (`crates/meshmap-server/tests/jobs.rs`, synthetic terrain, no network): job lifecycle, monotonic progress, cache
+  hits that never touch the terrain source, results shared across projects while images stay private to people with a job for
+  them, per-node reuse inside network jobs, cancellation of queued and running jobs, failure messages when terrain cannot be
+  downloaded, recovery of jobs interrupted by a restart, permission checks, and trimming of the cache.
+- **Not validated:** the raster is interpolated between radials and distances (about 1 cell of smoothing), so a single cell can
+  differ from a separately analysed link by a few dB where terrain changes abruptly; heatmaps have not been compared with
+  SPLAT! or Radio Mobile coverage plots, nor with measurements.
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.

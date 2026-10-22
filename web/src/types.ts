@@ -37,6 +37,12 @@ export interface Settings {
   /** Percent of situations / time the predicted loss is not exceeded (50 = median). */
   confidencePct: number;
   reliabilityPct: number;
+  /** Coverage heatmaps (server jobs). */
+  coverageRadiusKm: number;
+  coverageResolutionM: number;
+  /** The client device a heatmap is predicted for (its height comes from each node's "client height"). */
+  clientGainDbi: number;
+  clientCableLossDb: number;
 }
 
 export type ProjectRole = "owner" | "editor" | "viewer";
@@ -122,4 +128,8 @@ export const DEFAULT_SETTINGS: Settings = {
   verticalPolarization: true,
   confidencePct: 50,
   reliabilityPct: 50,
+  coverageRadiusKm: 25,
+  coverageResolutionM: 100,
+  clientGainDbi: 0,
+  clientCableLossDb: 0,
 };

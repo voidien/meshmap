@@ -22,6 +22,8 @@ interface Props {
   /** Nodes ticked in the Nodes list (bulk actions). */
   checkedIds: ReadonlySet<string>;
   showLabels: boolean;
+  /** Coverage heatmap images drawn between the terrain and the links. */
+  coverageImages: { id: string; url: string; bounds: { west: number; south: number; east: number; north: number }; opacity: number }[];
   /** Viewers can look but not move nodes. */
   readOnly: boolean;
   /** Ask the map to centre on a point; a new `key` triggers a move. */
@@ -260,6 +262,35 @@ export function MapView(p: Props) {
   }
 
   useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly]);
+
+  // coverage heatmaps: one image source + raster layer each, kept in step with the list
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const want = new Map(p.coverageImages.map((c) => [`cov-${c.id}`, c]));
+    for (const l of map.getStyle().layers ?? []) {
+      if (l.id.startsWith("cov-") && !want.has(l.id)) {
+        map.removeLayer(l.id);
+        if (map.getSource(l.id)) map.removeSource(l.id);
+      }
+    }
+    for (const [id, c] of want) {
+      const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
+        [c.bounds.west, c.bounds.north],
+        [c.bounds.east, c.bounds.north],
+        [c.bounds.east, c.bounds.south],
+        [c.bounds.west, c.bounds.south],
+      ];
+      const src = map.getSource(id) as maplibregl.ImageSource | undefined;
+      if (!src) {
+        map.addSource(id, { type: "image", url: c.url, coordinates });
+        map.addLayer({ id, type: "raster", source: id, paint: { "raster-opacity": c.opacity, "raster-fade-duration": 0, "raster-resampling": "linear" } }, "ghost-links");
+      } else {
+        src.updateImage({ url: c.url, coordinates });
+        map.setPaintProperty(id, "raster-opacity", c.opacity);
+      }
+    }
+  }, [p.coverageImages]);
 
   useEffect(() => {
     mapRef.current?.getContainer().classList.toggle("show-labels", p.showLabels);

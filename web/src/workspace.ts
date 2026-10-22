@@ -55,6 +55,10 @@ export function parseProject(raw: unknown): Project | null {
     verticalPolarization: typeof s.verticalPolarization === "boolean" ? s.verticalPolarization : DEFAULT_SETTINGS.verticalPolarization,
     confidencePct: num(s.confidencePct, DEFAULT_SETTINGS.confidencePct),
     reliabilityPct: num(s.reliabilityPct, DEFAULT_SETTINGS.reliabilityPct),
+    coverageRadiusKm: num(s.coverageRadiusKm, DEFAULT_SETTINGS.coverageRadiusKm),
+    coverageResolutionM: num(s.coverageResolutionM, DEFAULT_SETTINGS.coverageResolutionM),
+    clientGainDbi: num(s.clientGainDbi, DEFAULT_SETTINGS.clientGainDbi),
+    clientCableLossDb: num(s.clientCableLossDb, DEFAULT_SETTINGS.clientCableLossDb),
   };
   return {
     id: typeof o.id === "string" ? o.id : uid(),

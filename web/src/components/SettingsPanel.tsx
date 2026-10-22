@@ -100,6 +100,24 @@ export function SettingsPanel({ settings: s, onChange }: Props) {
         <Row label="Reliability % (time)" value={s.reliabilityPct} step={1} min={1} max={99} onChange={(v) => onChange({ reliabilityPct: v })} />
         <Row label="Confidence % (situation)" value={s.confidencePct} step={1} min={1} max={99} onChange={(v) => onChange({ confidencePct: v })} />
       </div>
+      <h4 className="subhead">Coverage heatmaps</h4>
+      <div className="grid2">
+        <Row label="Radius (km, 1-100)" value={s.coverageRadiusKm} step={5} min={1} max={100} onChange={(v) => onChange({ coverageRadiusKm: v })} />
+        <label className="field">
+          <span>Resolution</span>
+          <select value={s.coverageResolutionM} onChange={(e) => onChange({ coverageResolutionM: Number(e.target.value) })}>
+            {[60, 100, 150, 250, 500].map((m) => (
+              <option key={m} value={m}>
+                {m} m cells
+              </option>
+            ))}
+          </select>
+        </label>
+        <Row label="Client antenna gain (dBi)" value={s.clientGainDbi} step={0.5} min={-10} max={20} onChange={(v) => onChange({ clientGainDbi: v })} />
+        <Row label="Client cable loss (dB)" value={s.clientCableLossDb} step={0.5} min={0} max={20} onChange={(v) => onChange({ clientCableLossDb: v })} />
+      </div>
+      <p className="hint">The client device's height is each node's “Client height” field.</p>
+
       <p className="hint">
         50 / 50 is the median prediction. 90 / 90 is a design margin: the loss is only that high or lower 90 % of the time, with 90 %
         confidence in the model, so links need a stronger signal.
