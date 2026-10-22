@@ -72,3 +72,22 @@ kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4p
 .difflist { list-style: none; padding: 0; margin: 0; font-size: 12px; }
 .difflist li { display: flex; gap: 6px; align-items: center; padding: 2px 0; flex-wrap: wrap; }
 .difflist .arrow { color: var(--muted); }
+.node-marker .node-label { display: none; position: absolute; left: 22px; top: -2px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 16px; padding: 0 5px; border-radius: 3px; background: rgba(255,255,255,.9); box-shadow: 0 1px 2px rgba(0,0,0,.3); pointer-events: none; }
+.show-labels .node-marker .node-label { display: block; }
+.node-marker.checked { box-shadow: 0 0 0 3px rgba(36,87,214,.55), 0 1px 4px rgba(0,0,0,.5); }
+.nodes-tools { display: flex; gap: 6px; margin-bottom: 6px; }
+.nodes-tools input { flex: 1; } .nodes-tools select { width: auto; }
+.nodelist { list-style: none; padding: 0; margin: 0; max-height: 280px; overflow-y: auto; }
+.nodelist li { display: grid; grid-template-columns: auto 14px 1fr auto; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 6px; cursor: pointer; }
+.nodelist li:hover, .nodelist li.sel { background: #eef2ff; }
+.nodelist input[type=checkbox] { width: auto; }
+.sdot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #d97706; background: #fff; }
+.sdot.installed { background: #16a34a; border-color: #065f46; }
+.nname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nname .letter { display: inline-block; min-width: 18px; text-align: center; font-size: 11px; background: #e5e7eb; border-radius: 3px; margin-right: 5px; }
+.bulk { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+.bulk .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 6px; }
+.conns { list-style: none; padding: 0; margin: 4px 0 8px; font-size: 12px; }
+.conns li { display: grid; grid-template-columns: 12px 1fr auto; gap: 6px; align-items: center; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+.conns li:hover { background: #eef2ff; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }

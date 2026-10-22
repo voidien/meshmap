@@ -1,10 +1,21 @@
 import { getPresets } from "../engine/wasm";
-import type { MeshNode } from "../types";
+import { LINK_COLORS } from "../map/MapView";
+import type { Link, MeshNode } from "../types";
+
+export interface Connection {
+  link: Link;
+  other: MeshNode;
+}
 
 interface Props {
   node: MeshNode;
+  connections: Connection[];
   onChange: (patch: Partial<MeshNode>) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
+  onZoom: () => void;
+  onOpenLink: (key: string) => void;
+  onSelectNode: (id: string) => void;
 }
 
 function Num(props: { label: string; value: number; step?: number; unit?: string; min?: number; max?: number; onChange: (v: number) => void }) {
@@ -29,7 +40,7 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
   );
 }
 
-export function NodePanel({ node, onChange, onDelete }: Props) {
+export function NodePanel({ node, connections, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode }: Props) {
   const presets = getPresets();
   return (
     <section className="card">
@@ -68,9 +79,39 @@ export function NodePanel({ node, onChange, onDelete }: Props) {
         <span>Notes</span>
         <textarea rows={3} value={node.notes} onChange={(e) => onChange({ notes: e.target.value })} />
       </label>
-      <button className="danger" onClick={onDelete}>
-        Delete node
-      </button>
+      <h3>Connections ({connections.length})</h3>
+      {connections.length === 0 ? <p className="hint">No links within range. Raise the antenna, move closer, or increase the max range.</p> : null}
+      <ul className="conns">
+        {connections.map(({ link, other }) => (
+          <li key={link.key} onClick={() => onOpenLink(link.key)} title="Open terrain profile">
+            <span className="dot" style={{ background: LINK_COLORS[link.class] }} />
+            <span className="lname">
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelectNode(other.id);
+                }}
+              >
+                {other.name.trim() || "(unnamed)"}
+              </a>
+            </span>
+            <span className="lmeta">
+              {(link.distanceM / 1000).toFixed(1)} km{link.result ? ` · ${link.result.margin_db.toFixed(1)} dB` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="row-actions">
+        <button onClick={onZoom}>Zoom to</button>
+        <button onClick={onDuplicate} title="Copy this node (placed ~100 m away)">
+          Duplicate
+        </button>
+        <button className="danger" onClick={onDelete}>
+          Delete node
+        </button>
+      </div>
     </section>
   );
 }

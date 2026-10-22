@@ -47,7 +47,12 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
    one. "Import files…" accepts several files at once (each becomes its own project). "Duplicate" copies a setup for a what-if.
    "Compare setups" draws a second project faintly on the map (grey dots, dashed links) and lists node and link-class
    differences (nodes matched by MeshCore letter, else name).
-8. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+8. **Node management**: the Nodes panel lists every node (status dot, MeshCore letter, link count, best margin) with search and
+   sorting; click a row to select and zoom to it, tick several for bulk edits (height, client height, TX power, gain,
+   cable loss, preset, status; only filled-in fields change) or bulk delete, or add a node by typing coordinates.
+   A selected node shows its connections (click one to open its terrain profile), plus Zoom to / Duplicate / Delete.
+   The "Names" button toggles name labels on the map.
+9. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

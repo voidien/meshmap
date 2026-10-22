@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadCore } from "./engine/wasm";
 import { useLinks } from "./useLinks";
 import { MapView } from "./map/MapView";
-import { NodePanel } from "./components/NodePanel";
+import { NodePanel, type Connection } from "./components/NodePanel";
+import { NodeList } from "./components/NodeList";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LinkList } from "./components/LinkList";
 import { ProfileChart } from "./components/ProfileChart";
@@ -23,6 +24,9 @@ export function App() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
+  const [showLabels, setShowLabels] = useState(true);
   const [addMode, setAddMode] = useState(false);
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -63,6 +67,7 @@ export function App() {
     setWs((w) => (id === w.activeId || !w.projects.some((p) => p.id === id) ? w : { ...w, activeId: id, previousId: w.activeId }));
     setSelectedNode(null);
     setSelectedLink(null);
+    setChecked(new Set());
     setDragging(false);
   }, []);
 
@@ -159,8 +164,69 @@ export function App() {
 
   const deleteNode = (id: string) => {
     setProject((p) => ({ ...p, nodes: p.nodes.filter((n) => n.id !== id) }));
+    setChecked((c) => new Set([...c].filter((x) => x !== id)));
     setSelectedNode(null);
   };
+
+  const newNode = (nodes: MeshNode[], lat: number, lon: number, name: string): MeshNode => ({
+    id: uid(), name: name || `Node ${nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3,
+    cableLossDb: 0.5, presetId: "long_fast", status: "planned", notes: "",
+  });
+
+  const focusNode = (id: string) => {
+    const n = nodeById.get(id);
+    setSelectedNode(id);
+    setSelectedLink(null);
+    if (n) setFocus({ lat: n.lat, lon: n.lon, key: Date.now() });
+  };
+
+  const addNodeAt = (lat: number, lon: number, name: string) => {
+    const n = newNode(project.nodes, lat, lon, name);
+    setProject((p) => ({ ...p, nodes: [...p.nodes, n] }));
+    setSelectedNode(n.id);
+    setSelectedLink(null);
+    setFocus({ lat, lon, key: Date.now() });
+  };
+
+  const duplicateNode = (id: string) => {
+    const src = nodeById.get(id);
+    if (!src) return;
+    const copy: MeshNode = { ...src, id: uid(), letter: undefined, name: `${src.name.trim()} (copy)`, lat: src.lat + 0.0009, lon: src.lon + 0.0009 };
+    setProject((p) => ({ ...p, nodes: [...p.nodes, copy] }));
+    setSelectedNode(copy.id);
+  };
+
+  const patchMany = (ids: string[], patch: Partial<MeshNode>) => {
+    const set = new Set(ids);
+    setProject((p) => ({ ...p, nodes: p.nodes.map((n) => (set.has(n.id) ? { ...n, ...patch } : n)) }));
+  };
+
+  const deleteMany = (ids: string[]) => {
+    if (!confirm(`Delete ${ids.length} node${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const set = new Set(ids);
+    setProject((p) => ({ ...p, nodes: p.nodes.filter((n) => !set.has(n.id)) }));
+    setChecked(new Set());
+    if (selectedNode && set.has(selectedNode)) setSelectedNode(null);
+  };
+
+  const toggleChecked = (id: string) =>
+    setChecked((c) => {
+      const next = new Set(c);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const connections: Connection[] = useMemo(() => {
+    if (!sel) return [];
+    const out: Connection[] = [];
+    for (const l of links) {
+      if (l.a !== sel.id && l.b !== sel.id) continue;
+      const other = nodeById.get(l.a === sel.id ? l.b : l.a);
+      if (other) out.push({ link: l, other });
+    }
+    const rank = { clear: 0, marginal: 1, obstructed: 2, none: 3 } as const;
+    return out.sort((x, y) => rank[x.link.class] - rank[y.link.class] || (y.link.result?.margin_db ?? 0) - (x.link.result?.margin_db ?? 0));
+  }, [sel, links, nodeById]);
 
   // ---- import ------------------------------------------------------------
   /** Each file becomes its own project so setups can be flipped between and compared. */
@@ -229,6 +295,9 @@ export function App() {
           <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)}>
             3D terrain
           </button>
+          <button className={showLabels ? "on" : ""} onClick={() => setShowLabels((v) => !v)} title="Show node names on the map">
+            Names
+          </button>
         </div>
         <div className="status">
           {!ready ? "Loading engine…" : status.error ? <span className="err">{status.error}</span> : status.busy ? `Analysing links ${status.done}/${status.total}…` : `${project.nodes.length} nodes · ${allLinks.length - counts.none} links`}
@@ -239,7 +308,7 @@ export function App() {
           </span>
         </div>
 
-        {sel ? <NodePanel node={sel} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} /> : <p className="hint card">Click “Add node”, then click the map. Drag nodes to see links update. Click a link for its terrain profile.</p>}
+        {sel ? <NodePanel node={sel} connections={connections} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} /> : <p className="hint card">Click “Add node”, then click the map. Drag nodes to see links update. Click a link for its terrain profile.</p>}
 
         <ComparePanel
           current={project}
@@ -251,6 +320,20 @@ export function App() {
           onChange={setCompareId}
         />
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
+        {ready ? (
+        <NodeList
+            nodes={project.nodes}
+            links={allLinks}
+            focusId={selectedNode}
+            checked={checked}
+            onFocus={focusNode}
+            onToggle={toggleChecked}
+            onSetChecked={(ids) => setChecked(new Set(ids))}
+            onBulk={patchMany}
+            onDeleteMany={deleteMany}
+            onAddAt={addNodeAt}
+          />
+        ) : null}
         <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => { setSelectedLink(k); setSelectedNode(null); }} />
 
         <section className="card">
@@ -285,6 +368,9 @@ export function App() {
           ghostLinks={ghostLinks}
           fitKey={`${project.id}|${other?.id ?? ""}`}
           selectedNodeId={selectedNode}
+          checkedIds={checked}
+          showLabels={showLabels}
+          focus={focus}
           selectedLinkKey={selectedLink}
           addMode={addMode}
           terrain3d={terrain3d}

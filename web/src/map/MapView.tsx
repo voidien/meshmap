@@ -19,6 +19,11 @@ interface Props {
   /** When this changes the view zooms to fit the nodes (open + comparison project). */
   fitKey: string;
   selectedNodeId: string | null;
+  /** Nodes ticked in the Nodes list (bulk actions). */
+  checkedIds: ReadonlySet<string>;
+  showLabels: boolean;
+  /** Ask the map to centre on a point; a new `key` triggers a move. */
+  focus: { lat: number; lon: number; key: number } | null;
   selectedLinkKey: string | null;
   addMode: boolean;
   terrain3d: boolean;
@@ -238,12 +243,30 @@ export function MapView(p: Props) {
       const ll = m.getLngLat();
       if (Math.abs(ll.lat - n.lat) > 1e-9 || Math.abs(ll.lng - n.lon) > 1e-9) m.setLngLat([n.lon, n.lat]);
       const el = m.getElement();
-      el.className = `maplibregl-marker node-marker ${n.status}${c.selectedNodeId === n.id ? " selected" : ""}`;
+      el.className = `maplibregl-marker node-marker ${n.status}${c.selectedNodeId === n.id ? " selected" : ""}${c.checkedIds.has(n.id) ? " checked" : ""}`;
       el.title = `${n.name} (${n.status})`;
+      let label = el.querySelector<HTMLSpanElement>(".node-label");
+      if (!label) {
+        label = document.createElement("span");
+        label.className = "node-label";
+        el.appendChild(label);
+      }
+      const text = `${n.letter ? n.letter + " · " : ""}${n.name.trim() || "node"}`;
+      if (label.textContent !== text) label.textContent = text;
     }
   }
 
-  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey]);
+  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds]);
+
+  useEffect(() => {
+    mapRef.current?.getContainer().classList.toggle("show-labels", p.showLabels);
+  }, [p.showLabels]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const f = latest.current.focus;
+    if (map && f) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 11), duration: 500 });
+  }, [p.focus?.key]);
 
   // zoom to the nodes when the open project / comparison changes (and on first load)
   useEffect(() => {
