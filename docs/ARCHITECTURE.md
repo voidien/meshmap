@@ -294,7 +294,7 @@ The full plan in this document is the long-term target. We reach it in releases 
 |---|---|---|---|
 | **v0** | Static web app: MapLibre hillshade + 3D terrain, node add/move/delete, bare-earth links (profile, k-factor, Fresnel, FSPL + knife-edge diffraction, margin, color classes), profile chart, grid-indexed pair pruning, WASM link math, JSON save/load + CSV/KML/GeoJSON export | Accounts, DB, jobs, ITM, clutter, heatmaps, placement | 2-4 wks |
 | **v1** | ITM as the main estimate (build-vs-reuse decision first, §14.1), validation against NTIA vectors and SPLAT!/Radio Mobile (`docs/validation.md`) | Everything server-side | +2-3 wks |
-| **v2** | Axum + Postgres/PostGIS: accounts (magic links), shared projects, roles, versions, SSE (§9, §10, §12) | Jobs, packs | +3-4 wks |
+| **v2** (done: accounts, passkeys, invites, sharing; **SQLite** instead of Postgres for now: single container, trivially testable and backed up; Postgres/PostGIS arrives with the v3 job queue; versions and SSE still to do, polling is used) | Axum server: admin-created accounts with invite links (instead of magic links: no email needed), password + passkeys (WebAuthn), shared projects with owner/editor/viewer roles and optimistic revisions (§9, §10, §12) | Jobs, packs, project versions, live push | +3-4 wks |
 | **v3** | Postgres job queue + worker, project-wide analysis at scale with progress and caching, per-node heatmaps and network layer (§6, §7) | State packs, clutter | +4-6 wks |
 | **v4** | State terrain packs, 3DEP lidar/clutter ETL, bare-vs-clutter side by side (§5) | Placement | +4-8 wks |
 | **v5** | Placement suggestions (§8), then later phases (§16) | | open-ended |

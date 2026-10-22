@@ -39,9 +39,27 @@ export interface Settings {
   reliabilityPct: number;
 }
 
+export type ProjectRole = "owner" | "editor" | "viewer";
+
+export interface Person {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
+export interface Member extends Person {
+  role: "editor" | "viewer";
+}
+
 export interface Project {
   id: string;
   name: string;
+  /** The signed-in user's role on this project (set for projects loaded from the server). */
+  role?: ProjectRole;
+  revision?: number;
+  owner?: Person;
+  members?: Member[];
+  updatedBy?: string | null;
   nodes: MeshNode[];
   settings: Settings;
   /** Opaque MeshCore "overlays" passed through unchanged. */

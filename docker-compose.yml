@@ -2,15 +2,21 @@ name: meshmap
 services:
   meshmap:
     build: .
-    image: meshmap:v0
+    image: meshmap:v2
     container_name: meshmap
     restart: unless-stopped
+    stop_grace_period: 20s
     ports:
-      - "${MESHMAP_PORT:-9091}:8080"   # host port -> nginx in the container
+      - "${MESHMAP_PORT:-9091}:8080"   # host port -> the meshmap server in the container
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data               # accounts, passkeys and projects (meshmap.db): back this folder up
     read_only: true
     tmpfs:
       - /tmp
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M

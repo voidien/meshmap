@@ -22,6 +22,8 @@ interface Props {
   /** Nodes ticked in the Nodes list (bulk actions). */
   checkedIds: ReadonlySet<string>;
   showLabels: boolean;
+  /** Viewers can look but not move nodes. */
+  readOnly: boolean;
   /** Ask the map to centre on a point; a new `key` triggers a move. */
   focus: { lat: number; lon: number; key: number } | null;
   selectedLinkKey: string | null;
@@ -158,7 +160,7 @@ export function MapView(p: Props) {
 
     map.on("click", (e) => {
       const c = latest.current;
-      if (c.addMode) {
+      if (c.addMode && !c.readOnly) {
         c.onMapClick(e.lngLat.lat, e.lngLat.lng);
         return;
       }
@@ -209,6 +211,7 @@ export function MapView(p: Props) {
     }
     for (const n of c.nodes) {
       let m = markers.current.get(n.id);
+      if (m) m.setDraggable(!c.readOnly);
       if (!m) {
         const el = document.createElement("div");
         el.className = "node-marker";
@@ -218,7 +221,7 @@ export function MapView(p: Props) {
           if (!moved) latest.current.onNodeSelect(n.id);
           moved = false;
         });
-        m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat([n.lon, n.lat]).addTo(map);
+        m = new maplibregl.Marker({ element: el, draggable: !c.readOnly }).setLngLat([n.lon, n.lat]).addTo(map);
         let raf = 0;
         const report = (dragging: boolean) => {
           const ll = m!.getLngLat();
@@ -256,7 +259,7 @@ export function MapView(p: Props) {
     }
   }
 
-  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds]);
+  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly]);
 
   useEffect(() => {
     mapRef.current?.getContainer().classList.toggle("show-labels", p.showLabels);

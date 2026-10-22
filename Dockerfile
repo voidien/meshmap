@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# ---- 1. Rust -> WASM -------------------------------------------------------
+# ---- 1. Rust -> WASM (link engine for the browser) ----------------------------
 FROM rust:1-bookworm AS wasm
 RUN rustup target add wasm32-unknown-unknown \
  && cargo install wasm-bindgen-cli --version 0.2.100 --locked
 WORKDIR /src
 COPY Cargo.toml Cargo.lock* ./
 COPY crates ./crates
-# run the math tests in the build so a broken core never ships
+# run the math tests (including ITM vs the NTIA reference) in the build so a broken core never ships
 RUN cargo test -p meshmap-core -p meshmap-itm --release
 RUN cargo build --release --target wasm32-unknown-unknown -p meshmap-wasm \
  && wasm-bindgen --target web --out-dir /out target/wasm32-unknown-unknown/release/meshmap_wasm.wasm
@@ -21,9 +21,27 @@ COPY web/ ./
 COPY --from=wasm /out ./src/wasm/pkg
 RUN npm test && npm run build
 
-# ---- 3. Static server (non-root, listens on 8080) ----------------------------
-FROM nginxinc/nginx-unprivileged:stable-alpine
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=web /web/dist /usr/share/nginx/html
+# ---- 3. Server -----------------------------------------------------------------
+FROM rust:1-bookworm AS server
+WORKDIR /src
+COPY Cargo.toml Cargo.lock* ./
+COPY crates ./crates
+RUN cargo test -p meshmap-server --release \
+ && cargo build --release -p meshmap-server
+
+# ---- 4. Runtime: one small process serving the app and the API -----------------------------
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libssl3 ca-certificates util-linux \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin meshmap
+WORKDIR /app
+COPY --from=server /src/target/release/meshmap-server /app/meshmap-server
+COPY --from=web /web/dist /app/web
+COPY deploy/entrypoint.sh /app/entrypoint.sh
+ENV MESHMAP_DATA_DIR=/app/data MESHMAP_STATIC_DIR=/app/web PORT=8080 RUST_LOG=info
+VOLUME /app/data
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["/app/meshmap-server", "healthcheck"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["/app/meshmap-server"]
