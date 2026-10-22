@@ -44,3 +44,16 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
 6. **Save/Open JSON**, Nodes/Links CSV, GeoJSON, KML exports. The project also autosaves in the browser.
 7. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
+
+## Docker
+
+```bash
+docker compose up --build        # http://localhost:8080
+# or
+docker build -t meshmap:v0 . && docker run --rm -p 8080:8080 meshmap:v0
+```
+
+Multi-stage build: Rust tests + WASM build, then web tests + production build, then a small non-root nginx image
+(~50 MB) serving static files on port 8080 (`/healthz` for health checks). The container needs no database or secrets.
+For public hosting put TLS in front (Caddy, Traefik, a cloud load balancer) and replace the OSM basemap first.
+Any static host (Netlify, S3 + CDN, GitHub Pages) also works with just the contents of `web/dist`.

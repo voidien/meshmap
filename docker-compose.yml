@@ -1,0 +1,10 @@
+services:
+  meshmap:
+    build: .
+    image: meshmap:v0
+    ports:
+      - "8080:8080"   # put a TLS-terminating proxy (Caddy, Traefik, Cloudflare) in front for public hosting
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
