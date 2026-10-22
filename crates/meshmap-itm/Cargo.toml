@@ -1,0 +1,8 @@
+[package]
+name = "meshmap-itm"
+description = "Longley-Rice / ITM point-to-point propagation model (pure Rust port of the NTIA reference)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

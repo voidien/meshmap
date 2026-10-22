@@ -3,13 +3,16 @@
 Planner for large LoRa mesh networks (Meshtastic / MeshCore style) in the US, 915 MHz.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-v5 delivery ladder.
 
-**Current release: v0** - a static web app (no backend). Estimates only: bare-earth terrain from public ~30 m
-tiles, free-space loss plus single knife-edge diffraction. No clutter, no Longley-Rice yet.
+**Current release: v1** - a static web app (no backend). Estimates only: bare-earth terrain from public ~30 m tiles and
+the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see [`docs/validation.md`](docs/validation.md)).
+No clutter (trees, buildings) yet.
 
 ## Layout
 
 ```
 crates/meshmap-core   pure RF/terrain math (geodesy, FSPL, Fresnel, curvature, link analysis, pair pruning)
+crates/meshmap-itm    Longley-Rice / ITM point-to-point model (port of the NTIA reference)
+tools/itm_reference   builds the NTIA C++ reference and regenerates the validation vectors
 crates/meshmap-wasm   wasm-bindgen wrapper
 web/                  React + TypeScript + MapLibre app
 scripts/build-wasm.sh builds the WASM module into web/src/wasm/pkg
@@ -21,7 +24,7 @@ Prerequisites: Rust (stable) with `rustup target add wasm32-unknown-unknown`,
 `cargo install wasm-bindgen-cli --version 0.2.100`, Node 20+.
 
 ```bash
-cargo test --workspace            # math tests
+cargo test --workspace            # math tests, including ITM vs the NTIA reference vectors
 ./scripts/build-wasm.sh           # WASM bindings (re-run after changing Rust)
 cd web && npm install
 npm test                          # terrain decoding/sampling tests
@@ -47,12 +50,14 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
    one. "Import files…" accepts several files at once (each becomes its own project). "Duplicate" copies a setup for a what-if.
    "Compare setups" draws a second project faintly on the map (grey dots, dashed links) and lists node and link-class
    differences (nodes matched by MeshCore letter, else name).
-8. **Node management**: the Nodes panel lists every node (status dot, MeshCore letter, link count, best margin) with search and
+8. **ITM**: click a link: the table shows the Longley-Rice loss and regime, the knife-edge cross-check and the model used. Project settings
+   has the ITM environment (climate, ground, refractivity, polarization) and reliability / confidence; 90 / 90 is a design margin.
+9. **Node management**: the Nodes panel lists every node (status dot, MeshCore letter, link count, best margin) with search and
    sorting; click a row to select and zoom to it, tick several for bulk edits (height, client height, TX power, gain,
    cable loss, preset, status; only filled-in fields change) or bulk delete, or add a node by typing coordinates.
    A selected node shows its connections (click one to open its terrain profile), plus Zoom to / Duplicate / Delete.
    The "Names" button toggles name labels on the map.
-9. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+10. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

@@ -166,12 +166,28 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
         <tbody>
           <tr><th>Distance</th><td>{f(r.distance_m / 1000, 2)} km</td><th>Fresnel clearance</th><td className={r.clearance_pct < 60 ? "bad" : ""}>{r.clearance_pct < -100 ? "< -100" : f(r.clearance_pct, 0)} % {r.clearance_pct < 60 ? "(below 60 %)" : ""}</td></tr>
           <tr><th>Free-space loss</th><td>{f(r.fspl_db)} dB</td><th>Worst point</th><td>{f(r.worst_dist_m / 1000, 2)} km{r.obstruction_m > 0 ? ` (${f(r.obstruction_m, 0)} m above ray)` : ""}</td></tr>
-          <tr><th>Diffraction (knife-edge)</th><td>{f(r.diffraction_db)} dB</td><th>Total path loss</th><td>{f(r.path_loss_db)} dB</td></tr>
+          {r.itm ? (
+            <tr>
+              <th>Longley-Rice (ITM)</th><td><b>{f(r.itm.loss_db)} dB</b> · {r.itm.mode} regime · {f(r.itm.loss_db - r.fspl_db)} dB over free space</td>
+              <th>Knife-edge check</th><td>{f(r.fspl_db + r.diffraction_db)} dB (free space + {f(r.diffraction_db)} dB)</td>
+            </tr>
+          ) : (
+            <tr>
+              <th>Model</th><td colSpan={3}>Free space + knife-edge diffraction: {f(r.fspl_db + r.diffraction_db)} dB. ITM did not run: {r.itm_error}</td>
+            </tr>
+          )}
+          <tr><th>Path loss used</th><td><b>{f(r.path_loss_db)} dB</b> ({r.model === "itm" ? "ITM" : "knife-edge fallback"})</td><th>Reliability / confidence</th><td>{settings.reliabilityPct} % / {settings.confidencePct} %</td></tr>
           <tr><th>{a.name} → {b.name}</th><td>Rx {f(r.rx_ab_dbm)} dBm · sens {f(sensB)} → margin <b>{f(r.margin_ab_db)} dB</b></td>
               <th>{b.name} → {a.name}</th><td>Rx {f(r.rx_ba_dbm)} dBm · sens {f(sensA)} → margin <b>{f(r.margin_ba_db)} dB</b></td></tr>
         </tbody>
       </table>
-      <p className="hint">Estimate only: bare-earth ~30 m terrain, free space + single knife-edge diffraction (Longley-Rice not yet), no clutter.</p>
+      {r.itm && r.itm.warnings.length ? (
+        <p className="hint">ITM warnings: {r.itm.warnings.join("; ")}.</p>
+      ) : null}
+      <p className="hint">
+        Estimate only: Longley-Rice over bare-earth ~30 m terrain (no trees or buildings), at {settings.reliabilityPct} % reliability / {settings.confidencePct} % confidence.
+        The "regime" is ITM's own classification by distance and horizons; clearance above shows whether the direct ray is actually blocked.
+      </p>
     </div>
   );
 }

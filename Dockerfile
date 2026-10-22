@@ -8,7 +8,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock* ./
 COPY crates ./crates
 # run the math tests in the build so a broken core never ships
-RUN cargo test -p meshmap-core --release
+RUN cargo test -p meshmap-core -p meshmap-itm --release
 RUN cargo build --release --target wasm32-unknown-unknown -p meshmap-wasm \
  && wasm-bindgen --target web --out-dir /out target/wasm32-unknown-unknown/release/meshmap_wasm.wasm
 

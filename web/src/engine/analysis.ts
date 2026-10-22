@@ -39,7 +39,26 @@ export function linkKey(a: string, b: string): string {
 const nodeSig = (n: MeshNode) =>
   [n.lat.toFixed(6), n.lon.toFixed(6), n.heightM, n.txDbm, n.gainDbi, n.cableLossDb, n.presetId].join(",");
 
-const settingsSig = (s: Settings) => [s.freqMhz, s.k, s.marginalMarginDb, s.noiseFigureDb].join(",");
+const settingsSig = (s: Settings) =>
+  [s.freqMhz, s.k, s.marginalMarginDb, s.noiseFigureDb, s.itmClimate, s.itmN0, s.groundEpsilon, s.groundSigma, s.verticalPolarization, s.confidencePct, s.reliabilityPct].join(",");
+
+/** Parameters object for the WASM `analyze_link`. */
+export function linkParams(s: Settings) {
+  return {
+    freq_mhz: s.freqMhz,
+    k: s.k,
+    marginal_margin_db: s.marginalMarginDb,
+    itm: {
+      climate: s.itmClimate,
+      n0: s.itmN0,
+      epsilon: s.groundEpsilon,
+      sigma: s.groundSigma,
+      vertical_polarization: s.verticalPolarization,
+      confidence_pct: s.confidencePct,
+      reliability_pct: s.reliabilityPct,
+    },
+  };
+}
 
 /** Evenly spaced lat/lon samples (linear interpolation; error is negligible below ~100 km). */
 export function sampleLine(a: MeshNode, b: MeshNode, spacingM: number) {
@@ -74,7 +93,7 @@ export async function analyzeWithProfile(
   const { lats, lons, dist } = sampleLine(a, b, spacingM);
   const elev = await terrain.elevations(lats, lons);
   const result = wasm.analyze_link(
-    { freq_mhz: s.freqMhz, k: s.k, marginal_margin_db: s.marginalMarginDb },
+    linkParams(s),
     endpointOf(a, s),
     endpointOf(b, s),
     dist,

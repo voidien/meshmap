@@ -27,6 +27,16 @@ export interface Settings {
   marginalMarginDb: number;
   noiseFigureDb: number;
   showNone: boolean;
+  /** Longley-Rice (ITM) environment. */
+  itmClimate: number;
+  /** Surface refractivity reduced to sea level (N-units). */
+  itmN0: number;
+  groundEpsilon: number;
+  groundSigma: number;
+  verticalPolarization: boolean;
+  /** Percent of situations / time the predicted loss is not exceeded (50 = median). */
+  confidencePct: number;
+  reliabilityPct: number;
 }
 
 export interface Project {
@@ -51,6 +61,9 @@ export interface LinkResult {
   fspl_db: number;
   diffraction_db: number;
   path_loss_db: number;
+  model: "itm" | "knife_edge";
+  itm: { loss_db: number; mode: string; warnings: string[]; a_ref_db: number; delta_h_m: number } | null;
+  itm_error: string | null;
   clearance_pct: number;
   worst_index: number;
   worst_dist_m: number;
@@ -84,4 +97,11 @@ export const DEFAULT_SETTINGS: Settings = {
   marginalMarginDb: 10,
   noiseFigureDb: 6,
   showNone: false,
+  itmClimate: 5,
+  itmN0: 301,
+  groundEpsilon: 15,
+  groundSigma: 0.005,
+  verticalPolarization: true,
+  confidencePct: 50,
+  reliabilityPct: 50,
 };

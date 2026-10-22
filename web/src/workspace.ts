@@ -48,6 +48,13 @@ export function parseProject(raw: unknown): Project | null {
     marginalMarginDb: num(s.marginalMarginDb, DEFAULT_SETTINGS.marginalMarginDb),
     noiseFigureDb: num(s.noiseFigureDb, DEFAULT_SETTINGS.noiseFigureDb),
     showNone: s.showNone === true,
+    itmClimate: Number.isInteger(s.itmClimate) && (s.itmClimate as number) >= 1 && (s.itmClimate as number) <= 7 ? (s.itmClimate as number) : DEFAULT_SETTINGS.itmClimate,
+    itmN0: num(s.itmN0, DEFAULT_SETTINGS.itmN0),
+    groundEpsilon: num(s.groundEpsilon, DEFAULT_SETTINGS.groundEpsilon),
+    groundSigma: num(s.groundSigma, DEFAULT_SETTINGS.groundSigma),
+    verticalPolarization: typeof s.verticalPolarization === "boolean" ? s.verticalPolarization : DEFAULT_SETTINGS.verticalPolarization,
+    confidencePct: num(s.confidencePct, DEFAULT_SETTINGS.confidencePct),
+    reliabilityPct: num(s.reliabilityPct, DEFAULT_SETTINGS.reliabilityPct),
   };
   return {
     id: typeof o.id === "string" ? o.id : uid(),

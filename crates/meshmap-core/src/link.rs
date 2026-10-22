@@ -1,10 +1,11 @@
 //! Single-link analysis over a sampled terrain profile (bare earth).
 //!
-//! The estimate is free-space path loss plus single knife-edge diffraction on the worst
-//! obstruction. It is an approximation: it will be replaced by Longley-Rice (ITM) as the
-//! headline number, with this kept as a cross-check.
+//! The headline estimate is Longley-Rice (ITM, point-to-point) over the sampled terrain. Free-space
+//! loss and the simpler "free space + single knife-edge diffraction" model are always computed too, as
+//! cross-checks and as the fallback when ITM rejects its inputs (for example a very short path).
 
 use crate::rf::{earth_bulge_m, fresnel_radius_m, fspl_db, knife_edge_loss_db, wavelength_m};
+use meshmap_itm::{ItmInput, Polarization, PropMode};
 use serde::{Deserialize, Serialize};
 
 /// One end of a link. `sensitivity_dbm` is that end's receiver sensitivity.
@@ -17,19 +18,70 @@ pub struct Endpoint {
     pub sensitivity_dbm: f64,
 }
 
+/// Environment and statistics for the Longley-Rice model.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ItmSettings {
+    /// Radio climate 1..=7 (5 = continental temperate).
+    pub climate: i32,
+    /// Surface refractivity reduced to sea level, N-units.
+    pub n0: f64,
+    /// Ground relative permittivity.
+    pub epsilon: f64,
+    /// Ground conductivity, S/m.
+    pub sigma: f64,
+    pub vertical_polarization: bool,
+    /// Percent of situations (unmodelled differences between predictions and reality) the loss is not exceeded for.
+    pub confidence_pct: f64,
+    /// Percent of time the loss is not exceeded.
+    pub reliability_pct: f64,
+}
+
+impl Default for ItmSettings {
+    fn default() -> Self {
+        // continental temperate, average ground, vertical antennas, median (50 / 50) prediction
+        Self { climate: 5, n0: 301.0, epsilon: 15.0, sigma: 0.005, vertical_polarization: true, confidence_pct: 50.0, reliability_pct: 50.0 }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LinkParams {
     pub freq_mhz: f64,
-    /// Effective earth radius factor (4/3 standard).
+    /// Effective earth radius factor (4/3 standard). Used for the clearance geometry; ITM has its own
+    /// refractivity-based effective earth.
     pub k: f64,
     /// Margin below which a link is "marginal" even when otherwise clear.
     pub marginal_margin_db: f64,
+    #[serde(default)]
+    pub itm: ItmSettings,
 }
 
 impl Default for LinkParams {
     fn default() -> Self {
-        Self { freq_mhz: 915.0, k: 4.0 / 3.0, marginal_margin_db: 10.0 }
+        Self { freq_mhz: 915.0, k: 4.0 / 3.0, marginal_margin_db: 10.0, itm: ItmSettings::default() }
     }
+}
+
+/// Which model produced the headline path loss.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LossModel {
+    Itm,
+    /// Free space plus single knife-edge diffraction (used when ITM cannot run).
+    KnifeEdge,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ItmDetail {
+    /// Basic transmission loss, dB.
+    pub loss_db: f64,
+    /// "line-of-sight", "diffraction" or "troposcatter".
+    pub mode: String,
+    pub warnings: Vec<String>,
+    /// Loss relative to free space before variability, dB.
+    pub a_ref_db: f64,
+    /// Terrain irregularity parameter, metres.
+    pub delta_h_m: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,8 +97,14 @@ pub enum LinkClass {
 pub struct LinkResult {
     pub distance_m: f64,
     pub fspl_db: f64,
+    /// Single knife-edge diffraction loss (the v0 model), dB; kept as a cross-check.
     pub diffraction_db: f64,
+    /// Headline path loss used for the margins: ITM when available, else free space + knife-edge.
     pub path_loss_db: f64,
+    pub model: LossModel,
+    pub itm: Option<ItmDetail>,
+    /// Why ITM did not run, when `model` is `knife_edge`.
+    pub itm_error: Option<String>,
     /// Minimum (ray height above terrain) / (first Fresnel radius) over the path, in percent.
     /// Negative means the direct ray is below terrain.
     pub clearance_pct: f64,
@@ -83,6 +141,47 @@ pub fn fspl_margins_db(a: &Endpoint, b: &Endpoint, dist_m: f64, freq_mhz: f64) -
     let rx_ab = a.tx_dbm + a.gain_dbi - a.cable_loss_db + b.gain_dbi - b.cable_loss_db - fspl;
     let rx_ba = b.tx_dbm + b.gain_dbi - b.cable_loss_db + a.gain_dbi - a.cable_loss_db - fspl;
     (rx_ab - b.sensitivity_dbm, rx_ba - a.sensitivity_dbm)
+}
+
+fn run_itm(params: &LinkParams, a: &Endpoint, b: &Endpoint, dist_m: &[f64], elev_m: &[f64]) -> Result<ItmDetail, String> {
+    let n = dist_m.len();
+    let total = dist_m[n - 1];
+    let xi = total / (n - 1) as f64;
+    // ITM wants evenly spaced terrain samples
+    if dist_m.iter().enumerate().any(|(i, d)| (d - i as f64 * xi).abs() > 1e-6 * xi.max(1.0)) {
+        return Err("terrain profile is not evenly spaced".into());
+    }
+    if n < 3 {
+        return Err("path too short for the terrain model".into());
+    }
+    let pfl = meshmap_itm::pfl_from_elevations(xi, elev_m);
+    let s = &params.itm;
+    let input = ItmInput {
+        h_tx_m: a.h_agl_m,
+        h_rx_m: b.h_agl_m,
+        pfl: &pfl,
+        climate: s.climate,
+        n0: s.n0,
+        f_mhz: params.freq_mhz,
+        pol: if s.vertical_polarization { Polarization::Vertical } else { Polarization::Horizontal },
+        epsilon: s.epsilon,
+        sigma: s.sigma,
+        mdvar: 3, // broadcast: time variability from reliability, situation variability from confidence
+    };
+    let r = meshmap_itm::p2p_cr(&input, s.confidence_pct, s.reliability_pct).map_err(|e| e.to_string())?;
+    Ok(ItmDetail {
+        loss_db: r.a_db,
+        mode: match r.mode {
+            PropMode::LineOfSight => "line-of-sight",
+            PropMode::Diffraction => "diffraction",
+            PropMode::Troposcatter => "troposcatter",
+            PropMode::NotSet => "unknown",
+        }
+        .to_string(),
+        warnings: meshmap_itm::warning_messages(r.warnings).into_iter().map(String::from).collect(),
+        a_ref_db: r.a_ref_db,
+        delta_h_m: r.delta_h_m,
+    })
 }
 
 /// Analyse the link between `a` (profile start) and `b` (profile end).
@@ -158,7 +257,10 @@ pub fn analyze_link(
     };
 
     let fspl = fspl_db(total, params.freq_mhz);
-    let path_loss = fspl + diffraction_db;
+    let (path_loss, model, itm, itm_error) = match run_itm(params, a, b, dist_m, elev_m) {
+        Ok(d) => (d.loss_db, LossModel::Itm, Some(d), None),
+        Err(e) => (fspl + diffraction_db, LossModel::KnifeEdge, None, Some(e)),
+    };
     let eirp_ab = a.tx_dbm + a.gain_dbi - a.cable_loss_db;
     let eirp_ba = b.tx_dbm + b.gain_dbi - b.cable_loss_db;
     let rx_ab = eirp_ab + b.gain_dbi - b.cable_loss_db - path_loss;
@@ -184,6 +286,9 @@ pub fn analyze_link(
         fspl_db: fspl,
         diffraction_db,
         path_loss_db: path_loss,
+        model,
+        itm,
+        itm_error,
         clearance_pct,
         worst_index,
         worst_dist_m: dist_m[worst_index],
@@ -273,10 +378,67 @@ mod tests {
     fn margin_equals_rx_minus_sensitivity() {
         let (d, e) = profile(5_000.0, 51, |_| 0.0);
         let r = analyze_link(&LinkParams::default(), &ep(15.0), &ep(15.0), &d, &e, false).unwrap();
-        // rx = 22 + 3 - 0.5 + 3 - 0.5 - FSPL
-        let expected = 22.0 + 3.0 - 0.5 + 3.0 - 0.5 - fspl_db(5_000.0, 915.0);
+        // rx = EIRP_a - cable_b + gain_b - headline path loss
+        let expected = 22.0 + 3.0 - 0.5 + 3.0 - 0.5 - r.path_loss_db;
         assert!((r.rx_ab_dbm - expected).abs() < 1e-9);
         assert!((r.margin_ab_db - (expected + 131.5)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn itm_is_the_headline_model_when_it_can_run() {
+        let (d, e) = profile(10_000.0, 101, |x| 300.0 + 3.0 * (x / 700.0).sin());
+        let r = analyze_link(&LinkParams::default(), &ep(30.0), &ep(30.0), &d, &e, false).unwrap();
+        assert_eq!(r.model, LossModel::Itm);
+        let itm = r.itm.as_ref().unwrap();
+        assert_eq!(r.path_loss_db, itm.loss_db);
+        assert!(r.itm_error.is_none());
+        // over gently rolling ground at 10 km the answer should be in the neighbourhood of free space
+        assert!((r.path_loss_db - r.fspl_db).abs() < 25.0, "itm {} vs fspl {}", r.path_loss_db, r.fspl_db);
+    }
+
+    #[test]
+    fn itm_sees_a_ridge_the_flat_earth_model_misses() {
+        let (d, e) = profile(10_000.0, 101, |x| if (x - 5000.0).abs() < 300.0 { 400.0 } else { 0.0 });
+        let r = analyze_link(&LinkParams::default(), &ep(10.0), &ep(10.0), &d, &e, false).unwrap();
+        assert_eq!(r.model, LossModel::Itm);
+        assert!(r.path_loss_db > r.fspl_db + 15.0);
+        assert_eq!(r.class, LinkClass::Obstructed);
+    }
+
+    #[test]
+    fn long_flat_path_with_low_masts_is_a_diffraction_path() {
+        let (d, e) = profile(25_000.0, 251, |_| 100.0);
+        let r = analyze_link(&LinkParams::default(), &ep(3.0), &ep(3.0), &d, &e, false).unwrap();
+        assert_eq!(r.itm.as_ref().unwrap().mode, "diffraction");
+        assert!(r.path_loss_db > r.fspl_db + 30.0);
+    }
+
+    #[test]
+    fn higher_reliability_means_more_loss() {
+        let (d, e) = profile(30_000.0, 301, |x| 200.0 + 60.0 * (x / 3000.0).sin());
+        let mut p = LinkParams::default();
+        p.itm.reliability_pct = 50.0;
+        let median = analyze_link(&p, &ep(15.0), &ep(15.0), &d, &e, false).unwrap().path_loss_db;
+        p.itm.reliability_pct = 99.0;
+        let r99 = analyze_link(&p, &ep(15.0), &ep(15.0), &d, &e, false).unwrap().path_loss_db;
+        assert!(r99 > median);
+    }
+
+    #[test]
+    fn falls_back_to_knife_edge_when_itm_cannot_run() {
+        // 2 samples: ITM needs at least 3 terrain points
+        let r = analyze_link(&LinkParams::default(), &ep(5.0), &ep(5.0), &[0.0, 1000.0], &[0.0, 0.0], false).unwrap();
+        assert_eq!(r.model, LossModel::KnifeEdge);
+        assert!(r.itm.is_none() && r.itm_error.is_some());
+        assert!((r.path_loss_db - (r.fspl_db + r.diffraction_db)).abs() < 1e-9);
+        // antenna below ITM's minimum height
+        let (d, e) = profile(5_000.0, 51, |_| 0.0);
+        let r = analyze_link(&LinkParams::default(), &ep(0.1), &ep(5.0), &d, &e, false).unwrap();
+        assert_eq!(r.model, LossModel::KnifeEdge);
+        // unevenly spaced samples
+        let d = [0.0, 100.0, 900.0, 1000.0];
+        let r = analyze_link(&LinkParams::default(), &ep(5.0), &ep(5.0), &d, &[0.0; 4], false).unwrap();
+        assert_eq!(r.model, LossModel::KnifeEdge);
     }
 
     #[test]
