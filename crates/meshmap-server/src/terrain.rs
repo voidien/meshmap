@@ -1,5 +1,6 @@
 //! Terrain for server-side jobs: Terrarium elevation tiles (the same public tiles the browser uses), cached on disk.
 
+use crate::packs::{PackSet, PackTile};
 use meshmap_coverage::Elevation;
 use std::collections::HashMap;
 use std::io::Read;
@@ -137,6 +138,8 @@ pub fn lonlat_to_pixel(lon: f64, lat: f64, z: u32) -> (f64, f64) {
 /// Bilinear elevation lookups over a [`TileSource`], safe to share between worker threads.
 pub struct Sampler {
     src: Arc<dyn TileSource>,
+    packs: Arc<PackSet>,
+    pack_tiles: RwLock<HashMap<(u32, u32, u32), Option<Arc<PackTile>>>>,
     tiles: RwLock<HashMap<(u32, u32), TileData>>,
     /// Set when a tile could not be loaded; the job then fails instead of silently predicting over zero elevation.
     pub failed: AtomicBool,
@@ -144,12 +147,62 @@ pub struct Sampler {
 }
 
 impl Sampler {
-    pub fn new(src: Arc<dyn TileSource>) -> Self {
-        Self { src, tiles: RwLock::new(HashMap::new()), failed: AtomicBool::new(false), error: Mutex::new(None) }
+    pub fn new(src: Arc<dyn TileSource>, packs: Arc<PackSet>) -> Self {
+        Self { src, packs, pack_tiles: RwLock::new(HashMap::new()), tiles: RwLock::new(HashMap::new()), failed: AtomicBool::new(false), error: Mutex::new(None) }
     }
 
     pub fn clear(&self) {
         self.tiles.write().unwrap().clear();
+        self.pack_tiles.write().unwrap().clear();
+    }
+
+    fn pack_tile(&self, zoom: u32, x: u32, y: u32) -> Option<Arc<PackTile>> {
+        if let Some(t) = self.pack_tiles.read().unwrap().get(&(zoom, x, y)) {
+            return t.clone();
+        }
+        let loaded = self.packs.find(zoom, x, y).and_then(|(pack, _)| match crate::packs::load_tile(pack, x, y, true) {
+            Ok(t) => Some(Arc::new(t)),
+            Err(e) => {
+                self.failed.store(true, Ordering::Relaxed);
+                self.error.lock().unwrap().get_or_insert(e);
+                None
+            }
+        });
+        self.pack_tiles.write().unwrap().insert((zoom, x, y), loaded.clone());
+        loaded
+    }
+
+    /// Bilinear sample of a pack band at a point, or None when the pack data does not cover it.
+    fn pack_sample(&self, lat: f64, lon: f64, clutter: bool) -> Option<f64> {
+        for z in self.packs.zooms() {
+            let world = (1u64 << z) as f64 * TILE as f64;
+            let (px, py) = lonlat_to_pixel(lon, lat, z);
+            let px = px - 0.5;
+            let py = (py - 0.5).clamp(0.0, world - 2.0);
+            let (x0, y0) = (px.floor(), py.floor());
+            let (fx, fy) = (px - x0, py - y0);
+            let at = |ix: f64, iy: f64| -> Option<f64> {
+                let wx = ix.rem_euclid(world);
+                let t = self.pack_tile(z, (wx / TILE as f64) as u32, (iy / TILE as f64) as u32)?;
+                let i = (iy as usize % TILE) * TILE + (wx as usize % TILE);
+                Some(if clutter { *t.clutter.as_ref()?.get(i)? as f64 } else { t.bare[i] as f64 })
+            };
+            if let (Some(a), Some(b), Some(c), Some(d)) = (at(x0, y0), at(x0 + 1.0, y0), at(x0, y0 + 1.0), at(x0 + 1.0, y0 + 1.0)) {
+                return Some((a * (1.0 - fx) + b * fx) * (1.0 - fy) + (c * (1.0 - fx) + d * fx) * fy);
+            }
+        }
+        None
+    }
+
+    /// True when every tile needed for the box comes from a pack (so no public terrain has to be downloaded for it).
+    pub fn packs_cover(&self, south: f64, west: f64, north: f64, east: f64) -> bool {
+        self.packs.zooms().into_iter().any(|z| {
+            let (x0, y1) = lonlat_to_pixel(west, south, z);
+            let (x1, y0) = (lonlat_to_pixel(east, north, z).0, lonlat_to_pixel(east, north, z).1);
+            let t = |v: f64| (v / TILE as f64).floor() as i64;
+            let max_t = (1i64 << z) - 1;
+            (t(y0).max(0)..=t(y1).min(max_t)).all(|ty| (t(x0).max(0)..=t(x1).min(max_t)).all(|tx| self.packs.find(z, tx as u32, ty as u32).is_some()))
+        })
     }
 
     fn get(&self, tx: u32, ty: u32) -> Option<TileData> {
@@ -171,6 +224,10 @@ impl Sampler {
 
     /// Download (or load) every tile covering the box, a few at a time. `report(done, total)` after each tile.
     pub fn prefetch(&self, south: f64, west: f64, north: f64, east: f64, cancel: &AtomicBool, report: &(dyn Fn(usize, usize) + Sync)) -> Result<(), String> {
+        if self.packs_cover(south, west, north, east) {
+            report(1, 1);
+            return Ok(());
+        }
         let (x0, y1) = lonlat_to_pixel(west, south, ZOOM);
         let (x1, y0) = lonlat_to_pixel(east, north, ZOOM);
         let max_t = (1u32 << ZOOM) - 1;
@@ -205,7 +262,14 @@ impl Sampler {
 }
 
 impl Elevation for Sampler {
+    fn clutter_m(&self, lat: f64, lon: f64) -> f64 {
+        self.pack_sample(lat, lon, true).unwrap_or(0.0)
+    }
+
     fn elevation_m(&self, lat: f64, lon: f64) -> f64 {
+        if let Some(v) = self.pack_sample(lat, lon, false) {
+            return v;
+        }
         let world = (1u64 << ZOOM) as f64 * TILE as f64;
         let (px, py) = lonlat_to_pixel(lon, lat, ZOOM);
         let px = px - 0.5;
@@ -268,7 +332,7 @@ mod tests {
 
     #[test]
     fn sampler_interpolates_across_tile_edges() {
-        let s = Sampler::new(Arc::new(Ramp));
+        let s = Sampler::new(Arc::new(Ramp), Arc::new(PackSet::default()));
         let world = (1u64 << ZOOM) as f64 * TILE as f64;
         // a point exactly on pixel centre x = 1000.5 (global) and half a pixel further
         let lon = |gx: f64| gx / world * 360.0 - 180.0;
@@ -291,10 +355,38 @@ mod tests {
 
     #[test]
     fn a_missing_tile_is_reported_not_hidden() {
-        let s = Sampler::new(Arc::new(Broken));
+        let s = Sampler::new(Arc::new(Broken), Arc::new(PackSet::default()));
         assert_eq!(s.elevation_m(36.0, -85.0), 0.0);
         assert!(s.failed.load(Ordering::Relaxed));
         let cancel = AtomicBool::new(false);
         assert_eq!(s.prefetch(36.0, -85.1, 36.1, -85.0, &cancel, &|_, _| {}).unwrap_err(), "no network");
+    }
+}
+
+/// Share (0..=1) of a disc around a point for which a pack has clutter data, estimated on a coarse grid of sample points.
+pub fn clutter_share(packs: &PackSet, lat: f64, lon: f64, radius_m: f64) -> f64 {
+    let steps = 14;
+    let (mut hit, mut total) = (0u32, 0u32);
+    let dlat = radius_m / 111_195.0;
+    let dlon = dlat / lat.to_radians().cos().max(0.05);
+    for i in -steps..=steps {
+        for j in -steps..=steps {
+            let (fx, fy) = (i as f64 / steps as f64, j as f64 / steps as f64);
+            if fx * fx + fy * fy > 1.0 {
+                continue;
+            }
+            total += 1;
+            let z_list = packs.zooms();
+            let covered = z_list.iter().any(|&z| {
+                let (px, py) = lonlat_to_pixel(lon + fx * dlon, lat + fy * dlat, z);
+                packs.find(z, (px / TILE as f64) as u32, (py / TILE as f64) as u32).is_some_and(|(_, has_clutter)| has_clutter)
+            });
+            hit += covered as u32;
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        hit as f64 / total as f64
     }
 }

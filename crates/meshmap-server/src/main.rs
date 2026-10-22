@@ -54,6 +54,9 @@ async fn main() {
     if let Some(u) = env("MESHMAP_TERRAIN_URL") {
         cfg.terrain_url = u;
     }
+    if let Some(d) = env("MESHMAP_PACKS_DIR") {
+        cfg.packs_dir = PathBuf::from(d);
+    }
     if let Some(mb) = env("MESHMAP_CACHE_MB").and_then(|v| v.parse().ok()) {
         cfg.cache_mb = mb;
     }

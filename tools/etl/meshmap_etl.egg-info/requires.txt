@@ -1,0 +1,9 @@
+numpy>=1.26
+rasterio>=1.3
+laspy[lazrs]>=2.5
+pyarrow>=14
+shapely>=2.0
+pillow>=10
+
+[test]
+pytest

@@ -1,7 +1,7 @@
 use crate::db::{now, Db};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use url::Url;
 
 #[derive(Clone, Debug)]
@@ -18,12 +18,15 @@ pub struct Config {
     pub cache_mb: u64,
     /// Terrain tile URL template ({z}/{x}/{y}); `file://` directories work too.
     pub terrain_url: String,
+    /// Folder of terrain packs (bare earth + clutter) built by `tools/etl`.
+    pub packs_dir: PathBuf,
 }
 
 impl Config {
     pub fn for_data_dir(data_dir: PathBuf, static_dir: PathBuf) -> Self {
         Self {
             cache_dir: data_dir.join("cache"),
+            packs_dir: data_dir.join("packs"),
             cache_mb: 2000,
             terrain_url: crate::terrain::DEFAULT_URL.to_string(),
             data_dir,
@@ -40,6 +43,7 @@ pub struct AppState {
     pub limiter: RateLimiter,
     pub challenges: Challenges,
     pub jobs: crate::jobs::Jobs,
+    packs: RwLock<Arc<crate::packs::PackSet>>,
 }
 
 pub type Shared = Arc<AppState>;
@@ -52,7 +56,19 @@ impl AppState {
 
     /// Like [`AppState::new`] with a specific terrain source (tests use synthetic terrain).
     pub fn with_terrain(db: Db, cfg: Config, terrain: Arc<dyn crate::terrain::TileSource>) -> Shared {
-        Arc::new(Self { db, cfg, limiter: RateLimiter::default(), challenges: Challenges::default(), jobs: crate::jobs::Jobs::new(terrain) })
+        let packs = RwLock::new(Arc::new(crate::packs::PackSet::load(&cfg.packs_dir)));
+        Arc::new(Self { db, cfg, limiter: RateLimiter::default(), challenges: Challenges::default(), jobs: crate::jobs::Jobs::new(terrain), packs })
+    }
+
+    /// The terrain packs as of now; packs added or rebuilt on disk are picked up without restarting.
+    pub fn packs(&self) -> Arc<crate::packs::PackSet> {
+        let current = self.packs.read().unwrap().clone();
+        if crate::packs::PackSet::stamp_of(&self.cfg.packs_dir) != current.stamp {
+            let fresh = Arc::new(crate::packs::PackSet::load(&self.cfg.packs_dir));
+            *self.packs.write().unwrap() = fresh.clone();
+            return fresh;
+        }
+        current
     }
 }
 

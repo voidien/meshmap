@@ -17,9 +17,14 @@ pub use grid::{inverse_mercator, mercator, Bounds};
 pub use network::{composite_network, NetworkBuilder, NetworkResult, NetworkStats};
 pub use node::{compute_node, node_extent, CoverageError, NodeParams, Progress, Raster, MAX_CELLS};
 
-/// Elevation (metres above sea level) of the ground at a point.
+/// Elevation (metres above sea level) of the ground at a point, and optionally the height of whatever stands on it.
 pub trait Elevation: Sync {
     fn elevation_m(&self, lat: f64, lon: f64) -> f64;
+
+    /// Height of trees, buildings and the like above the ground at a point, metres (0 where unknown).
+    fn clutter_m(&self, _lat: f64, _lon: f64) -> f64 {
+        0.0
+    }
 }
 
 impl<F: Fn(f64, f64) -> f64 + Sync> Elevation for F {

@@ -31,6 +31,26 @@ pub fn analyze_link(
     to_js(&res)
 }
 
+/// Analyse one link over bare earth and, when `clutter_m` is non-empty, over terrain plus clutter.
+/// Returns `{ bare, clutter }` (`clutter` is null without clutter data).
+#[wasm_bindgen]
+pub fn analyze_link_both(
+    params: JsValue,
+    a: JsValue,
+    b: JsValue,
+    dist_m: &[f64],
+    bare_m: &[f64],
+    clutter_m: &[f64],
+    include_series: bool,
+) -> Result<JsValue, JsError> {
+    let params: LinkParams = from_js(params, "params")?;
+    let a: Endpoint = from_js(a, "endpoint a")?;
+    let b: Endpoint = from_js(b, "endpoint b")?;
+    let clutter = if clutter_m.is_empty() { None } else { Some(clutter_m) };
+    let res = link::analyze_link_both(&params, &a, &b, dist_m, bare_m, clutter, include_series).map_err(|e| JsError::new(&e))?;
+    to_js(&res)
+}
+
 /// Free-space-only margins `[a->b, b->a]` in dB, no profile needed.
 #[wasm_bindgen]
 pub fn fspl_margins(a: JsValue, b: JsValue, dist_m: f64, freq_mhz: f64) -> Result<Vec<f64>, JsError> {

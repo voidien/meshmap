@@ -1,0 +1,2 @@
+[console_scripts]
+meshmap-etl = meshmap_etl.cli:main

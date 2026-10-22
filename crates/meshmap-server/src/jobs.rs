@@ -23,7 +23,7 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 /// Bump when the prediction method changes, so old cached results are not reused.
-pub const MODEL_VERSION: &str = "cov-1";
+pub const MODEL_VERSION: &str = "cov-2";
 pub const MAX_NODES: usize = 400;
 const MAX_QUEUED_PER_USER: i64 = 25;
 
@@ -105,6 +105,13 @@ pub struct CoverageRequest {
     pub settings: SettingsIn,
     pub radius_km: f64,
     pub resolution_m: f64,
+    /// "bare" (bare earth, the default) or "clutter" (terrain plus trees and buildings, where a terrain pack has them)
+    #[serde(default = "default_terrain")]
+    pub terrain: String,
+}
+
+fn default_terrain() -> String {
+    "bare".into()
 }
 
 pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
@@ -115,6 +122,9 @@ pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
         "coverage_network" if !r.nodes.is_empty() && r.nodes.len() <= MAX_NODES => {}
         "coverage_network" => return bad(format!("A network job needs 1 to {MAX_NODES} nodes.")),
         other => return bad(format!("Unknown job kind \"{other}\".")),
+    }
+    if !matches!(r.terrain.as_str(), "bare" | "clutter") {
+        return bad("Terrain must be \"bare\" or \"clutter\".".into());
     }
     if !(1.0..=100.0).contains(&r.radius_km) {
         return bad("Coverage radius must be between 1 and 100 km.".into());
@@ -168,7 +178,14 @@ fn node_params(r: &CoverageRequest, n: &NodeIn) -> NodeParams {
         itm: ItmSettings { climate: s.climate, n0: s.n0, epsilon: s.epsilon, sigma: s.sigma, vertical_polarization: s.vertical_polarization, confidence_pct: s.confidence_pct, reliability_pct: s.reliability_pct },
         radius_m: r.radius_km * 1000.0,
         resolution_m: r.resolution_m,
+        use_clutter: r.terrain == "clutter",
     }
+}
+
+/// Identifies the terrain data behind a result: the public tiles plus the terrain packs, so rebuilding a pack
+/// makes earlier results stale.
+pub fn terrain_id(state: &Shared) -> String {
+    format!("{}|{}", state.jobs.terrain.id(), state.packs().fingerprint())
 }
 
 fn sha(v: &Value) -> String {
@@ -181,6 +198,7 @@ pub fn node_hash(r: &CoverageRequest, n: &NodeIn, terrain_id: &str) -> String {
     sha(&json!({
         "v": MODEL_VERSION,
         "terrain": terrain_id,
+        "mode": r.terrain,
         "node": { "lat": round(n.lat), "lon": round(n.lon), "h": n.height_m, "tx": n.tx_dbm, "g": n.gain_dbi, "c": n.cable_loss_db, "preset": n.preset_id },
         "client": { "h": n.client_height_m.unwrap_or(r.client.height_m), "gain": r.client.gain_dbi, "cable": r.client.cable_loss_db },
         "settings": r.settings,
@@ -419,8 +437,16 @@ fn node_raster(ctx: &Ctx, req: &CoverageRequest, i: usize, hash: &str, sampler: 
 
 fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> {
     let dir = ctx.state.cfg.cache_dir.clone();
-    let terrain_id = ctx.state.jobs.terrain.id();
-    let sampler = Sampler::new(ctx.state.jobs.terrain.clone());
+    let terrain_id = terrain_id(ctx.state);
+    let packs = ctx.state.packs();
+    let sampler = Sampler::new(ctx.state.jobs.terrain.clone(), packs.clone());
+    let share = |p: &NodeParams| -> Value {
+        if req.terrain == "clutter" {
+            json!(crate::terrain::clutter_share(&packs, p.lat, p.lon, p.radius_m))
+        } else {
+            Value::Null
+        }
+    };
     let write_png = |name: &str, w: usize, h: usize, rgba: &[u8]| -> Result<(), Fail> {
         let png = encode_png(w, h, rgba).map_err(Fail::Failed)?;
         atomic_write(&cache_path(&dir, hash, name), &png).map_err(|e| Fail::Failed(format!("cannot write the cache: {e}")))
@@ -434,6 +460,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
         json!({
             "kind": "coverage_node", "hash": hash, "bounds": bounds_json(&raster.bounds), "width": raster.width, "height": raster.height,
             "images": { "margin": url(hash, "margin.png") }, "stats": stats_json(&net.stats), "nodes": 1,
+            "terrain": req.terrain, "clutterShare": share(&node_params(req, &req.nodes[0])),
         })
     } else {
         // union of the node rasters, built up one node at a time so memory stays small
@@ -449,6 +476,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
         }
         let mut builder = NetworkBuilder::new(min_x, max_x, min_y, max_y, cell).map_err(Fail::Failed)?;
         let total = req.nodes.len() as f64;
+        let shares: Vec<f64> = if req.terrain == "clutter" { params.iter().filter_map(|p| share(p).as_f64()).collect() } else { vec![] };
         // identical nodes (same hash) are only computed once
         let mut done: HashSet<String> = HashSet::new();
         for (i, n) in req.nodes.iter().enumerate() {
@@ -474,6 +502,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
         json!({
             "kind": "coverage_network", "hash": hash, "bounds": bounds_json(&net.bounds), "width": net.width, "height": net.height,
             "images": { "margin": url(hash, "margin.png"), "count": url(hash, "count.png") }, "stats": stats_json(&net.stats), "nodes": done.len(),
+            "terrain": req.terrain, "clutterShare": if shares.is_empty() { Value::Null } else { json!(shares.iter().sum::<f64>() / shares.len() as f64) },
         })
     };
     atomic_write(&cache_path(&dir, hash, "json"), result.to_string().as_bytes()).map_err(|e| Fail::Failed(format!("cannot write the cache: {e}")))?;
@@ -643,7 +672,7 @@ pub fn find_job(c: &Connection, id: &str) -> Result<Option<JobOut>, ApiError> {
 /// Insert a job for `project_id`: finished at once when the result is cached, attached to an identical
 /// queued/running job of the same project when there is one, else queued.
 pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageRequest) -> Result<(JobOut, bool), ApiError> {
-    let terrain_id = state.jobs.terrain.id();
+    let terrain_id = terrain_id(state);
     let hash = request_hash(req, &terrain_id);
     let cached = cached_result(&state.cfg.cache_dir, &hash);
     let params_json = serde_json::to_string(req).map_err(|e| ApiError::internal(e.to_string()))?;
@@ -687,5 +716,5 @@ pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageReq
 
 /// Is there already a stored result for this request?
 pub fn is_cached(state: &Shared, req: &CoverageRequest) -> bool {
-    cached_result(&state.cfg.cache_dir, &request_hash(req, &state.jobs.terrain.id())).is_some()
+    cached_result(&state.cfg.cache_dir, &request_hash(req, &terrain_id(state))).is_some()
 }

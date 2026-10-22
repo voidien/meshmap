@@ -10,7 +10,7 @@ fn main() {
         let p = NodeParams {
             lat: 36.0, lon: -85.0, h_agl_m: 10.0, tx_dbm: 22.0, gain_dbi: 3.0, cable_loss_db: 0.5, sensitivity_dbm: -131.5,
             client_h_agl_m: 2.0, client_gain_dbi: 0.0, client_cable_loss_db: 0.0, freq_mhz: 915.0, itm: ItmSettings::default(),
-            radius_m: radius, resolution_m: res,
+            radius_m: radius, resolution_m: res, use_clutter: false,
         };
         let cancel = AtomicBool::new(false);
         let t = Instant::now();

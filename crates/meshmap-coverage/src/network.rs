@@ -140,6 +140,7 @@ mod tests {
             itm: ItmSettings::default(),
             radius_m: 8_000.0,
             resolution_m: 100.0,
+            use_clutter: false,
         }
     }
 

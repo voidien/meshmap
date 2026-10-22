@@ -31,6 +31,8 @@ pub struct NodeParams {
     pub radius_m: f64,
     /// Ground resolution, metres.
     pub resolution_m: f64,
+    /// Predict over terrain plus clutter (trees, buildings) instead of bare earth.
+    pub use_clutter: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -129,9 +131,14 @@ pub(crate) fn radial_margins(
     let step = p.resolution_m;
     let mut pfl = vec![0.0; n_samples + 2];
     pfl[1] = step;
+    let mut bare = vec![0.0; n_samples];
+    let mut surface = vec![0.0; n_samples];
     for j in 0..n_samples {
         let (la, lo) = if j == 0 { (p.lat, p.lon) } else { destination(p.lat, p.lon, az_deg, j as f64 * step) };
-        pfl[j + 2] = terrain.elevation_m(la, lo);
+        bare[j] = terrain.elevation_m(la, lo);
+        // the node's own position stays on the ground: its antenna height is already measured from there
+        surface[j] = if p.use_clutter && j > 0 { bare[j] + terrain.clutter_m(la, lo).max(0.0) } else { bare[j] };
+        pfl[j + 2] = surface[j];
     }
     let mut out = vec![f32::NAN; n_samples];
     let mut prefix = Vec::with_capacity(n_samples + 2);
@@ -140,11 +147,13 @@ pub(crate) fn radial_margins(
             // too short for the terrain model: free space
             Some(fspl_db(j as f64 * step, p.freq_mhz))
         } else {
-            // the profile from the node out to distance j (j intervals), exactly what a point-to-point analysis would see
+            // the profile from the node out to distance j (j intervals), exactly what a point-to-point analysis would see.
+            // The far end is the client device's own spot, so it too stays on the ground.
             prefix.clear();
             prefix.push(j as f64);
             prefix.push(step);
             prefix.extend_from_slice(&pfl[2..j + 3]);
+            prefix[j + 2] = bare[j];
             match itm_loss(p, &prefix) {
                 Ok(l) => {
                     ok_calls.fetch_add(1, Ordering::Relaxed);
@@ -275,6 +284,7 @@ mod tests {
             itm: ItmSettings::default(),
             radius_m: 10_000.0,
             resolution_m: 100.0,
+            use_clutter: false,
         }
     }
 
@@ -344,6 +354,45 @@ mod tests {
         let behind = at(&r, 36.0, -85.0 + dlon).unwrap();
         let open = at(&r, 36.0, -85.0 - dlon).unwrap();
         assert!(open - behind > 10.0, "open {open} behind ridge {behind}");
+    }
+
+    /// Flat ground with a belt of 25 m trees 2-3 km east of the node.
+    struct Forest;
+    impl Elevation for Forest {
+        fn elevation_m(&self, _lat: f64, _lon: f64) -> f64 {
+            100.0
+        }
+        fn clutter_m(&self, _lat: f64, lon: f64) -> f64 {
+            let d_km = (lon + 85.0) * 111.2 * 36.0f64.to_radians().cos();
+            if (2.0..3.0).contains(&d_km) {
+                25.0
+            } else {
+                0.0
+            }
+        }
+    }
+
+    #[test]
+    fn clutter_mode_shadows_the_ground_behind_trees_and_bare_mode_ignores_them() {
+        let dlon = 6.0 / (111.2 * 36.0f64.to_radians().cos());
+        let bare = run(&params(), &Forest).unwrap();
+        let clutter = run(&NodeParams { use_clutter: true, ..params() }, &Forest).unwrap();
+        let (b_east, c_east) = (at(&bare, 36.0, -85.0 + dlon).unwrap(), at(&clutter, 36.0, -85.0 + dlon).unwrap());
+        let (b_west, c_west) = (at(&bare, 36.0, -85.0 - dlon).unwrap(), at(&clutter, 36.0, -85.0 - dlon).unwrap());
+        assert!(b_east - c_east > 8.0, "behind the trees: bare {b_east} clutter {c_east}");
+        assert!((b_west - c_west).abs() < 0.5, "open side unchanged: bare {b_west} clutter {c_west}");
+        // the trees cannot hide the node's own surroundings
+        let near_b = at(&bare, 36.0, -85.0 + 0.3 / (111.2 * 36.0f64.to_radians().cos())).unwrap();
+        let near_c = at(&clutter, 36.0, -85.0 + 0.3 / (111.2 * 36.0f64.to_radians().cos())).unwrap();
+        assert!((near_b - near_c).abs() < 0.5);
+    }
+
+    #[test]
+    fn a_terrain_source_without_clutter_gives_identical_results_in_both_modes() {
+        let flat = |_: f64, _: f64| 100.0;
+        let a = run(&params(), &flat).unwrap();
+        let b = run(&NodeParams { use_clutter: true, ..params() }, &flat).unwrap();
+        assert_eq!(a.data, b.data);
     }
 
     #[test]

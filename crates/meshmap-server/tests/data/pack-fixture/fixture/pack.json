@@ -1,0 +1,26 @@
+{
+  "format": "meshmap-pack/1",
+  "builtAt": "2026-01-01T00:00:00Z",
+  "tileSize": 256,
+  "bare": {
+    "encoding": "rg16-dm-offset500",
+    "source": "synthetic"
+  },
+  "clutter": {
+    "encoding": "gray8-half-metre",
+    "sources": [
+      "synthetic"
+    ]
+  },
+  "id": "fixture",
+  "name": "Synthetic fixture",
+  "zoom": 13,
+  "bbox": [
+    -85.1,
+    35.9,
+    -84.9,
+    36.1
+  ],
+  "bytes": 0,
+  "tileCount": 9
+}

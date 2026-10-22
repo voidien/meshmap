@@ -135,6 +135,53 @@ pub struct Series {
     pub fresnel_m: Vec<f64>,
 }
 
+/// Both predictions for one path: over bare earth, and (when clutter data exists) over terrain plus clutter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkPair {
+    pub bare: LinkResult,
+    pub clutter: Option<LinkResult>,
+}
+
+/// Ground plus clutter along a profile, for the model to treat as the surface radio waves have to clear.
+///
+/// The two ends stay at bare-earth height: an antenna is on a mast or roof that is already counted in its height above
+/// ground, so clutter at the antenna's own location must not lift it (or bury it). Everything in between is raised
+/// by the clutter height (trees, buildings). Negative or non-finite clutter values are treated as zero.
+pub fn surface_profile(bare: &[f64], clutter: &[f64]) -> Vec<f64> {
+    let n = bare.len();
+    bare.iter()
+        .enumerate()
+        .map(|(i, &b)| {
+            let c = clutter.get(i).copied().unwrap_or(0.0);
+            if i == 0 || i + 1 == n || !c.is_finite() || c <= 0.0 {
+                b
+            } else {
+                b + c
+            }
+        })
+        .collect()
+}
+
+/// Analyse a link over bare earth and, when `clutter` is given, again over terrain plus clutter.
+/// In the clutter result `series.terrain_eff_m` is the surface (terrain plus clutter) with earth curvature.
+pub fn analyze_link_both(
+    params: &LinkParams,
+    a: &Endpoint,
+    b: &Endpoint,
+    dist_m: &[f64],
+    bare_m: &[f64],
+    clutter_m: Option<&[f64]>,
+    include_series: bool,
+) -> Result<LinkPair, String> {
+    let bare = analyze_link(params, a, b, dist_m, bare_m, include_series)?;
+    let clutter = match clutter_m {
+        Some(c) if c.len() == bare_m.len() => Some(analyze_link(params, a, b, dist_m, &surface_profile(bare_m, c), include_series)?),
+        Some(_) => return Err("clutter profile must have as many samples as the terrain profile".into()),
+        None => None,
+    };
+    Ok(LinkPair { bare, clutter })
+}
+
 /// Free-space-only margin for both directions; cheap screen that needs no profile.
 pub fn fspl_margins_db(a: &Endpoint, b: &Endpoint, dist_m: f64, freq_mhz: f64) -> (f64, f64) {
     let fspl = fspl_db(dist_m, freq_mhz);
@@ -475,6 +522,52 @@ mod tests {
         assert_eq!(r.series.fresnel_m[0], 0.0);
         let r = analyze_link(&LinkParams::default(), &ep(15.0), &ep(15.0), &d, &e, false).unwrap();
         assert!(r.series.ray_m.is_empty());
+    }
+
+    fn trees(len: f64, n: usize, from: f64, to: f64, height: f64) -> Vec<f64> {
+        (0..n).map(|i| { let x = len * i as f64 / (n - 1) as f64; if x >= from && x <= to { height } else { 0.0 } }).collect()
+    }
+
+    #[test]
+    fn a_tree_line_blocks_a_path_that_is_clear_over_bare_earth() {
+        let (d, e) = profile(5_000.0, 201, |_| 100.0);
+        let canopy = trees(5_000.0, 201, 2_300.0, 2_700.0, 20.0);
+        let pair = analyze_link_both(&LinkParams::default(), &ep(15.0), &ep(15.0), &d, &e, Some(&canopy), false).unwrap();
+        assert!(pair.bare.clearance_pct > 60.0, "{}", pair.bare.clearance_pct);
+        let c = pair.clutter.unwrap();
+        assert!(c.clearance_pct < pair.bare.clearance_pct - 50.0, "clutter {} bare {}", c.clearance_pct, pair.bare.clearance_pct);
+        assert!(c.path_loss_db > pair.bare.path_loss_db + 5.0);
+        assert!(c.margin_db < pair.bare.margin_db);
+        assert!(c.obstruction_m > 5.0);
+    }
+
+    #[test]
+    fn clutter_at_the_antennas_themselves_is_ignored() {
+        // 30 m of trees right at both ends, nothing between: the masts are above ground level, not above the trees
+        let (d, e) = profile(5_000.0, 126, |_| 0.0);
+        let mut canopy = vec![0.0; 126];
+        for i in [0usize, 125] {
+            canopy[i] = 30.0;
+        }
+        let pair = analyze_link_both(&LinkParams::default(), &ep(10.0), &ep(10.0), &d, &e, Some(&canopy), false).unwrap();
+        let c = pair.clutter.unwrap();
+        assert_eq!(c.path_loss_db, pair.bare.path_loss_db);
+        assert_eq!(c.clearance_pct, pair.bare.clearance_pct);
+    }
+
+    #[test]
+    fn surface_profile_keeps_the_ends_on_the_ground_and_sanitises_clutter() {
+        let s = surface_profile(&[10.0, 11.0, 12.0, 13.0, 14.0], &[5.0, 5.0, -3.0, f64::NAN, 5.0]);
+        assert_eq!(s, vec![10.0, 16.0, 12.0, 13.0, 14.0]);
+        assert_eq!(surface_profile(&[1.0, 2.0, 3.0], &[]), vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn without_clutter_data_there_is_no_clutter_result_and_bad_lengths_are_rejected() {
+        let (d, e) = profile(5_000.0, 51, |_| 0.0);
+        let pair = analyze_link_both(&LinkParams::default(), &ep(10.0), &ep(10.0), &d, &e, None, false).unwrap();
+        assert!(pair.clutter.is_none());
+        assert!(analyze_link_both(&LinkParams::default(), &ep(10.0), &ep(10.0), &d, &e, Some(&[0.0; 3]), false).is_err());
     }
 
     #[test]
