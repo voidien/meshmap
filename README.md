@@ -66,12 +66,40 @@ Any static host (Netlify, S3 + CDN, GitHub Pages) also works with just the conte
 
 ### HTTPS through Tailscale (optional)
 
-Same approach as the Loom project: Tailscale runs on the host and `tailscale serve` fronts the published port.
-
 ```bash
 tailscale serve --bg 9091          # use your MESHMAP_PORT if you changed it
 ```
 
 Then open `https://<machine>.<tailnet>.ts.net` from any device on your tailnet (HTTPS certificates must be enabled in the
 Tailscale admin console, DNS page). `tailscale serve status` shows what is published and `tailscale serve reset` removes it.
-meshmap has no login, so keep it on `serve` (tailnet only) rather than Funnel (public internet).
+
+### Tailscale from a container (optional)
+
+Instead of Tailscale on the server, meshmap can bring its own: `docker-compose.tailscale.yml` adds a Tailscale container
+beside it that joins your tailnet as a machine of its own (`meshmap` unless you set `TS_HOSTNAME`) and serves
+`https://meshmap.<tailnet>.ts.net` with a certificate. meshmap shares that container's network, so nothing listens on the
+server's port 9091 any more.
+
+1. In the Tailscale admin console:
+   - **DNS:** turn on MagicDNS and **HTTPS Certificates**.
+   - **Access controls:** only needed for Funnel (below). Tagging the machine is simplest (a tagged machine's key never expires):
+     ```json
+     "tagOwners": { "tag:meshmap": ["autogroup:admin"] },
+     "nodeAttrs": [ { "target": ["tag:meshmap"], "attr": ["funnel"] } ]
+     ```
+   - **Settings → Keys → Generate auth key**, with the tag `tag:meshmap` if you made one.
+2. In `.env`, uncomment and fill in:
+   ```
+   COMPOSE_FILE=docker-compose.yml:docker-compose.tailscale.yml
+   TS_AUTHKEY=tskey-auth-...
+   ```
+3. `docker compose up -d`, then `docker compose logs tailscale` shows it joining (the certificate takes up to a minute the
+   first time). Its identity is kept in `data/tailscale/`, so it keeps its name and address across restarts and updates (the
+   key is used only the first time). Needs Docker Compose 2.24 or later.
+4. Open `https://meshmap.<tailnet>.ts.net` from a device signed in to Tailscale.
+
+By default (`TS_MODE=serve`) only devices on your tailnet can reach it. Set `TS_MODE=funnel` in `.env` to put it on the public
+internet through Funnel as well (needs the `funnel` attribute above). meshmap has no login, so anyone with the URL could use it.
+
+If you used `tailscale serve` on the server before, turn it off there (`tailscale serve reset`): the address is now the new
+machine's. To go back, comment out the two lines and `docker compose up -d`.

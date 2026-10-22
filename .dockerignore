@@ -1,7 +1,9 @@
-.git
-target
 **/node_modules
+*.md
+.env
+.git
+data
+docs
+target
 web/dist
 web/src/wasm/pkg
-docs
-*.md

@@ -1,0 +1,27 @@
+# Optional: meshmap on your tailnet (and, if you choose, through Tailscale Funnel on the internet) from its own
+# Tailscale machine in a container beside it (a "sidecar"). Nothing then listens on this server's ports; the way in is
+# https://<TS_HOSTNAME>.<your tailnet>.ts.net. Turn it on with two lines in .env (see .env.example):
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.tailscale.yml
+#   TS_AUTHKEY=tskey-auth-...
+# then `docker compose up -d`. The README's "Tailscale from a container" says what to set in Tailscale first.
+# Needs Docker Compose 2.24 or later (for `!reset`).
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-meshmap}
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?Put a Tailscale auth key in .env as TS_AUTHKEY}
+      TS_HOSTNAME: ${TS_HOSTNAME:-meshmap}
+      TS_STATE_DIR: /var/lib/tailscale             # the machine's identity, so it keeps its name across restarts and updates
+      TS_SERVE_CONFIG: /config/${TS_MODE:-serve}.json   # serve = tailnet only (default), funnel = also the internet
+      TS_USERSPACE: "true"
+    volumes:
+      - ./data/tailscale:/var/lib/tailscale
+      - ./tailscale:/config:ro
+
+  meshmap:
+    network_mode: service:tailscale                # meshmap shares the sidecar's network: Tailscale reaches it on 127.0.0.1
+    depends_on:
+      - tailscale
+    ports: !reset []                               # and nothing is published on this server
