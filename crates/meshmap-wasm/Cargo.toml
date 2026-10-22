@@ -1,0 +1,15 @@
+[package]
+name = "meshmap-wasm"
+description = "WASM bindings for meshmap-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+meshmap-core = { path = "../meshmap-core" }
+wasm-bindgen = "=0.2.100"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"

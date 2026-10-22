@@ -1,0 +1,9 @@
+[package]
+name = "meshmap-core"
+description = "Pure RF/terrain math for LoRa mesh planning (no IO, WASM-safe)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

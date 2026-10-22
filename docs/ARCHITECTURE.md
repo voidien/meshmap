@@ -285,7 +285,41 @@ REST + JSON, versioned `/api/v1`, OpenAPI generated (`utoipa`), TypeScript types
 7. Is the Meshtastic vs. MeshCore difference purely preset/sensitivity data? (Proposed: yes; hop/routing behaviour is out of scope for v1.)
 8. Teams/orgs: v1 shares per-project with explicit members; org-level groups deferred.
 
-## 15. Milestones (your order; each ends with "how to run / what to verify")
+## 15. Delivery ladder (what we build, in order)
+
+The full plan in this document is the long-term target. We reach it in releases that each work on their own. Everything in
+§1-§14 stays valid; the ladder only decides *when* each part is built. Step v0 deliberately has **no backend**.
+
+| Release | Adds | What it leaves out (and where it comes back) | Rough effort |
+|---|---|---|---|
+| **v0** | Static web app: MapLibre hillshade + 3D terrain, node add/move/delete, bare-earth links (profile, k-factor, Fresnel, FSPL + knife-edge diffraction, margin, color classes), profile chart, grid-indexed pair pruning, WASM link math, JSON save/load + CSV/KML/GeoJSON export | Accounts, DB, jobs, ITM, clutter, heatmaps, placement | 2-4 wks |
+| **v1** | ITM as the main estimate (build-vs-reuse decision first, §14.1), validation against NTIA vectors and SPLAT!/Radio Mobile (`docs/validation.md`) | Everything server-side | +2-3 wks |
+| **v2** | Axum + Postgres/PostGIS: accounts (magic links), shared projects, roles, versions, SSE (§9, §10, §12) | Jobs, packs | +3-4 wks |
+| **v3** | Postgres job queue + worker, project-wide analysis at scale with progress and caching, per-node heatmaps and network layer (§6, §7) | State packs, clutter | +4-6 wks |
+| **v4** | State terrain packs, 3DEP lidar/clutter ETL, bare-vs-clutter side by side (§5) | Placement | +4-8 wks |
+| **v5** | Placement suggestions (§8), then later phases (§16) | | open-ended |
+
+Effort figures are rough guesses. Highest risk: v1 (ITM correctness), v4 (data pipeline), v5.
+
+### v0 design
+
+- **No backend**: `web/` builds to static files. Hostable anywhere (GitHub Pages, S3, Netlify, Caddy).
+- **Terrain**: public AWS/Mapzen *Terrarium* terrain-RGB tiles (zoom 12, roughly 30 m at US latitudes) used for both the map (hillshade/3D)
+  and link profiles. Coarser and less consistent than the 10 m 3DEP packs of v4, so results are labelled rough estimates.
+- **Math**: `crates/meshmap-core` (pure Rust, no IO) compiled to WASM by `crates/meshmap-wasm`. The same core crate becomes the shared
+  server/WASM crate later, so v0 work carries over unchanged. Profiles are sampled in TypeScript (tile fetch + bilinear), then handed to
+  WASM as arrays; the core only ever sees `(distance, elevation)` arrays, which is the same contract the later tile packs will use.
+- **Loss model**: FSPL + single knife-edge diffraction (ITU-R P.526) on the worst obstruction. Approximate, replaced by ITM in v1.
+  A path with at least 60 % first-Fresnel clearance has zero diffraction loss by construction.
+- **Persistence**: browser `localStorage` plus JSON import/export. No accounts.
+- **Link classes** (worst direction): `none` = free-space budget already negative (not drawn, listed only if enabled);
+  `obstructed` = ray blocked (clearance < 0 %) or margin < 0 dB; `marginal` = Fresnel clearance < 60 % or margin < threshold (default 10 dB);
+  `clear` otherwise. Nodes with different SF/BW are `none` (LoRa cannot demodulate across presets).
+- **Simplifications to revisit**: main-thread WASM (a Web Worker comes when profiles get heavy), no clutter, no antenna patterns.
+
+## 15b. Full-plan milestones (reference; used from v1 onward)
+
+Each ends with "how to run / what to verify". They are the detailed breakdown of releases v1-v5 above.
 
 | | Milestone | Delivers | You verify |
 |---|---|---|---|
