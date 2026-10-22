@@ -10,6 +10,10 @@ export interface CoverageResult {
   images: { margin: string; count?: string };
   stats: { coveredKm2: number; redundantKm2: number; predictedKm2: number };
   nodes: number;
+  /** which ground model the server used */
+  terrain?: "bare" | "clutter";
+  /** share of the predicted area that had clutter data (clutter runs only) */
+  clutterShare?: number | null;
 }
 
 export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
@@ -54,6 +58,7 @@ export function coverageRequest(kind: "coverage_node" | "coverage_network", node
         reliabilityPct: s.reliabilityPct,
       },
     },
+    terrain: s.terrainMode,
     radiusKm: s.coverageRadiusKm,
     resolutionM: s.coverageResolutionM,
   };

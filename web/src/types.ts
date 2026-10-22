@@ -43,7 +43,11 @@ export interface Settings {
   /** The client device a heatmap is predicted for (its height comes from each node's "client height"). */
   clientGainDbi: number;
   clientCableLossDb: number;
+  /** Which ground model drives link colours and numbers: bare earth only, or terrain plus trees/buildings where a data pack has them. */
+  terrainMode: TerrainMode;
 }
+
+export type TerrainMode = "bare" | "clutter";
 
 export type ProjectRole = "owner" | "editor" | "viewer";
 
@@ -109,8 +113,14 @@ export interface Link {
   b: string;
   class: LinkClass;
   distanceM: number;
-  /** Absent for links classified without terrain (`none`). */
+  /** Result for the selected terrain mode; absent for links classified without terrain (`none`). */
   result?: LinkResult;
+  /** Bare-earth result. */
+  bare?: LinkResult;
+  /** Terrain + clutter result; absent when no clutter data covers the path. */
+  clutter?: LinkResult;
+  /** The path has clutter data (so `clutter` is meaningful). */
+  hasClutter?: boolean;
   warning?: string;
 }
 
@@ -132,4 +142,5 @@ export const DEFAULT_SETTINGS: Settings = {
   coverageResolutionM: 100,
   clientGainDbi: 0,
   clientCableLossDb: 0,
+  terrainMode: "clutter",
 };

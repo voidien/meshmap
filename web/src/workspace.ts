@@ -57,6 +57,7 @@ export function parseProject(raw: unknown): Project | null {
     reliabilityPct: num(s.reliabilityPct, DEFAULT_SETTINGS.reliabilityPct),
     coverageRadiusKm: num(s.coverageRadiusKm, DEFAULT_SETTINGS.coverageRadiusKm),
     coverageResolutionM: num(s.coverageResolutionM, DEFAULT_SETTINGS.coverageResolutionM),
+    terrainMode: s.terrainMode === "bare" ? "bare" : "clutter",
     clientGainDbi: num(s.clientGainDbi, DEFAULT_SETTINGS.clientGainDbi),
     clientCableLossDb: num(s.clientCableLossDb, DEFAULT_SETTINGS.clientCableLossDb),
   };

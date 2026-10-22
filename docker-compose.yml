@@ -2,7 +2,7 @@ name: meshmap
 services:
   meshmap:
     build: .
-    image: meshmap:v2
+    image: meshmap:v4
     container_name: meshmap
     restart: unless-stopped
     stop_grace_period: 20s
@@ -20,3 +20,12 @@ services:
       resources:
         limits:
           memory: 1G           # coverage jobs hold terrain tiles and result rasters in memory
+
+  # Builds terrain packs into ./data/packs:  docker compose --profile etl run --rm etl build --id nashville --bbox=... (see tools/etl/README.md)
+  etl:
+    profiles: ["etl"]
+    build: ./tools/etl
+    image: meshmap-etl:v4
+    volumes:
+      - ./data:/app/data
+    working_dir: /app

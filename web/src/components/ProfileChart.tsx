@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { analyzeWithProfile, SPACING_FULL_M } from "../engine/analysis";
 import { LINK_COLORS } from "../map/MapView";
-import type { MeshNode, Settings } from "../types";
+import type { LinkResult, MeshNode, Settings, TerrainMode } from "../types";
 import type { ProfileData } from "../engine/analysis";
 
 interface Props {
@@ -66,15 +66,17 @@ export function ProfileChart({ a, b, settings, onClose }: Props) {
 
 function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void }) {
   const { data, a, b, settings, hover, setHover } = props;
-  const { dist, elev, result: r } = data;
+  const { dist, elev, result: r, bare, withClutter } = data;
+  const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
   const n = dist.length;
   const total = dist[n - 1];
   const s = r.series;
 
   const upper = s.ray_m.map((y, i) => y + s.fresnel_m[i]);
   const lower = s.ray_m.map((y, i) => y - s.fresnel_m[i]);
-  const ymin0 = Math.min(...s.terrain_eff_m, ...lower);
-  const ymax0 = Math.max(...s.terrain_eff_m, ...upper);
+  const bareLine = bare.series.terrain_eff_m;
+  const ymin0 = Math.min(...bareLine, ...s.terrain_eff_m, ...lower);
+  const ymax0 = Math.max(...bareLine, ...s.terrain_eff_m, ...upper);
   const pad = Math.max(5, (ymax0 - ymin0) * 0.06);
   const ymin = ymin0 - pad;
   const ymax = ymax0 + pad;
@@ -84,7 +86,8 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
   const poly = (top: number[], bottom: number[]) =>
     path(top) + [...bottom].reverse().map((v, k) => `L${X(dist[n - 1 - k]).toFixed(1)},${Y(v).toFixed(1)}`).join("") + "Z";
   const inner = (sign: number) => s.ray_m.map((y, i) => y + sign * 0.6 * s.fresnel_m[i]);
-  const terrainFill = path(s.terrain_eff_m) + `L${X(total)},${H - M.b}L${X(0)},${H - M.b}Z`;
+  const terrainFill = path(bareLine) + `L${X(total)},${H - M.b}L${X(0)},${H - M.b}Z`;
+  const clutterFill = showClutter ? poly(s.terrain_eff_m, bareLine) : "";
 
   const yTicks = niceTicks(ymin, ymax, 5);
   const xTicks = niceTicks(0, total / 1000, 8);
@@ -105,7 +108,9 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
     <div className="chart-body">
       <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         <path d={terrainFill} fill="#b59a73" opacity={0.85} />
-        <path d={path(s.terrain_eff_m)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
+        {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={0.75} /> : null}
+        <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
+        {showClutter ? <path d={path(s.terrain_eff_m)} fill="none" stroke="#1f5f2f" strokeWidth={1.2} /> : null}
         <path d={poly(upper, lower)} fill="#4f8ff7" opacity={0.15} />
         <path d={poly(inner(1), inner(-1))} fill="#4f8ff7" opacity={0.22} />
         <path d={path(s.ray_m)} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
@@ -150,7 +155,13 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
         <span><i className="sw" style={{ background: "#b59a73" }} />terrain + earth curvature (k={Number(settings.k.toFixed(2))})</span>
         <span><i className="sw" style={{ background: "#1d4ed8" }} />direct ray</span>
         <span><i className="sw" style={{ background: "#4f8ff7", opacity: 0.5 }} />1st Fresnel zone (inner = 60 %)</span>
-        <span>clutter: not modelled (bare earth)</span>
+        {showClutter ? (
+          <span><i className="sw" style={{ background: "#3f8f4f" }} />trees and buildings (clutter)</span>
+        ) : data.clutter === null ? (
+          <span>no clutter data on this path: bare earth only</span>
+        ) : (
+          <span>clutter hidden (terrain model: bare earth)</span>
+        )}
       </div>
       <div className="readout">
         {hover !== null ? (
@@ -181,13 +192,42 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
               <th>{b.name} → {a.name}</th><td>Rx {f(r.rx_ba_dbm)} dBm · sens {f(sensA)} → margin <b>{f(r.margin_ba_db)} dB</b></td></tr>
         </tbody>
       </table>
+      {withClutter ? <CompareTable bare={bare} clutter={withClutter} mode={settings.terrainMode} /> : null}
       {r.itm && r.itm.warnings.length ? (
         <p className="hint">ITM warnings: {r.itm.warnings.join("; ")}.</p>
       ) : null}
       <p className="hint">
-        Estimate only: Longley-Rice over bare-earth ~30 m terrain (no trees or buildings), at {settings.reliabilityPct} % reliability / {settings.confidencePct} % confidence.
+        Estimate only: Longley-Rice over {showClutter ? "terrain plus trees and buildings treated as solid obstacles (no foliage loss; both antennas stay on the ground)" : "bare-earth terrain (no trees or buildings)"}, at {settings.reliabilityPct} % reliability / {settings.confidencePct} % confidence.
         The "regime" is ITM's own classification by distance and horizons; clearance above shows whether the direct ray is actually blocked.
       </p>
     </div>
+  );
+}
+
+function CompareTable({ bare, clutter, mode }: { bare: LinkResult; clutter: LinkResult; mode: TerrainMode }) {
+  const f = (v: number, d = 1) => v.toFixed(d);
+  const rows: [string, (r: LinkResult) => string][] = [
+    ["Class", (r) => r.class],
+    ["Path loss", (r) => `${f(r.path_loss_db)} dB`],
+    ["Worst margin", (r) => `${f(r.margin_db)} dB`],
+    ["Fresnel clearance", (r) => `${r.clearance_pct < -100 ? "< -100" : f(r.clearance_pct, 0)} %`],
+    ["Obstruction above ray", (r) => (r.obstruction_m > 0 ? `${f(r.obstruction_m, 0)} m` : "none")],
+  ];
+  return (
+    <table className="budget compare-terrain">
+      <thead>
+        <tr><th /><th className={mode === "bare" ? "sel" : ""}>Bare earth</th><th className={mode === "clutter" ? "sel" : ""}>Terrain + clutter</th><th>Difference</th></tr>
+      </thead>
+      <tbody>
+        {rows.map(([label, fn]) => (
+          <tr key={label}>
+            <th>{label}</th>
+            <td>{fn(bare)}</td>
+            <td>{fn(clutter)}</td>
+            <td>{label === "Path loss" ? `${f(clutter.path_loss_db - bare.path_loss_db)} dB` : label === "Worst margin" ? `${f(clutter.margin_db - bare.margin_db)} dB` : ""}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

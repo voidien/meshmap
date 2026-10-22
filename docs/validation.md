@@ -65,6 +65,24 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   differ from a separately analysed link by a few dB where terrain changes abruptly; heatmaps have not been compared with
   SPLAT! or Radio Mobile coverage plots, nor with measurements.
 
+## Clutter and terrain packs: `tools/etl`, `crates/meshmap-coverage`
+
+- Unit tests: tile encoding round-trips between Python and Rust (`tests/packs.rs` decodes tiles written by the Python ETL) and
+  browser decoding is tested in `web/src/engine/packs.test.ts`; trees shadow a radial in the coverage engine and results are
+  bit-identical when no clutter source is present; a hot-added pack changes the cache key.
+- End to end (headless Chromium, synthetic pack with a 25 m tree belt across a path): the 5.1 km link goes from marginal
+  (107.8 dB, 50.7 dB margin) on bare earth to obstructed (134.3 dB, 24.2 dB margin, clearance -66 %) with clutter.
+- **Lidar vs the canopy + buildings fallback** (Nashville downtown, 4 z13 tiles, ground truth = lidar surface minus ground):
+  with the `max` canopy statistic, 70.4 % of pixels are at least 3 m tall in the fallback against 77.1 % in the lidar
+  product; Jaccard overlap of the 3 m masks 0.825; median height difference -1.5 m, mean absolute difference 4.5 m,
+  correlation 0.67. The fallback therefore underestimates clutter a little (missed small buildings, thin canopy). The default
+  statistic changed from the 75th percentile (Jaccard 0.725, median -3.5 m) to `max` because of this.
+- **3DEP 1/3" vs Terrarium z12 bare earth** (same area): mean absolute difference 0.48 m, 95th percentile 1.63 m, maximum 17.2 m,
+  so the main benefit of a pack is the clutter, not the bare ground.
+- **Not validated:** one urban area only; no comparison with measured links; ITM treats clutter as terrain geometry, so there is
+  no foliage or building-penetration loss, seasons are ignored, and antennas stay on the ground (their height is above ground,
+  not above clutter). Heatmaps over areas without clutter data silently use bare earth, which the UI reports as a percentage.
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.
@@ -73,7 +91,7 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   resolution and interpolation, how each tool samples the profile, k-factor / refractivity handling, ITM version (SPLAT!'s ITWOM
   is a different model), and rounding of the reliability settings.
 - **No field calibration.** Predictions have not been compared with measured RSSI/SNR (a later phase).
-- **Terrain data is coarse.** v0/v1 use public ~30 m Terrarium tiles with no clutter; real paths through trees and buildings
-  will be worse than predicted, and ITM at 915 MHz in dense clutter is optimistic.
+- **Terrain data.** Without a terrain pack the app uses public ~30 m Terrarium tiles with no clutter; real paths through trees and
+  buildings will be worse than predicted. With a pack, clutter is modelled as solid obstacles, but foliage loss is not.
 - ITM is defined for 20 MHz-20 GHz and path distances above roughly 1 km; shorter paths return a result with a warning, and
   inputs ITM rejects fall back to free space + knife-edge, labelled as such in the UI.

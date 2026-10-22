@@ -1,3 +1,5 @@
+import { packSampler } from "./packs";
+
 /**
  * Elevation sampling from public Terrarium terrain-RGB tiles (AWS Open Data / Mapzen).
  * elevation_m = (R * 256 + G + B / 256) - 32768
@@ -118,4 +120,35 @@ export class TerrainSampler {
   }
 }
 
-export const terrain = new TerrainSampler();
+export interface ProfileSamples {
+  /** ground elevation, metres */
+  bare: Float64Array;
+  /** height of trees and buildings, metres; null when no clutter data covers the path */
+  clutter: Float64Array | null;
+}
+
+/** Terrain for link profiles: pack data (bare earth + clutter) where the server has it, public tiles for the rest. */
+export class Terrain extends TerrainSampler {
+  constructor(private packs: { sample: (lats: ArrayLike<number>, lons: ArrayLike<number>) => Promise<{ bare: Float64Array; clutter: Float64Array | null; inPack: Uint8Array }> }) {
+    super();
+  }
+
+  async profile(lats: ArrayLike<number>, lons: ArrayLike<number>): Promise<ProfileSamples> {
+    const p = await this.packs.sample(lats, lons);
+    const missing: number[] = [];
+    for (let i = 0; i < lats.length; i++) if (!p.inPack[i]) missing.push(i);
+    if (missing.length === lats.length) return { bare: await super.elevations(lats, lons), clutter: null };
+    if (missing.length > 0) {
+      const pub = await super.elevations(missing.map((i) => lats[i]), missing.map((i) => lons[i]));
+      missing.forEach((i, k) => (p.bare[i] = pub[k]));
+    }
+    return { bare: p.bare, clutter: p.clutter };
+  }
+
+  /** Bare-earth elevations, from a pack where there is one (keeps the old API for callers that only need ground). */
+  override async elevations(lats: ArrayLike<number>, lons: ArrayLike<number>): Promise<Float64Array> {
+    return (await this.profile(lats, lons)).bare;
+  }
+}
+
+export const terrain = new Terrain(packSampler);

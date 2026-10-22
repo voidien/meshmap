@@ -135,11 +135,13 @@ pub fn lonlat_to_pixel(lon: f64, lat: f64, z: u32) -> (f64, f64) {
     (x, y)
 }
 
+type PackTileCache = HashMap<(u32, u32, u32), Option<Arc<PackTile>>>;
+
 /// Bilinear elevation lookups over a [`TileSource`], safe to share between worker threads.
 pub struct Sampler {
     src: Arc<dyn TileSource>,
     packs: Arc<PackSet>,
-    pack_tiles: RwLock<HashMap<(u32, u32, u32), Option<Arc<PackTile>>>>,
+    pack_tiles: RwLock<PackTileCache>,
     tiles: RwLock<HashMap<(u32, u32), TileData>>,
     /// Set when a tile could not be loaded; the job then fails instead of silently predicting over zero elevation.
     pub failed: AtomicBool,
@@ -290,6 +292,34 @@ impl Elevation for Sampler {
     }
 }
 
+/// Share (0..=1) of a disc around a point for which a pack has clutter data, estimated on a coarse grid of sample points.
+pub fn clutter_share(packs: &PackSet, lat: f64, lon: f64, radius_m: f64) -> f64 {
+    let steps = 14;
+    let (mut hit, mut total) = (0u32, 0u32);
+    let dlat = radius_m / 111_195.0;
+    let dlon = dlat / lat.to_radians().cos().max(0.05);
+    for i in -steps..=steps {
+        for j in -steps..=steps {
+            let (fx, fy) = (i as f64 / steps as f64, j as f64 / steps as f64);
+            if fx * fx + fy * fy > 1.0 {
+                continue;
+            }
+            total += 1;
+            let z_list = packs.zooms();
+            let covered = z_list.iter().any(|&z| {
+                let (px, py) = lonlat_to_pixel(lon + fx * dlon, lat + fy * dlat, z);
+                packs.find(z, (px / TILE as f64) as u32, (py / TILE as f64) as u32).is_some_and(|(_, has_clutter)| has_clutter)
+            });
+            hit += covered as u32;
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        hit as f64 / total as f64
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,30 +393,3 @@ mod tests {
     }
 }
 
-/// Share (0..=1) of a disc around a point for which a pack has clutter data, estimated on a coarse grid of sample points.
-pub fn clutter_share(packs: &PackSet, lat: f64, lon: f64, radius_m: f64) -> f64 {
-    let steps = 14;
-    let (mut hit, mut total) = (0u32, 0u32);
-    let dlat = radius_m / 111_195.0;
-    let dlon = dlat / lat.to_radians().cos().max(0.05);
-    for i in -steps..=steps {
-        for j in -steps..=steps {
-            let (fx, fy) = (i as f64 / steps as f64, j as f64 / steps as f64);
-            if fx * fx + fy * fy > 1.0 {
-                continue;
-            }
-            total += 1;
-            let z_list = packs.zooms();
-            let covered = z_list.iter().any(|&z| {
-                let (px, py) = lonlat_to_pixel(lon + fx * dlon, lat + fy * dlat, z);
-                packs.find(z, (px / TILE as f64) as u32, (py / TILE as f64) as u32).is_some_and(|(_, has_clutter)| has_clutter)
-            });
-            hit += covered as u32;
-        }
-    }
-    if total == 0 {
-        0.0
-    } else {
-        hit as f64 / total as f64
-    }
-}

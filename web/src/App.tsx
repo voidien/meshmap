@@ -360,7 +360,7 @@ export function App({ auth }: { auth: AuthContext }) {
       <aside className="side">
         <header>
           <h1>meshmap</h1>
-          <span className="ver">v3 · estimates only</span>
+          <span className="ver">v4 · estimates only</span>
         </header>
         <div className="userbar">
           <span className="who" title={auth.user.username}>

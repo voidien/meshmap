@@ -1,4 +1,4 @@
-import type { Settings } from "../types";
+import type { Settings, TerrainMode } from "../types";
 
 interface Props {
   settings: Settings;
@@ -100,6 +100,18 @@ export function SettingsPanel({ settings: s, onChange }: Props) {
         <Row label="Reliability % (time)" value={s.reliabilityPct} step={1} min={1} max={99} onChange={(v) => onChange({ reliabilityPct: v })} />
         <Row label="Confidence % (situation)" value={s.confidencePct} step={1} min={1} max={99} onChange={(v) => onChange({ confidencePct: v })} />
       </div>
+      <h4 className="subhead">Terrain model</h4>
+      <label className="field">
+        <span>Ground used for links and heatmaps</span>
+        <select value={s.terrainMode} onChange={(e) => onChange({ terrainMode: e.target.value as TerrainMode })}>
+          <option value="clutter">Terrain + trees and buildings (where data exists)</option>
+          <option value="bare">Bare earth only</option>
+        </select>
+      </label>
+      <p className="hint">
+        Clutter comes from terrain data packs installed on the server (see README). Where none covers a path, bare earth is used and the profile says so.
+        Open a link's profile to see both models side by side.
+      </p>
       <h4 className="subhead">Coverage heatmaps</h4>
       <div className="grid2">
         <Row label="Radius (km, 1-100)" value={s.coverageRadiusKm} step={5} min={1} max={100} onChange={(v) => onChange({ coverageRadiusKm: v })} />

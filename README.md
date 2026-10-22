@@ -88,6 +88,20 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
   ground every 100 m by default (a link profile every 40 m), so a cell can differ a little from the same spot analysed as a link.
   As everywhere: estimates, no trees or buildings yet.
 
+## Terrain packs (trees and buildings)
+
+By default the app uses public ~30 m bare-earth tiles. For better results build a **terrain pack** (3DEP elevation plus the
+height of trees and buildings from lidar, or canopy-height and building-footprint data) with `tools/etl` and put it in
+`data/packs/` (see [tools/etl/README.md](tools/etl/README.md); the server notices new packs without a restart):
+
+```bash
+docker compose --profile etl run --rm etl build --id nashville --bbox=-86.80,36.15,-86.765,36.185 --lidar TN_DavidsonCo_1_2022
+```
+
+Where a pack covers a path, a link's profile shows **bare earth and terrain + clutter side by side**, and *Project settings →
+Terrain model* picks which one colors links and heatmaps. Heatmap cards say how much of the area had clutter data. Clutter is
+treated as solid obstacles: there is no foliage loss, and both antennas stay on the ground (heights are above ground).
+
 ## What to verify
 
 1. **Add nodes**: "+ Add node", click the map; edit height, TX power, gain, cable loss, preset, status, notes.
@@ -112,7 +126,9 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
    cable loss, preset, status; only filled-in fields change) or bulk delete, or add a node by typing coordinates.
    A selected node shows its connections (click one to open its terrain profile), plus Zoom to / Duplicate / Delete.
    The "Names" button toggles name labels on the map.
-11. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+11. **Clutter** (needs a pack): open a link across wooded or built-up ground; the profile shows the tree/building layer and a table
+   with bare earth vs terrain + clutter. Flip *Terrain model* in settings and watch link colors and heatmaps change.
+12. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

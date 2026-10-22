@@ -78,8 +78,23 @@ export function sampleLine(a: MeshNode, b: MeshNode, spacingM: number) {
 
 export interface ProfileData {
   dist: Float64Array;
+  /** ground elevation */
   elev: Float64Array;
+  /** height of trees/buildings above ground; null without clutter data */
+  clutter: Float64Array | null;
+  bare: LinkResult;
+  withClutter: LinkResult | null;
+  /** result for the selected terrain mode */
   result: LinkResult;
+}
+
+interface Both {
+  bare: LinkResult;
+  clutter: LinkResult | null;
+}
+
+function pick(b: Both, s: Settings): LinkResult {
+  return s.terrainMode === "clutter" && b.clutter ? b.clutter : b.bare;
 }
 
 /** Fetch the terrain profile and run the WASM link analysis. */
@@ -91,16 +106,17 @@ export async function analyzeWithProfile(
   includeSeries: boolean,
 ): Promise<ProfileData> {
   const { lats, lons, dist } = sampleLine(a, b, spacingM);
-  const elev = await terrain.elevations(lats, lons);
-  const result = wasm.analyze_link(
+  const { bare: elev, clutter } = await terrain.profile(lats, lons);
+  const both = wasm.analyze_link_both(
     linkParams(s),
     endpointOf(a, s),
     endpointOf(b, s),
     dist,
     elev,
+    clutter ?? new Float64Array(0),
     includeSeries,
-  ) as LinkResult;
-  return { dist, elev, result };
+  ) as Both;
+  return { dist, elev, clutter, bare: both.bare, withClutter: both.clutter ?? null, result: pick(both, s) };
 }
 
 const linkCache = new Map<string, Link>();
@@ -111,7 +127,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
   const key = linkKey(x.id, y.id);
   const cacheKey = `${spacingM}|${settingsSig(s)}|${nodeSig(x)}|${nodeSig(y)}|${x.id}|${y.id}`;
   const hit = linkCache.get(cacheKey);
-  if (hit) return hit;
+  if (hit) return withMode(hit, s);
 
   const distanceM = wasm.haversine_m(x.lat, x.lon, y.lat, y.lon);
   const px = presetById(x.presetId);
@@ -124,13 +140,21 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
     if (Math.min(mAb, mBa) < 0) {
       link = { key, a: x.id, b: y.id, class: "none", distanceM, warning: "Out of range even in free space." };
     } else {
-      const { result } = await analyzeWithProfile(x, y, s, spacingM, false);
-      link = { key, a: x.id, b: y.id, class: result.class, distanceM, result };
+      const p = await analyzeWithProfile(x, y, s, spacingM, false);
+      link = { key, a: x.id, b: y.id, class: p.result.class, distanceM, result: p.result, bare: p.bare, hasClutter: p.withClutter !== null };
+      if (p.withClutter) link.clutter = p.withClutter;
     }
   }
   if (linkCache.size >= MAX_CACHE) linkCache.clear();
   linkCache.set(cacheKey, link);
-  return link;
+  return withMode(link, s);
+}
+
+/** Cached links hold both results; the terrain mode only picks which one is the headline. */
+function withMode(link: Link, s: Settings): Link {
+  if (!link.bare) return link;
+  const result = s.terrainMode === "clutter" && link.clutter ? link.clutter : link.bare;
+  return result === link.result ? link : { ...link, result, class: result.class };
 }
 
 export interface ComputeOptions {

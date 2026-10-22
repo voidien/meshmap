@@ -67,6 +67,14 @@ export function CoveragePanel({ layers, staleKeys, selectedNode, nodeCount, radi
                     Covers {km2(l.result.stats.coveredKm2)} km² of {km2(l.result.stats.predictedKm2)} km² predicted
                     {l.kind === "network" ? ` · ${km2(l.result.stats.redundantKm2)} km² reached by 2+ nodes` : ""}
                   </div>
+                  {l.result.terrain === "clutter" && typeof l.result.clutterShare === "number" ? (
+                    <div className={`lmeta ${(l.result.clutterShare as number) < 0.95 ? "warn" : ""}`}>
+                      Trees and buildings: {Math.round((l.result.clutterShare as number) * 100)} % of the area has clutter data
+                      {(l.result.clutterShare as number) < 0.95 ? "; the rest is predicted over bare earth, so it is optimistic there" : ""}
+                    </div>
+                  ) : l.result.terrain === "bare" ? (
+                    <div className="lmeta">Bare-earth model</div>
+                  ) : null}
                   {stale ? <div className="lmeta warn">Out of date: nodes or settings changed since this was computed.</div> : null}
                   <div className="lrow wrap">
                     <span className="lmeta">Opacity</span>
