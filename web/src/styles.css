@@ -64,3 +64,11 @@ button.danger { color: var(--danger); margin-top: 8px; }
   .side { order: 2; border-right: 0; border-top: 1px solid var(--line); }
   .mapwrap { order: 1; }
 }
+.switchrow { display: flex; gap: 6px; margin-bottom: 6px; }
+.switchrow select { flex: 1; font-weight: 600; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 11px; background: #fff; }
+.compare h4 { margin: 10px 0 4px; font-size: 13px; }
+.compare thead th { text-align: left; }
+.difflist { list-style: none; padding: 0; margin: 0; font-size: 12px; }
+.difflist li { display: flex; gap: 6px; align-items: center; padding: 2px 0; flex-wrap: wrap; }
+.difflist .arrow { color: var(--muted); }

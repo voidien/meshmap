@@ -13,6 +13,11 @@ export const LINK_COLORS = { clear: "#1a9850", marginal: "#e0a800", obstructed: 
 interface Props {
   nodes: MeshNode[];
   links: Link[];
+  /** Another project drawn faintly underneath for comparison. */
+  ghostNodes: MeshNode[];
+  ghostLinks: Link[];
+  /** When this changes the view zooms to fit the nodes (open + comparison project). */
+  fitKey: string;
   selectedNodeId: string | null;
   selectedLinkKey: string | null;
   addMode: boolean;
@@ -69,6 +74,15 @@ function linksGeoJSON(nodes: MeshNode[], links: Link[]): GeoJSON.FeatureCollecti
   return { type: "FeatureCollection", features };
 }
 
+function pointsGeoJSON(nodes: MeshNode[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: nodes.map((n) => ({ type: "Feature", geometry: { type: "Point", coordinates: [n.lon, n.lat] }, properties: { name: n.name } })),
+  };
+}
+
+const CLASS_COLOR: maplibregl.ExpressionSpecification = ["match", ["get", "class"], "clear", LINK_COLORS.clear, "marginal", LINK_COLORS.marginal, "obstructed", LINK_COLORS.obstructed, LINK_COLORS.none];
+
 export function MapView(p: Props) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -88,18 +102,33 @@ export function MapView(p: Props) {
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    (window as unknown as { __meshmap?: maplibregl.Map }).__meshmap = map; // handy for debugging and browser tests
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
       map.addSource("links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("ghost-links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("ghost-nodes", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "ghost-links",
+        type: "line",
+        source: "ghost-links",
+        paint: { "line-color": CLASS_COLOR, "line-width": 2, "line-opacity": 0.55, "line-dasharray": [1, 2] },
+      });
+      map.addLayer({
+        id: "ghost-nodes",
+        type: "circle",
+        source: "ghost-nodes",
+        paint: { "circle-radius": 6, "circle-color": "#6b7280", "circle-opacity": 0.55, "circle-stroke-color": "#fff", "circle-stroke-width": 2 },
+      });
       map.addLayer({
         id: "links-line",
         type: "line",
         source: "links",
         layout: { "line-cap": "round" },
         paint: {
-          "line-color": ["match", ["get", "class"], "clear", LINK_COLORS.clear, "marginal", LINK_COLORS.marginal, "obstructed", LINK_COLORS.obstructed, LINK_COLORS.none],
+          "line-color": CLASS_COLOR,
           "line-width": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 12, 4],
           "line-opacity": 0.9,
           "line-dasharray": ["case", ["==", ["get", "class"], "none"], ["literal", [2, 2]], ["literal", [1, 0]]],
@@ -159,6 +188,8 @@ export function MapView(p: Props) {
     syncMarkers(map, c);
     if (loaded.current) {
       (map.getSource("links") as maplibregl.GeoJSONSource | undefined)?.setData(linksGeoJSON(c.nodes, c.links));
+      (map.getSource("ghost-links") as maplibregl.GeoJSONSource | undefined)?.setData(linksGeoJSON(c.ghostNodes, c.ghostLinks));
+      (map.getSource("ghost-nodes") as maplibregl.GeoJSONSource | undefined)?.setData(pointsGeoJSON(c.ghostNodes));
       map.setFilter("links-selected", ["==", ["get", "key"], c.selectedLinkKey ?? ""]);
     }
   }
@@ -212,7 +243,18 @@ export function MapView(p: Props) {
     }
   }
 
-  useEffect(syncAll, [p.nodes, p.links, p.selectedNodeId, p.selectedLinkKey]);
+  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey]);
+
+  // zoom to the nodes when the open project / comparison changes (and on first load)
+  useEffect(() => {
+    const map = mapRef.current;
+    const c = latest.current;
+    const pts = [...c.nodes, ...c.ghostNodes];
+    if (!map || pts.length === 0) return;
+    const b = new maplibregl.LngLatBounds([pts[0].lon, pts[0].lat], [pts[0].lon, pts[0].lat]);
+    for (const n of pts) b.extend([n.lon, n.lat]);
+    map.fitBounds(b, { padding: 90, maxZoom: 11, duration: 600, pitch: map.getPitch() });
+  }, [p.fitKey]);
 
   useEffect(() => {
     const map = mapRef.current;

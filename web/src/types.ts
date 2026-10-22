@@ -30,6 +30,7 @@ export interface Settings {
 }
 
 export interface Project {
+  id: string;
   name: string;
   nodes: MeshNode[];
   settings: Settings;
