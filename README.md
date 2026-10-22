@@ -69,8 +69,8 @@ Adds a `tailscale` container that publishes meshmap on your tailnet over HTTPS, 
 
 ```bash
 cp .env.example .env              # then set TS_AUTHKEY (and optionally TS_HOSTNAME)
-docker compose --profile tailscale up --build -d
-docker compose logs -f tailscale  # shows the node coming up
+docker compose up --build -d      # .env.example sets COMPOSE_PROFILES=tailscale; otherwise add --profile tailscale to every command
+docker compose logs -f tailscale  # shows the node coming up (the HTTPS cert takes ~30-60 s on first start)
 ```
 
 Then open `https://<TS_HOSTNAME>.<your-tailnet>.ts.net` from any device on your tailnet. The container runs in
@@ -81,3 +81,14 @@ port 9091 keeps working alongside it; drop the `ports:` mapping in `docker-compo
 - `TS_MODE=serve` (default): reachable only from your tailnet.
 - `TS_MODE=funnel`: reachable from the **public internet** via Tailscale Funnel (needs the `funnel` node attribute in your
   tailnet policy). meshmap has no login, so anyone with the URL can use it; prefer `serve`.
+
+Troubleshooting the sidecar:
+
+```bash
+docker compose --profile tailscale down                                   # stop everything, including the sidecar
+docker compose exec tailscale tailscale serve status                      # should show https://<host>.ts.net -> http://meshmap-web:8080
+docker compose exec tailscale wget -qO- http://meshmap-web:8080/healthz   # should print "ok"
+```
+
+`docker compose down` without the profile (or `COMPOSE_PROFILES` in `.env`) leaves the tailscale container running and reports
+the network as "still in use".
