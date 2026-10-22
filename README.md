@@ -48,9 +48,9 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
 ## Docker
 
 ```bash
-docker compose up --build        # http://localhost:8081
+docker compose up --build        # http://localhost:9091
 # or
-docker build -t meshmap:v0 . && docker run --rm -p 8081:8080 meshmap:v0
+docker build -t meshmap:v0 . && docker run --rm -p 9091:8080 meshmap:v0
 ```
 
 Multi-stage build: Rust tests + WASM build, then web tests + production build, then a small non-root nginx image
