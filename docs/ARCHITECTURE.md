@@ -285,12 +285,73 @@ REST + JSON, versioned `/api/v1`, OpenAPI generated (`utoipa`), TypeScript types
 7. Is the Meshtastic vs. MeshCore difference purely preset/sensitivity data? (Proposed: yes; hop/routing behaviour is out of scope for v1.)
 8. Teams/orgs: v1 shares per-project with explicit members; org-level groups deferred.
 
-## 15. Milestones
+## 15. Milestones (your order; each ends with "how to run / what to verify")
 
-1. **M0 – Core math**: `core` + `itm` crates, presets, test vectors, WASM build + parity CI.
-2. **M1 – Terrain**: ETL for one state from 3DEP 10 m, pack format, terrain-RGB tiles, map with 3D/hillshade.
-3. **M2 – Projects**: auth, projects/roles, node CRUD, SSE, versions, exports.
-4. **M3 – Links**: pairing/pruning, link layer, profile chart, bare vs. clutter (lidar AOI + fallback clutter).
-5. **M4 – Jobs + coverage**: Postgres queue, worker, radial coverage, caching, network composite.
-6. **M5 – Placement**: candidates, greedy coverage, relay search, explanations.
-7. **M6 – Hardening**: perf at 300 nodes / state scale, Docker packaging, docs, security review.
+| | Milestone | Delivers | You verify |
+|---|---|---|---|
+| a | DEM + clutter pipeline, elevation lookup | `meshmap-etl`, `meshmap-terrain`, one state pack, terrain-RGB tiles, `elevation` CLI + endpoint | Known peaks/benchmarks match published elevations within DEM error; clutter band non-zero over known forests/buildings; pack size/build time |
+| b | Link math library | `core` + `itm`, presets, WASM build | Unit tests (§17), ITM reference vectors, WASM-vs-native parity, SPLAT!/Radio Mobile spot checks |
+| c | Map UI + node editing | React/MapLibre, 3D terrain, node CRUD (local/anonymous project), WASM drag feedback, profile chart | Drag a node, links recolor instantly; chart shows terrain, clutter, ray, Fresnel; bare vs clutter side by side |
+| d | Project-wide analysis with jobs | Pruned pair search, job queue, worker, SSE progress, result caching | 100+ synthetic nodes: pair count ≪ N², progress bar, second run is cache hits, edit one node recomputes only its links |
+| e | Accounts and sharing | Magic links/OAuth, roles, invites, versions, exports | Role matrix tests; viewer cannot edit; version restore; CSV/KML/GeoJSON open in QGIS/Google Earth |
+| f | Heatmaps | Radial coverage jobs, tile artifacts, network layer | Per-node raster vs. SPLAT!; network layer composited without recompute |
+| g | Placement suggestions | Candidates, greedy coverage, relay search, explanations | Known synthetic scenarios with a provably best site; explanation text matches map |
+| h | Later phases | §16 | per feature |
+
+## 16. Later phases (design hooks now, build later)
+
+- **Mesh health**: link graph (links with margin ≥ threshold, both directions) in the worker. Hop counts via BFS from chosen
+  gateway nodes; **articulation points** and bridges (Tarjan) = single points of failure; connected components = isolated groups;
+  "what if node X dies" is a cached recompute. No schema change beyond job kinds.
+- **Calibration**: `observations(project, node_a, node_b, rssi, snr, observed_at, source)` from CSV import or a Meshtastic MQTT
+  subscriber (worker role, opt-in per project). Compare predicted vs. observed per link; fit a per-project clutter-loss offset
+  and/or foliage coefficient (least squares) stored in project `settings`, applied through the input hash. Report residuals; never
+  silently change the model.
+- **Field mode**: PWA route of the same React app; phone GPS → WASM `analyze_link` against nearby nodes and a local radial coverage for a
+  hypothetical node at X m AGL, with tiles prefetched for the area (service worker cache). Works offline once region tiles are cached.
+- **Antenna patterns**: `antenna_patterns(id, name, gain table by azimuth (and optional elevation))`; node gets `pattern_id` +
+  `azimuth_deg` (+ tilt). The core takes gain as a function `gain(bearing)`; link budget uses each end's gain toward the other.
+  Omni stays the default, and the core API is designed for this from M(b) to avoid a later breaking change.
+- **Comments and site report**: `comments(id, project_id, node_id?, author, body, created_at)`. One-page report rendered
+  server-side from an HTML template to PDF (headless Chromium or `typst`) with static map image, profile, expected links, assumptions.
+
+## 17. Correctness and validation plan
+
+- **Unit/property tests** in `core`: distance/bearing (known city pairs; antipodal and pole edge cases), FSPL (e.g. 1 km @ 915 MHz ≈ 91.7 dB),
+  Fresnel radius (analytic cases), curvature bulge (`d1·d2/(2kR)` for several k), and a synthetic known profile with a single knife-edge
+  obstruction checking clearance % and classification.
+- **ITM**: run NTIA's published reference test vectors against `meshmap-itm`; additionally cross-check against the reference C++
+  implementation on a few hundred random profiles in CI (tolerance ~0.1 dB) with differences documented.
+- **Spot checks** against SPLAT! and Radio Mobile on a handful of real links (clear, marginal, obstructed). Expect differences from DEM
+  resolution, interpolation, ITM version/variability settings and k handling; we record them in `docs/validation.md` with the inputs, so
+  they're reproducible rather than anecdotal.
+- **Assumptions are always shown**: each result carries the model version, DEM source/resolution/year, clutter origin, k, ITM environment
+  and reliability, receiver sensitivity and NF, and the UI labels outputs "estimate". Exports include the same block.
+
+## 18. Expected hosting needs (estimates, to be confirmed at milestone a)
+
+**Terrain storage** (compressed packs; bands: int16 bare + uint8 clutter):
+- 10 m grid: ≈ 10 M samples per 1000 km² per... i.e. 10⁴ samples/km² → ~30 KB/km² raw, ~10-15 KB/km² compressed.
+  Colorado (270k km²) ≈ 3-4 GB; Texas (700k km²) ≈ 8-10 GB; a small state ≈ < 1 GB; CONUS ≈ 80-120 GB.
+- 1 m lidar: ~3 MB/km² raw, ~1 MB/km² compressed; a 2,000 km² county ≈ 2 GB. So lidar is loaded per area of interest, not statewide.
+- Terrain-RGB visual tiles: ≈ 0.5-1× the 10 m pack size per state.
+- ETL scratch: 3-5× the final pack size while building (more for lidar); one-off, can run on a laptop/big VM and upload the result.
+
+**Runtime sizing**
+| Tier | Fits | Spec |
+|---|---|---|
+| Small (1-3 states, few groups) | api + worker + db on one box | 4 vCPU, 8-16 GB RAM, 100-250 GB SSD |
+| Medium (heavy heatmaps/placement, several concurrent users) | separate worker | api 2 vCPU/4 GB; worker 8-16 vCPU/16-32 GB; Postgres 2 vCPU/4-8 GB; 500 GB SSD or S3 for packs |
+| ETL (offline/occasional) | one-off | 16 cores, 32-64 GB RAM, 0.5-1 TB scratch, GDAL/PDAL image |
+
+- Postgres is small (projects/nodes are kilobytes; links ≈ N·k rows per project); a few GB for years of use.
+- Per-node coverage raster ≈ 100 km × 100 km at 90 m ≈ 1.2 M cells ≈ 0.3-0.5 MB compressed; ~100 nodes ≈ tens of MB per project version, cached by hash with LRU/TTL cleanup.
+- Memory is dominated by hot terrain tiles (mmap/OS page cache on the pack file); give the box RAM ≈ the hot working set (a few GB) and fast SSD.
+- Compute is bursty: whole-project recompute of ~100 nodes × ~10 candidates each is seconds-minutes on 8 cores; a 50 km-radius coverage raster is
+  roughly seconds to tens of seconds per node. Workers scale horizontally if needed.
+- Bandwidth: browser reads tile ranges along a link (KBs) and visual tiles; put packs behind Caddy/CDN with range support.
+
+## 19. Next step
+
+Please review §14 (open questions) and §18 (sizing). On your OK I start milestone (a), beginning with a Cargo workspace skeleton, the pack
+format spec, and the ETL for one state (suggest Colorado: big relief, good 3DEP lidar coverage, ~3-4 GB).
