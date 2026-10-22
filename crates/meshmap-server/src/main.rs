@@ -48,15 +48,21 @@ async fn main() {
         return;
     }
 
-    let cfg = Config {
-        data_dir,
-        static_dir: PathBuf::from(env("MESHMAP_STATIC_DIR").unwrap_or_else(|| "web/dist".into())),
-        origin: env("MESHMAP_ORIGIN").map(|o| url::Url::parse(&o).expect("MESHMAP_ORIGIN must be a full URL such as https://meshmap.example.ts.net")),
-        cookie_secure: env("MESHMAP_COOKIE_SECURE").map(|v| matches!(v.as_str(), "1" | "true" | "yes")),
-    };
+    let mut cfg = Config::for_data_dir(data_dir, PathBuf::from(env("MESHMAP_STATIC_DIR").unwrap_or_else(|| "web/dist".into())));
+    cfg.origin = env("MESHMAP_ORIGIN").map(|o| url::Url::parse(&o).expect("MESHMAP_ORIGIN must be a full URL such as https://meshmap.example.ts.net"));
+    cfg.cookie_secure = env("MESHMAP_COOKIE_SECURE").map(|v| matches!(v.as_str(), "1" | "true" | "yes"));
+    if let Some(u) = env("MESHMAP_TERRAIN_URL") {
+        cfg.terrain_url = u;
+    }
+    if let Some(mb) = env("MESHMAP_CACHE_MB").and_then(|v| v.parse().ok()) {
+        cfg.cache_mb = mb;
+    }
+    let workers: usize = env("MESHMAP_JOB_WORKERS").and_then(|v| v.parse().ok()).unwrap_or(1);
     tracing::info!("data in {}, serving {}", cfg.data_dir.display(), cfg.static_dir.display());
 
-    let app = meshmap_server::build_app(AppState::new(db, cfg));
+    let state = AppState::new(db, cfg);
+    meshmap_server::jobs::start_workers(state.clone(), workers);
+    let app = meshmap_server::build_app(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await.expect("cannot bind the port");
     tracing::info!("listening on {addr}");

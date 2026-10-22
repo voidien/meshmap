@@ -62,6 +62,31 @@ CREATE TABLE IF NOT EXISTS project_members (
     PRIMARY KEY (project_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS members_user ON project_members(user_id);
+CREATE TABLE IF NOT EXISTS jobs (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+    kind       TEXT NOT NULL,
+    input_hash TEXT NOT NULL,
+    params     TEXT NOT NULL,
+    state      TEXT NOT NULL CHECK (state IN ('queued', 'running', 'done', 'failed', 'cancelled')),
+    progress   REAL NOT NULL DEFAULT 0,
+    message    TEXT NOT NULL DEFAULT '',
+    error      TEXT,
+    result     TEXT,
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    finished_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state, created_at);
+CREATE INDEX IF NOT EXISTS jobs_project ON jobs(project_id, created_at);
+CREATE INDEX IF NOT EXISTS jobs_hash ON jobs(input_hash);
+CREATE TABLE IF NOT EXISTS artifacts (
+    hash      TEXT PRIMARY KEY,
+    bytes     INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    last_used INTEGER NOT NULL
+);
 "#;
 
 impl Db {
@@ -93,6 +118,12 @@ impl Db {
         let conn = self.0.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("VACUUM INTO ?1", [dest.to_string_lossy().as_ref()])?;
         Ok(())
+    }
+
+    /// Run a database closure on the current (blocking) thread; for worker threads that are not async.
+    pub fn blocking<T>(&self, f: impl FnOnce(&mut Connection) -> Result<T, ApiError>) -> Result<T, ApiError> {
+        let mut conn = self.0.lock().map_err(|_| ApiError::internal("database lock poisoned"))?;
+        f(&mut conn)
     }
 
     /// Run a blocking database closure off the async runtime.

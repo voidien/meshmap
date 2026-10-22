@@ -70,7 +70,7 @@ fn role_of(c: &Connection, project_id: &str, user_id: &str) -> Result<Option<Str
     Ok(c.query_row("SELECT role FROM project_members WHERE project_id = ?1 AND user_id = ?2", params![project_id, user_id], |r| r.get(0)).optional()?)
 }
 
-fn need_role(c: &Connection, project_id: &str, user_id: &str) -> Result<String, ApiError> {
+pub(crate) fn need_role(c: &Connection, project_id: &str, user_id: &str) -> Result<String, ApiError> {
     // a project you can't see looks the same as one that doesn't exist
     role_of(c, project_id, user_id)?.ok_or_else(|| ApiError::not_found("No such project."))
 }

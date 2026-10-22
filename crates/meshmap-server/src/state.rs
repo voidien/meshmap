@@ -12,6 +12,26 @@ pub struct Config {
     pub origin: Option<Url>,
     /// Force the Secure flag on cookies on or off; by default it follows the request's scheme.
     pub cookie_secure: Option<bool>,
+    /// Where finished job results are kept (content-addressed, safe to delete).
+    pub cache_dir: PathBuf,
+    /// Upper bound for the result cache, MB.
+    pub cache_mb: u64,
+    /// Terrain tile URL template ({z}/{x}/{y}); `file://` directories work too.
+    pub terrain_url: String,
+}
+
+impl Config {
+    pub fn for_data_dir(data_dir: PathBuf, static_dir: PathBuf) -> Self {
+        Self {
+            cache_dir: data_dir.join("cache"),
+            cache_mb: 2000,
+            terrain_url: crate::terrain::DEFAULT_URL.to_string(),
+            data_dir,
+            static_dir,
+            origin: None,
+            cookie_secure: None,
+        }
+    }
 }
 
 pub struct AppState {
@@ -19,13 +39,20 @@ pub struct AppState {
     pub cfg: Config,
     pub limiter: RateLimiter,
     pub challenges: Challenges,
+    pub jobs: crate::jobs::Jobs,
 }
 
 pub type Shared = Arc<AppState>;
 
 impl AppState {
     pub fn new(db: Db, cfg: Config) -> Shared {
-        Arc::new(Self { db, cfg, limiter: RateLimiter::default(), challenges: Challenges::default() })
+        let terrain = Arc::new(crate::terrain::HttpTiles::new(&cfg.terrain_url, cfg.data_dir.join("terrain")));
+        Self::with_terrain(db, cfg, terrain)
+    }
+
+    /// Like [`AppState::new`] with a specific terrain source (tests use synthetic terrain).
+    pub fn with_terrain(db: Db, cfg: Config, terrain: Arc<dyn crate::terrain::TileSource>) -> Shared {
+        Arc::new(Self { db, cfg, limiter: RateLimiter::default(), challenges: Challenges::default(), jobs: crate::jobs::Jobs::new(terrain) })
     }
 }
 

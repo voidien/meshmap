@@ -5,9 +5,12 @@ pub mod admin;
 pub mod auth;
 pub mod db;
 pub mod error;
+pub mod jobs;
+pub mod jobs_api;
 pub mod passkeys;
 pub mod projects;
 pub mod state;
+pub mod terrain;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue, Request};
@@ -26,6 +29,7 @@ pub fn build_app(state: Shared) -> Router {
         .merge(passkeys::routes())
         .merge(admin::routes())
         .merge(projects::routes())
+        .merge(jobs_api::routes())
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), auth::same_origin_writes));
 
@@ -49,7 +53,10 @@ async fn response_headers(req: Request<axum::body::Body>, next: Next) -> Respons
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("strict-origin-when-cross-origin"));
     h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     if path.starts_with("/api/") {
-        h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        // API answers are never cached, except content-addressed result images which set their own header
+        if !h.contains_key(header::CACHE_CONTROL) {
+            h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        }
     } else if path.starts_with("/assets/") {
         h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
     } else if !h.contains_key(header::CACHE_CONTROL) {

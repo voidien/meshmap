@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 fn app() -> Router {
-    let cfg = Config { data_dir: ".".into(), static_dir: "/nonexistent".into(), origin: None, cookie_secure: None };
+    let cfg = Config::for_data_dir(std::env::temp_dir().join("meshmap-api-tests"), "/nonexistent".into());
     meshmap_server::build_app(AppState::new(Db::open_in_memory().unwrap(), cfg))
 }
 

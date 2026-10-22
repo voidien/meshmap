@@ -1,0 +1,11 @@
+[package]
+name = "meshmap-coverage"
+description = "Coverage heatmaps: radial Longley-Rice predictions rasterized on a Web-Mercator-aligned grid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+meshmap-core = { path = "../meshmap-core" }
+meshmap-itm = { path = "../meshmap-itm" }
+rayon = "1"
