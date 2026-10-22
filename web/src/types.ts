@@ -3,11 +3,15 @@ export type LinkClass = "clear" | "marginal" | "obstructed" | "none";
 
 export interface MeshNode {
   id: string;
+  /** MeshCore layer letter (A, B, ...), kept so MeshCore files round-trip. */
+  letter?: string;
   name: string;
   lat: number;
   lon: number;
   /** Antenna height above ground level (m). */
   heightM: number;
+  /** Height of the client/receiver at the far end of coverage (m); MeshCore antenna_height_b. */
+  clientHeightM: number;
   txDbm: number;
   gainDbi: number;
   cableLossDb: number;
@@ -29,6 +33,8 @@ export interface Project {
   name: string;
   nodes: MeshNode[];
   settings: Settings;
+  /** Opaque MeshCore "overlays" passed through unchanged. */
+  overlays?: unknown[];
 }
 
 export interface Preset {

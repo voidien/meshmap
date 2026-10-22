@@ -1,0 +1,45 @@
+{
+  "layers": [
+    {
+      "letter": "A",
+      "name": "Point A",
+      "latitude": 36.150671414441945,
+      "longitude": -85.43758893169132,
+      "antenna_height_a": 5,
+      "antenna_height_b": 1
+    },
+    {
+      "letter": "B",
+      "name": "Point B",
+      "latitude": 36.17101310630388,
+      "longitude": -85.59520914757915,
+      "antenna_height_a": 10,
+      "antenna_height_b": 2
+    },
+    {
+      "letter": "C",
+      "name": "Point C",
+      "latitude": 35.7991353375957,
+      "longitude": -84.98030061655732,
+      "antenna_height_a": 5,
+      "antenna_height_b": 2
+    },
+    {
+      "letter": "D",
+      "name": "Point D",
+      "latitude": 36.08519697725533,
+      "longitude": -85.22862257966521,
+      "antenna_height_a": 10,
+      "antenna_height_b": 2
+    },
+    {
+      "letter": "E",
+      "name": "Point E",
+      "latitude": 36.18487485017921,
+      "longitude": -85.40726780525821,
+      "antenna_height_a": 10,
+      "antenna_height_b": 3
+    }
+  ],
+  "overlays": []
+}

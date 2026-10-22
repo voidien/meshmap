@@ -42,6 +42,7 @@ export function NodePanel({ node, onChange, onDelete }: Props) {
         <Num label="Latitude" value={Number(node.lat.toFixed(6))} step={0.0001} min={-90} max={90} onChange={(v) => onChange({ lat: v })} />
         <Num label="Longitude" value={Number(node.lon.toFixed(6))} step={0.0001} min={-180} max={180} onChange={(v) => onChange({ lon: v })} />
         <Num label="Antenna height AGL" unit="m" value={node.heightM} min={0} step={0.5} onChange={(v) => onChange({ heightM: v })} />
+        <Num label="Client height (MeshCore)" unit="m" value={node.clientHeightM} min={0} step={0.5} onChange={(v) => onChange({ clientHeightM: v })} />
         <Num label="TX power" unit="dBm" value={node.txDbm} onChange={(v) => onChange({ txDbm: v })} />
         <Num label="Antenna gain" unit="dBi" value={node.gainDbi} step={0.1} onChange={(v) => onChange({ gainDbi: v })} />
         <Num label="Cable loss" unit="dB" value={node.cableLossDb} min={0} step={0.1} onChange={(v) => onChange({ cableLossDb: v })} />

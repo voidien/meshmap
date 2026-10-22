@@ -6,13 +6,13 @@ import { NodePanel } from "./components/NodePanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LinkList } from "./components/LinkList";
 import { ProfileChart } from "./components/ProfileChart";
+import { uid } from "./id";
+import { exportMeshcore, importMeshcore, isMeshcoreFile } from "./meshcore";
 import { download, geojson, kml, linksCsv, nodesCsv } from "./export";
 import { DEFAULT_SETTINGS, type MeshNode, type Project, type Settings } from "./types";
 
 const STORAGE_KEY = "meshmap.project.v0";
 
-const uid = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 function emptyProject(): Project {
   return { name: "Untitled project", nodes: [], settings: { ...DEFAULT_SETTINGS } };
@@ -29,10 +29,12 @@ function parseProject(raw: unknown): Project | null {
     if (!n || typeof n.lat !== "number" || typeof n.lon !== "number") continue;
     nodes.push({
       id: typeof n.id === "string" ? n.id : uid(),
+      letter: typeof n.letter === "string" ? n.letter : undefined,
       name: typeof n.name === "string" ? n.name : "Node",
       lat: n.lat,
       lon: n.lon,
       heightM: num(n.heightM, 5),
+      clientHeightM: num(n.clientHeightM, 1),
       txDbm: num(n.txDbm, 22),
       gainDbi: num(n.gainDbi, 3),
       cableLossDb: num(n.cableLossDb, 0.5),
@@ -50,7 +52,7 @@ function parseProject(raw: unknown): Project | null {
     noiseFigureDb: num(s.noiseFigureDb, DEFAULT_SETTINGS.noiseFigureDb),
     showNone: s.showNone === true,
   };
-  return { name: typeof o.name === "string" ? o.name : "Untitled project", nodes, settings };
+  return { name: typeof o.name === "string" ? o.name : "Untitled project", nodes, settings, overlays: Array.isArray(o.overlays) ? o.overlays : undefined };
 }
 
 function loadSaved(): Project {
@@ -108,7 +110,7 @@ export function App() {
       ...p,
       nodes: [
         ...p.nodes,
-        { id, name: `Node ${p.nodes.length + 1}`, lat, lon, heightM: 5, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: "long_fast", status: "planned", notes: "" },
+        { id, name: `Node ${p.nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: "long_fast", status: "planned", notes: "" },
       ],
     }));
     setSelectedNode(id);
@@ -136,13 +138,22 @@ export function App() {
 
   const importFile = async (file: File) => {
     try {
-      const parsed = parseProject(JSON.parse(await file.text()));
-      if (!parsed) throw new Error("not a meshmap project");
-      setProject(parsed);
+      const raw: unknown = JSON.parse(await file.text());
+      if (isMeshcoreFile(raw)) {
+        const mc = importMeshcore(raw)!;
+        if (mc.nodes.length === 0) throw new Error("no valid points in this MeshCore file");
+        if (project.nodes.length > 0 && !confirm(`Replace the ${project.nodes.length} nodes in this project with the ${mc.nodes.length} MeshCore points from this file? (Cancel keeps your project.)`)) return;
+        setProject((p) => ({ ...p, nodes: mc.nodes, overlays: mc.overlays }));
+        if (mc.skipped) alert(`${mc.skipped} entries without a valid latitude/longitude were skipped.`);
+      } else {
+        const parsed = parseProject(raw);
+        if (!parsed) throw new Error("not a meshmap or MeshCore file");
+        setProject(parsed);
+      }
       setSelectedNode(null);
       setSelectedLink(null);
     } catch (e) {
-      alert(`Could not open project: ${e instanceof Error ? e.message : e}`);
+      alert(`Could not open file: ${e instanceof Error ? e.message : e}`);
     }
   };
 
@@ -184,13 +195,14 @@ export function App() {
           <h3>Project</h3>
           <div className="btnrow">
             <button onClick={() => download(`${slug}.meshmap.json`, JSON.stringify(project, null, 2), "application/json")}>Save JSON</button>
-            <button onClick={() => fileInput.current?.click()}>Open JSON</button>
+            <button onClick={() => fileInput.current?.click()}>Open JSON / MeshCore</button>
             <button onClick={() => { if (confirm("Clear all nodes and start a new project?")) { setProject(emptyProject()); setSelectedNode(null); setSelectedLink(null); } }}>New</button>
           </div>
           <div className="btnrow">
             <button onClick={() => download(`${slug}-nodes.csv`, nodesCsv(project.nodes), "text/csv")}>Nodes CSV</button>
             <button onClick={() => download(`${slug}-links.csv`, linksCsv(project.nodes, allLinks), "text/csv")}>Links CSV</button>
             <button onClick={() => download(`${slug}.geojson`, geojson(project, links), "application/geo+json")}>GeoJSON</button>
+            <button onClick={() => download(`${slug}-coverage_layers.json`, exportMeshcore(project.nodes, project.overlays), "application/json")}>MeshCore JSON</button>
             <button onClick={() => download(`${slug}.kml`, kml(project, links), "application/vnd.google-earth.kml+xml")}>KML</button>
           </div>
           <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ""; }} />

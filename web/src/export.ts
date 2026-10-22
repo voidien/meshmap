@@ -13,8 +13,8 @@ const r = (x: number, d = 2) => Number(x.toFixed(d));
 
 export function nodesCsv(nodes: MeshNode[]): string {
   return csv([
-    ["name", "lat", "lon", "height_agl_m", "tx_dbm", "gain_dbi", "cable_loss_db", "preset", "status", "notes"],
-    ...nodes.map((n) => [n.name, n.lat, n.lon, n.heightM, n.txDbm, n.gainDbi, n.cableLossDb, presetById(n.presetId).name, n.status, n.notes]),
+    ["name", "lat", "lon", "height_agl_m", "client_height_m", "tx_dbm", "gain_dbi", "cable_loss_db", "preset", "status", "notes"],
+    ...nodes.map((n) => [n.name, n.lat, n.lon, n.heightM, n.clientHeightM, n.txDbm, n.gainDbi, n.cableLossDb, presetById(n.presetId).name, n.status, n.notes]),
   ]);
 }
 

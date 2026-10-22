@@ -1,0 +1,45 @@
+{
+  "layers": [
+    {
+      "letter": "A",
+      "name": "Brandon ",
+      "latitude": 36.17058207075019,
+      "longitude": -85.61994497803683,
+      "antenna_height_a": 5,
+      "antenna_height_b": 1
+    },
+    {
+      "letter": "C",
+      "name": "Dorton (Hinch)",
+      "latitude": 35.7991353375957,
+      "longitude": -84.98030061655732,
+      "antenna_height_a": 5,
+      "antenna_height_b": 2
+    },
+    {
+      "letter": "D",
+      "name": "Coby",
+      "latitude": 36.08519697725533,
+      "longitude": -85.22862257966521,
+      "antenna_height_a": 10,
+      "antenna_height_b": 2
+    },
+    {
+      "letter": "G",
+      "name": "Hampton (Monterey link?)",
+      "latitude": 36.18017269518761,
+      "longitude": -85.24217162065969,
+      "antenna_height_a": 10,
+      "antenna_height_b": 1
+    },
+    {
+      "letter": "H",
+      "name": "Pleasant hill ",
+      "latitude": 35.9796923453256,
+      "longitude": -85.22368751611369,
+      "antenna_height_a": 10,
+      "antenna_height_b": 3
+    }
+  ],
+  "overlays": []
+}

@@ -41,7 +41,8 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
 4. **Click a link** (map or list): terrain profile with earth curvature (k-factor), direct ray, first Fresnel zone
    (inner band = 60 %), loss/margin numbers in both directions.
 5. **3D terrain** toggle: tilted MapLibre terrain.
-6. **Save/Open JSON**, Nodes/Links CSV, GeoJSON, KML exports. The project also autosaves in the browser.
+6. **Save/Open JSON**, Nodes/Links CSV, GeoJSON, KML exports, and **MeshCore** `coverage_layers_*.json` import/export
+   (Open JSON / MeshCore auto-detects the format; `antenna_height_a` = node antenna height, `antenna_height_b` = client height; letters and `overlays` are preserved). The project also autosaves in the browser.
 7. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
