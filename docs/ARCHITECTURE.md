@@ -331,7 +331,7 @@ REST + JSON, versioned `/api/v1`, OpenAPI generated (`utoipa`), TypeScript types
 ## 18. Expected hosting needs (estimates, to be confirmed at milestone a)
 
 **Terrain storage** (compressed packs; bands: int16 bare + uint8 clutter):
-- 10 m grid: ≈ 10 M samples per 1000 km² per... i.e. 10⁴ samples/km² → ~30 KB/km² raw, ~10-15 KB/km² compressed.
+- 10 m grid: 10⁴ samples/km² × 3 bytes (bare + clutter) ≈ 30 KB/km² raw, ~10-15 KB/km² compressed.
   Colorado (270k km²) ≈ 3-4 GB; Texas (700k km²) ≈ 8-10 GB; a small state ≈ < 1 GB; CONUS ≈ 80-120 GB.
 - 1 m lidar: ~3 MB/km² raw, ~1 MB/km² compressed; a 2,000 km² county ≈ 2 GB. So lidar is loaded per area of interest, not statewide.
 - Terrain-RGB visual tiles: ≈ 0.5-1× the 10 m pack size per state.
