@@ -8,3 +8,25 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+
+  # Optional Tailscale sidecar:  docker compose --profile tailscale up --build -d
+  # Gives meshmap an HTTPS address on your tailnet (https://<TS_HOSTNAME>.<tailnet>.ts.net) with no open ports.
+  # See .env.example for the required TS_AUTHKEY.
+  tailscale:
+    profiles: ["tailscale"]
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-meshmap}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"                          # no /dev/net/tun or NET_ADMIN needed
+      TS_SERVE_CONFIG: /config/${TS_MODE:-serve}.json   # serve = tailnet only, funnel = public internet
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./deploy/tailscale:/config:ro
+    depends_on:
+      - meshmap
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:

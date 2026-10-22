@@ -3,3 +3,4 @@ node_modules/
 web/dist/
 web/src/wasm/pkg/
 *.log
+.env

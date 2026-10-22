@@ -62,3 +62,22 @@ Multi-stage build: Rust tests + WASM build, then web tests + production build, t
 (~50 MB) serving static files on port 8080 (`/healthz` for health checks). The container needs no database or secrets.
 For public hosting put TLS in front (Caddy, Traefik, a cloud load balancer) and replace the OSM basemap first.
 Any static host (Netlify, S3 + CDN, GitHub Pages) also works with just the contents of `web/dist`.
+
+### Tailscale (optional sidecar)
+
+Adds a `tailscale` container that publishes meshmap on your tailnet over HTTPS, with no ports opened.
+
+```bash
+cp .env.example .env              # then set TS_AUTHKEY (and optionally TS_HOSTNAME)
+docker compose --profile tailscale up --build -d
+docker compose logs -f tailscale  # shows the node coming up
+```
+
+Then open `https://<TS_HOSTNAME>.<your-tailnet>.ts.net` from any device on your tailnet. The container runs in
+userspace mode (no `NET_ADMIN`/TUN needed) and keeps its identity in the `tailscale-state` volume. The local
+port 9091 keeps working alongside it; drop the `ports:` mapping in `docker-compose.yml` if you want tailnet-only access.
+
+- Prerequisites: HTTPS certificates enabled in the Tailscale admin console (DNS page).
+- `TS_MODE=serve` (default): reachable only from your tailnet.
+- `TS_MODE=funnel`: reachable from the **public internet** via Tailscale Funnel (needs the `funnel` node attribute in your
+  tailnet policy). meshmap has no login, so anyone with the URL can use it; prefer `serve`.
