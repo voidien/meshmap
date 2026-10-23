@@ -57,6 +57,8 @@ export interface PackSample {
   clutter: Float64Array | null;
   /** which points came from a pack (the rest need public terrain) */
   inPack: Uint8Array;
+  /** the pack each in-pack point came from */
+  packIds: (string | null)[];
 }
 
 /** Reads the packs the server has and samples them. Knows nothing about the public terrain fallback. */
@@ -131,6 +133,7 @@ export class PackSampler {
     const bare = new Float64Array(n);
     const clutter = new Float64Array(n);
     const inPack = new Uint8Array(n);
+    const packIds: (string | null)[] = new Array(n).fill(null);
     let anyClutter = false;
     const zooms = [...new Set(this.packs.map((p) => p.zoom))];
     const plan: { i: number; p: PackInfo; px: number; py: number }[] = [];
@@ -183,6 +186,7 @@ export class PackSampler {
       if (g === null) continue; // fall back to the public terrain for this point
       bare[i] = g;
       inPack[i] = 1;
+      packIds[i] = p.id;
       // clutter exists only where the tile under the point has a clutter band
       if (idx.get(Math.floor(Math.round(px) / TILE) * 16777216 + Math.floor(Math.round(py) / TILE)) === 1) {
         const c = bil("clutter");
@@ -192,7 +196,7 @@ export class PackSampler {
         }
       }
     }
-    return { bare, clutter: anyClutter ? clutter : null, inPack };
+    return { bare, clutter: anyClutter ? clutter : null, inPack, packIds };
   }
 }
 

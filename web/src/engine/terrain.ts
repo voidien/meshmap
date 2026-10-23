@@ -120,6 +120,16 @@ export class TerrainSampler {
   }
 }
 
+export interface SpotInfo {
+  lat: number;
+  lon: number;
+  /** ground elevation above sea level, metres */
+  groundM: number;
+  /** height of trees and buildings on the spot (null when no clutter data covers it) */
+  clutterM: number | null;
+  source: string;
+}
+
 export interface ProfileSamples {
   /** ground elevation, metres */
   bare: Float64Array;
@@ -129,7 +139,7 @@ export interface ProfileSamples {
 
 /** Terrain for link profiles: pack data (bare earth + clutter) where the server has it, public tiles for the rest. */
 export class Terrain extends TerrainSampler {
-  constructor(private packs: { sample: (lats: ArrayLike<number>, lons: ArrayLike<number>) => Promise<{ bare: Float64Array; clutter: Float64Array | null; inPack: Uint8Array }> }) {
+  constructor(private packs: { sample: (lats: ArrayLike<number>, lons: ArrayLike<number>) => Promise<{ bare: Float64Array; clutter: Float64Array | null; inPack: Uint8Array; packIds: (string | null)[] }>; packs?: { id: string; name: string }[] }) {
     super();
   }
 
@@ -143,6 +153,18 @@ export class Terrain extends TerrainSampler {
       missing.forEach((i, k) => (p.bare[i] = pub[k]));
     }
     return { bare: p.bare, clutter: p.clutter };
+  }
+
+  /** Everything known about one spot: ground height, the height of trees/buildings on it, and where the numbers come from. */
+  async probe(lat: number, lon: number): Promise<SpotInfo> {
+    const p = await this.packs.sample([lat], [lon]);
+    if (p.inPack[0]) {
+      const id = p.packIds[0];
+      const name = this.packs.packs?.find((x) => x.id === id)?.name ?? id ?? "terrain pack";
+      return { lat, lon, groundM: p.bare[0], clutterM: p.clutter ? p.clutter[0] : null, source: `terrain pack “${name}” (about 15 m)` };
+    }
+    const [g] = await super.elevations([lat], [lon]);
+    return { lat, lon, groundM: g, clutterM: null, source: "public terrain (about 30 m)" };
   }
 
   /** Bare-earth elevations, from a pack where there is one (keeps the old API for callers that only need ground). */

@@ -129,6 +129,16 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   is predicted marginal counts as working or not working depending on that threshold. Real meshes also route by flooding and
   signal-quality heuristics, not along ideal shortest paths, and nodes share airtime; none of that is modelled.
 
+## Elevation on the map (v8)
+
+- Contours are unit tested on a synthetic cone (rings at the right heights and distances, every fifth line major, feet and metres,
+  nothing when zoomed out or over flat ground). In a browser run on real terrain the readout agreed with its feet conversion, the
+  right-click menu showed ground elevation, source and nearest node, contour lines and the colour layer drew, and the choice
+  survived a reload. Elevations are the analysis terrain (about 30 m public tiles, or a pack), interpolated: expect a few metres of
+  error on slopes and larger errors on cliffs, buildings and bridges (public tiles are bare-earth models).
+- **Not validated:** against surveyed benchmarks; contour accuracy at the edges of the viewed area; behaviour on very large screens.
+  Contour labels use a public font server (without it, lines still draw but labels may not).
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.

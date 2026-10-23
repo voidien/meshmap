@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 // MapLibre 6 ships an ES-module worker; let Vite bundle it (with its shared chunk) and hand over the URL.
@@ -8,6 +8,9 @@ maplibregl.setWorkerUrl(workerUrl);
 import { TERRAIN_TILE_URL } from "../engine/terrain";
 import { circleRing, type Area } from "../placement";
 import { beamGeoJSON } from "./beams";
+import { buildContours } from "./contours";
+import { DEFAULT_LAYERS, ElevationReadout, LayersControl, loadLayers, MapContextMenu, RELIEF_STOPS, saveLayers, type MapLayers, type MenuState } from "./MapOverlays";
+import { terrain, type SpotInfo } from "../engine/terrain";
 import type { Link, MeshNode } from "../types";
 
 export const LINK_COLORS = { clear: "#1a9850", marginal: "#e0a800", obstructed: "#d73027", none: "#8a8a8a" } as const;
@@ -45,10 +48,14 @@ interface Props {
   onNodeSelect: (id: string | null) => void;
   onNodeMove: (id: string, lat: number, lon: number, dragging: boolean) => void;
   onLinkSelect: (key: string | null) => void;
+  /** Right-click menu actions (omitted = not offered). */
+  onAddNodeAt?: (lat: number, lon: number) => void;
+  onPlanAround?: (lat: number, lon: number) => void;
 }
 
 const STYLE: maplibregl.StyleSpecification = {
   version: 8,
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
   sources: {
     osm: {
       type: "raster",
@@ -68,6 +75,13 @@ const STYLE: maplibregl.StyleSpecification = {
   },
   layers: [
     { id: "osm", type: "raster", source: "osm", paint: { "raster-opacity": 0.8 } },
+    {
+      id: "relief",
+      type: "color-relief",
+      source: "dem",
+      layout: { visibility: "none" },
+      paint: { "color-relief-opacity": 0.5, "color-relief-color": ["interpolate", ["linear"], ["elevation"], ...RELIEF_STOPS.flat()] },
+    },
     {
       id: "hillshade",
       type: "hillshade",
@@ -108,6 +122,14 @@ export function MapView(p: Props) {
   const loaded = useRef(false);
   const markers = useRef(new Map<string, maplibregl.Marker>());
   const siteMarkers = useRef<maplibregl.Marker[]>([]);
+  const [layers, setLayers] = useState<MapLayers>(loadLayers);
+  const layersRef = useRef<MapLayers>(DEFAULT_LAYERS);
+  layersRef.current = layers;
+  const [spot, setSpot] = useState<SpotInfo | null>(null);
+  const [spotBusy, setSpotBusy] = useState(false);
+  const [menu, setMenu] = useState<MenuState | null>(null);
+  const contourTimer = useRef<number | undefined>(undefined);
+  const contourSeq = useRef(0);
   const latest = useRef(p);
   latest.current = p;
 
@@ -122,11 +144,47 @@ export function MapView(p: Props) {
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    let probeTimer: number | undefined;
+    let probeSeq = 0;
+    map.on("mousemove", (e) => {
+      window.clearTimeout(probeTimer);
+      probeTimer = window.setTimeout(async () => {
+        const mine = ++probeSeq;
+        setSpotBusy(true);
+        try {
+          const s = await terrain.probe(e.lngLat.lat, e.lngLat.lng);
+          if (mine === probeSeq) setSpot(s);
+        } catch {
+          /* terrain not available yet */
+        } finally {
+          if (mine === probeSeq) setSpotBusy(false);
+        }
+      }, 120);
+    });
+    map.on("contextmenu", (e) => {
+      e.originalEvent.preventDefault();
+      const { lat, lng: lon } = e.lngLat;
+      setMenu({ x: e.point.x, y: e.point.y, lat, lon, info: null });
+      terrain.probe(lat, lon).then((info) => setMenu((m) => (m && m.lat === lat && m.lon === lon ? { ...m, info } : m)), () => undefined);
+    });
+    map.on("movestart", () => setMenu(null));
+    map.on("moveend", () => refreshContours());
     (window as unknown as { __meshmap?: maplibregl.Map }).__meshmap = map; // handy for debugging and browser tests
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
+      map.addSource("contours", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "contour-minor", type: "line", source: "contours", filter: ["!", ["get", "major"]], layout: { visibility: "none" }, paint: { "line-color": "#7c5a2a", "line-width": 0.6, "line-opacity": 0.55 } });
+      map.addLayer({ id: "contour-major", type: "line", source: "contours", filter: ["get", "major"], layout: { visibility: "none" }, paint: { "line-color": "#6b4a1f", "line-width": 1.3, "line-opacity": 0.8 } });
+      map.addLayer({
+        id: "contour-labels",
+        type: "symbol",
+        source: "contours",
+        filter: ["get", "major"],
+        layout: { visibility: "none", "symbol-placement": "line", "text-field": ["to-string", ["get", "ele"]], "text-size": 11, "text-font": ["Noto Sans Regular"], "text-max-angle": 30 },
+        paint: { "text-color": "#4a3412", "text-halo-color": "rgba(255,255,255,0.85)", "text-halo-width": 1.5 },
+      });
       map.addSource("placement-area", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({ id: "placement-fill", type: "fill", source: "placement-area", paint: { "fill-color": "#7c3aed", "fill-opacity": 0.06 } });
       map.addLayer({ id: "placement-line", type: "line", source: "placement-area", paint: { "line-color": "#7c3aed", "line-width": 2, "line-dasharray": [3, 2] } });
@@ -180,12 +238,15 @@ export function MapView(p: Props) {
         paint: { "line-color": "#000", "line-width": 14, "line-opacity": 0 },
       });
       loaded.current = true;
+      applyLayers();
+      refreshContours();
       syncAll();
       syncPlacement();
       syncField();
     });
 
     map.on("click", (e) => {
+      setMenu(null);
       const c = latest.current;
       if (c.pickMode || (c.addMode && !c.readOnly)) {
         c.onMapClick(e.lngLat.lat, e.lngLat.lng);
@@ -288,6 +349,47 @@ export function MapView(p: Props) {
   }
 
   useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly, p.health]);
+
+  function applyLayers() {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const l = layersRef.current;
+    const vis = (id: string, on: boolean) => map.getLayer(id) && map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    vis("hillshade", l.hillshade);
+    vis("relief", l.relief);
+    vis("contour-minor", l.contours);
+    vis("contour-major", l.contours);
+    vis("contour-labels", l.contours);
+  }
+
+  function refreshContours() {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const l = layersRef.current;
+    const set = (fc: GeoJSON.FeatureCollection) => (map.getSource("contours") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
+    window.clearTimeout(contourTimer.current);
+    if (!l.contours) {
+      contourSeq.current++;
+      set({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    contourTimer.current = window.setTimeout(async () => {
+      const mine = ++contourSeq.current;
+      const b = map.getBounds();
+      try {
+        const fc = await buildContours({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() }, map.getZoom(), l.units, async (la, lo) => (await terrain.profile(la, lo)).bare);
+        if (mine === contourSeq.current) set(fc);
+      } catch {
+        /* terrain tiles not available: leave the old lines */
+      }
+    }, 250);
+  }
+
+  useEffect(() => {
+    saveLayers(layers);
+    applyLayers();
+    refreshContours();
+  }, [layers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the planning area and suggested sites
   function syncPlacement() {
@@ -392,5 +494,22 @@ export function MapView(p: Props) {
     else map.once("load", apply);
   }, [p.terrain3d]);
 
-  return <div ref={container} className="map" />;
+  const width = container.current?.clientWidth ?? 9999;
+  return (
+    <>
+      <div ref={container} className="map" />
+      <LayersControl value={layers} onChange={setLayers} />
+      <ElevationReadout spot={spot} busy={spotBusy} />
+      {menu ? (
+        <MapContextMenu
+          menu={{ ...menu, x: Math.max(4, Math.min(menu.x, width - 250)), y: menu.y }}
+          nodes={p.nodes}
+          readOnly={p.readOnly}
+          onClose={() => setMenu(null)}
+          onAddNode={p.onAddNodeAt}
+          onPlanAround={p.onPlanAround}
+        />
+      ) : null}
+    </>
+  );
 }

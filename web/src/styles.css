@@ -200,3 +200,17 @@ fieldset.plain:disabled { opacity: .6; }
 .health-sum .ok b { color: #166534; }
 ul.hlist { list-style: none; padding: 0; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 4px; }
 ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
+
+.maplayers { position: absolute; top: 10px; left: 10px; z-index: 3; }
+.maplayers > button { box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.maplayers-menu { margin-top: 4px; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 230px; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.maplayers-menu .field.inline { margin: 4px 0; }
+.relief-legend { margin: 6px 0 2px; }
+.relief-legend .bar { height: 10px; border-radius: 3px; border: 1px solid rgba(0,0,0,.2); }
+.relief-legend .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted, #667); }
+.elev-readout { position: absolute; left: 8px; bottom: 28px; z-index: 3; background: rgba(255,255,255,.92); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-size: 12px; max-width: calc(100% - 90px); pointer-events: none; }
+.fmap .elev-readout { bottom: 56px; }
+.ctxmenu { position: absolute; z-index: 5; width: 240px; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.3); padding: 6px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ctxmenu .ctxhead { font-weight: 600; padding: 2px 4px; }
+.ctxmenu .ctxinfo { padding: 2px 4px 6px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.ctxmenu button { text-align: left; }

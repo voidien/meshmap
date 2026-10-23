@@ -510,7 +510,7 @@ export function App({ auth }: { auth: AuthContext }) {
       <aside className="side">
         <header>
           <h1>meshmap</h1>
-          <span className="ver">v6 · estimates only</span>
+          <span className="ver">v8 · estimates only</span>
         </header>
         <div className="userbar">
           <span className="who" title={auth.user.username}>
@@ -758,6 +758,11 @@ export function App({ auth }: { auth: AuthContext }) {
           onNodeSelect={onNodeSelect}
           onNodeMove={onNodeMove}
           onLinkSelect={(k) => { setSelectedLink(k); if (k) setSelectedNode(null); }}
+          onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
+          onPlanAround={pubProject ? undefined : (lat, lon) => {
+            setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
+            setTimeout(() => document.getElementById("placement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+          }}
         />
         {selLink && nodeById.get(selLink.a) && nodeById.get(selLink.b) ? (
           selLink.result ? (
