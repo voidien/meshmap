@@ -291,3 +291,67 @@ fn broken_packs_are_ignored_not_fatal() {
     assert_eq!(set.packs()[0].id, "fixture");
     assert!(PackSet::load(&dir.join("nonexistent")).is_empty());
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// a fine pack on top of a coarse one
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A zoom-14 pack of flat ground at `elev_m` covering the 3x3 tiles around (lat, lon), without clutter.
+fn write_fine_pack(root: &std::path::Path, lat: f64, lon: f64, elev_m: f64) {
+    let dir = root.join("fine");
+    let (px, py) = meshmap_server::terrain::lonlat_to_pixel(lon, lat, 14);
+    let (cx, cy) = ((px / 256.0).floor() as u32, (py / 256.0).floor() as u32);
+    let v = ((elev_m + 500.0) * 10.0).round() as u16;
+    let mut rgb = Vec::new();
+    for _ in 0..256 * 256 {
+        rgb.extend_from_slice(&[(v >> 8) as u8, (v & 255) as u8, 0]);
+    }
+    let mut tiles = Vec::new();
+    for ty in cy - 1..=cy + 1 {
+        for tx in cx - 1..=cx + 1 {
+            let d = dir.join("14").join(tx.to_string());
+            std::fs::create_dir_all(&d).unwrap();
+            let mut out = Vec::new();
+            {
+                let mut enc = png::Encoder::new(&mut out, 256, 256);
+                enc.set_color(png::ColorType::Rgb);
+                enc.set_depth(png::BitDepth::Eight);
+                enc.write_header().unwrap().write_image_data(&rgb).unwrap();
+            }
+            std::fs::write(d.join(format!("{ty}.bare.png")), out).unwrap();
+            tiles.push(json!({ "x": tx, "y": ty, "clutter": "none", "lidar": 0.0 }));
+        }
+    }
+    std::fs::write(dir.join("tiles.json"), Value::Array(tiles).to_string()).unwrap();
+    std::fs::write(
+        dir.join("pack.json"),
+        json!({ "format": "meshmap-pack/1", "id": "fine", "name": "Fine town pack", "zoom": 14, "bbox": [lon - 0.05, lat - 0.05, lon + 0.05, lat + 0.05], "builtAt": "2026-02-01T00:00:00Z", "tileSize": 256, "tileCount": 9, "bytes": 0 }).to_string(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_finer_pack_wins_where_it_overlaps_a_coarser_one() {
+    let root = std::env::temp_dir().join(format!("meshmap-fine-{}", uuid::Uuid::new_v4()));
+    copy_dir(&fixture_dir().join("fixture"), &root.join("fixture"));
+    write_fine_pack(&root, 36.0, -85.0, 700.0);
+    let packs = PackSet::load(&root);
+    assert_eq!(packs.zooms(), vec![14, 13], "finest first");
+
+    let s = Sampler::new(Arc::new(Hills(AtomicUsize::new(0))), Arc::new(packs));
+    // inside both: the fine pack's flat 700 m, not the coarse pack's ~300 m
+    let got = s.elevation_m(36.0, -85.0);
+    assert!((got - 700.0).abs() < 0.2, "{got}");
+    // inside the coarse pack only (4.5 km east: beyond the fine pack's 3x3 tiles): the coarse pack
+    let lon = -85.0 + 4500.0 / (111_320.0 * 36.0_f64.to_radians().cos());
+    let got = s.elevation_m(36.0, lon);
+    assert!((got - 700.0).abs() > 50.0 && (got - 300.0).abs() < 40.0, "{got}");
+    // the fine pack has no clutter band, so clutter still comes from the coarse pack where it has some (the tree belt)
+    let cy = CENTER.1 as f64 * 256.0;
+    let world = (1u64 << Z) as f64 * 256.0;
+    let gx = GX0 + 150.5;
+    let lon = gx / world * 360.0 - 180.0;
+    let n = std::f64::consts::PI - 2.0 * std::f64::consts::PI * (cy + 100.5) / world;
+    let lat = n.sinh().atan().to_degrees();
+    assert_eq!(s.clutter_m(lat, lon), 25.0);
+}

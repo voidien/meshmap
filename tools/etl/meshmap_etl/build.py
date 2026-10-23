@@ -25,6 +25,10 @@ class Options:
     lidar_depth: int = 7
     canopy_stat: str = "max"
     buildings: bool = True
+    #: also place building footprints on top of lidar where the lidar sees open ground (buildings built after the survey)
+    buildings_over_lidar: bool = False
+    #: lidar height below which a pixel counts as open ground for the rule above, metres
+    open_ground_m: float = 2.0
     overture_release: str | None = None
     dem_url: str | None = None
     canopy_url: str | None = None
@@ -61,7 +65,7 @@ class Sources:
         self.o = o
         self.dem = Dem3dep(o.dem_url)
         self.canopy = CanopyHeight(o.canopy_url, o.canopy_stat) if o.clutter in ("auto", "canopy") else None
-        self.buildings = OvertureBuildings(o.overture_release) if (o.buildings and o.clutter in ("auto", "canopy")) else None
+        self.buildings = OvertureBuildings(o.overture_release) if (o.buildings and (o.clutter in ("auto", "canopy") or o.buildings_over_lidar)) else None
         self.lidar = []
         if o.clutter in ("auto", "lidar"):
             from .sources.lidar import EptProject
@@ -87,19 +91,21 @@ def build_tile(tile: Tile, src: Sources, bld=None):
     nan_share = float(np.isnan(bare_raw).mean())
     bare = fill_missing(bare_raw)
 
-    parts, clutter, lidar_share = [], None, 0.0
+    parts, clutter, lidar_share, buildings_added = [], None, 0.0, 0.0
     fallback = None
     if src.canopy is not None:
         canopy = src.canopy.cell_heights(tile)
         if canopy is not None:
             fallback = canopy.astype(np.float64)
             parts.append("canopy")
+    b_ras = None
     if bld is not None:
         from .sources.buildings import OvertureBuildings
 
-        b = OvertureBuildings.rasterize(tile, *bld)
-        fallback = b.astype(np.float64) if fallback is None else np.maximum(fallback, b)
+        b_ras = OvertureBuildings.rasterize(tile, *bld).astype(np.float64)
         parts.append("buildings")
+        if src.o.clutter != "lidar":  # lidar-only builds leave pixels without lidar empty
+            fallback = b_ras if fallback is None else np.maximum(fallback, b_ras)
 
     lidar_h = np.zeros((256, 256))
     lidar_ok = np.zeros((256, 256), dtype=bool)
@@ -116,10 +122,15 @@ def build_tile(tile: Tile, src: Sources, bld=None):
         base = fallback if fallback is not None else np.zeros((256, 256))
         clutter = np.where(lidar_ok, lidar_h, base)
         parts.insert(0, "lidar")
+        if src.o.buildings_over_lidar and b_ras is not None:
+            # a footprint where the survey saw open ground is a building put up since: add it, keep the surveyed ones as measured
+            new = lidar_ok & (b_ras > 0) & (lidar_h < src.o.open_ground_m)
+            clutter = np.where(new, b_ras, clutter)
+            buildings_added = float(new.mean())
     elif fallback is not None:
         clutter = fallback
 
-    info = {"x": tile.x, "y": tile.y, "clutter": "+".join(parts) if clutter is not None else "none", "lidar": round(lidar_share, 3), "noData": round(nan_share, 3)}
+    info = {"x": tile.x, "y": tile.y, "clutter": "+".join(parts) if clutter is not None else "none", "lidar": round(lidar_share, 3), "buildingsAdded": round(buildings_added, 4), "noData": round(nan_share, 3)}
     return bare, (clutter.astype(np.float32) if clutter is not None else None), info
 
 
@@ -199,7 +210,7 @@ def build_pack(out_dir: str, pack_id: str, name: str, bbox, o: Options, workers:
             "bbox": list(bbox),
             "tool": f"meshmap-etl {__version__}",
             "bare": {"encoding": "rg16-dm-offset500", "source": dmod.SOURCE_NAME},
-            "clutter": {"encoding": "gray8-half-metre", "sources": sources[1:], "options": {k: v for k, v in asdict(o).items() if k in ("clutter", "canopy_stat", "buildings", "lidar_projects")}},
+            "clutter": {"encoding": "gray8-half-metre", "sources": sources[1:], "options": {k: v for k, v in asdict(o).items() if k in ("clutter", "canopy_stat", "buildings", "buildings_over_lidar", "lidar_projects")}},
             "bytes": sum(e.get("bytes", 0) for e in entries),
             "attribution": ["USGS 3DEP", "Meta/WRI canopy height (CC BY 4.0)", "Overture Maps Foundation (ODbL)"],
         },

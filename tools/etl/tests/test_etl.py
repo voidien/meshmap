@@ -208,6 +208,56 @@ def test_build_tile_with_fake_sources():
     assert clutter is None and info["clutter"] == "none"
 
 
+class FakeLidar:
+    def covers(self, tile):
+        return True
+
+    def tile_points(self, tile):
+        return None, None, None, None
+
+
+def lidar_sources(monkeypatch, clutter, over_lidar):
+    from meshmap_etl.sources import buildings as bmod, lidar as lmod
+
+    h = np.zeros((256, 256))
+    h[50:60, 50:60] = 10.0  # a building that stood at survey time
+    ok = np.ones((256, 256), dtype=bool)
+    ok[:40, :] = False  # no lidar returns here
+    monkeypatch.setattr(lmod, "clutter_from_points", lambda tile, x, y, z, cls, bare: (h, ok))
+    b = np.zeros((256, 256), np.float32)
+    b[50:60, 50:60] = 15.0  # the same building, a taller estimate
+    b[200:210, 200:210] = 8.0  # a building put up since the survey
+    b[20:30, 20:30] = 6.0  # a footprint where the lidar has no returns
+    monkeypatch.setattr(bmod.OvertureBuildings, "rasterize", staticmethod(lambda tile, geoms, heights: b))
+    s = build.Sources.__new__(build.Sources)
+    s.o = build.Options(clutter=clutter, buildings_over_lidar=over_lidar)
+    s.dem, s.canopy, s.buildings, s.lidar = FakeDem(), None, object(), [FakeLidar()]
+    return s
+
+
+def test_newer_buildings_are_added_on_open_ground_but_surveyed_ones_stay_as_measured(monkeypatch):
+    s = lidar_sources(monkeypatch, "lidar", True)
+    _, clutter, info = build.build_tile(Tile(13, 1, 1), s, ("g", "h"))
+    assert clutter[55, 55] == 10.0, "a surveyed building keeps its lidar height"
+    assert clutter[205, 205] == 8.0, "a footprint over open ground is a newer building"
+    assert clutter[25, 25] == 0.0, "no lidar returns and lidar-only mode: left empty"
+    assert info["buildingsAdded"] == pytest.approx(100 / 65536, abs=1e-4)
+    assert "lidar" in info["clutter"] and "buildings" in info["clutter"]
+
+
+def test_without_the_option_lidar_is_used_as_it_is(monkeypatch):
+    s = lidar_sources(monkeypatch, "lidar", False)
+    _, clutter, info = build.build_tile(Tile(13, 1, 1), s, ("g", "h"))
+    assert clutter[205, 205] == 0.0 and clutter[55, 55] == 10.0
+    assert info["buildingsAdded"] == 0.0
+
+
+def test_auto_mode_fills_pixels_without_lidar_from_buildings(monkeypatch):
+    s = lidar_sources(monkeypatch, "auto", True)
+    _, clutter, _ = build.build_tile(Tile(13, 1, 1), s, ("g", "h"))
+    assert clutter[25, 25] == 6.0 and clutter[205, 205] == 8.0 and clutter[55, 55] == 10.0
+
+
 def test_cli_build_info_verify_on_a_tiny_pack(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(build, "sources_for", lambda o: fake_sources(o.clutter))
     out = str(tmp_path)

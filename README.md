@@ -102,7 +102,7 @@ height of trees and buildings from lidar, or canopy-height and building-footprin
 docker compose --profile etl run --rm etl build --id nashville --bbox=-86.80,36.15,-86.765,36.185 --lidar TN_DavidsonCo_1_2022
 ```
 
-Where a pack covers a path, a link's profile shows **bare earth and terrain + clutter side by side**, and *Project settings →
+Packs can overlap: where a finer pack (a town at zoom 14) sits on a coarser regional one (zoom 13), the finest data wins. Where a pack covers a path, a link's profile shows **bare earth and terrain + clutter side by side**, and *Project settings →
 Terrain model* picks which one colors links and heatmaps. Heatmap cards say how much of the area had clutter data. Clutter is
 treated as solid obstacles: there is no foliage loss, and both antennas stay on the ground (heights are above ground).
 

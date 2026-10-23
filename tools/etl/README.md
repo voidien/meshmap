@@ -55,16 +55,29 @@ The ETL needs unrestricted internet access to `prd-tnm.s3.amazonaws.com`, `usgs-
 
 ## Example: Cookeville and Crossville, Tennessee
 
-USGS has 2015 lidar (project family `USGS_LPC_TN_27County_blk1..4`) that covers both towns; blocks 2 and 3 cover the whole area
-between them, blocks 1 and 4 fill the edges. List them with `meshmap-etl lidar-projects USGS_LPC_TN_27County`. Build each town
-with a margin (about 80 tiles, 40 x 28 km, each):
+What exists: USGS's index shows one lidar collection over both towns, the Tennessee "27 County" Cumberland Plateau survey
+(quality level 2, about 2 points per square metre), flown 3 December 2015 to 13 January 2016. The 2023 USGS copy
+(`TN_27_County_QL2_LiDAR_Cumberland_Plateau_BAA`) is the same data. Nothing newer was found. Its public Entwine copies are the
+projects `USGS_LPC_TN_27County_blk1_2015_LAS_2018` to `blk4` (list them with `meshmap-etl lidar-projects USGS_LPC_TN_27County`;
+blocks 2 and 3 cover the whole area).
+
+Two caveats follow from its age and season: buildings and clearings since early 2016 are missing, and it was flown with the leaves
+off, so canopy is thinner in the data than in summer.
+
+Build in two layers. A regional pack at zoom 13 (about 15 m per pixel) for the area between and around the towns, then finer
+packs at zoom 14 (about 7.6 m per pixel) for each town. **Where packs overlap, the finest one wins**, so the town packs simply sit
+on top of the regional one; the regional pack keeps supplying clutter wherever a fine tile has none.
 
 ```bash
-docker compose --profile etl run --rm etl build --id cookeville --bbox=-85.70,36.05,-85.30,36.30 --lidar-prefix USGS_LPC_TN_27County
-docker compose --profile etl run --rm etl build --id crossville --bbox=-85.25,35.85,-84.85,36.10 --lidar-prefix USGS_LPC_TN_27County
+# regional, zoom 13 (about 330 tiles, 30-40 MB; hours on a small server; interrupted builds resume)
+docker compose --profile etl run --rm etl build --id upper-cumberland --bbox=-85.75,35.80,-84.85,36.30 --lidar-prefix USGS_LPC_TN_27County --buildings-over-lidar
+
+# towns, zoom 14: Cookeville (about 56 tiles) and Crossville (about 42 tiles)
+docker compose --profile etl run --rm etl build --id cookeville-z14 --zoom 14 --bbox=-85.58,36.11,-85.42,36.21 --lidar-prefix USGS_LPC_TN_27County --buildings-over-lidar
+docker compose --profile etl run --rm etl build --id crossville-z14 --zoom 14 --bbox=-85.10,35.91,-84.96,36.00 --lidar-prefix USGS_LPC_TN_27County --buildings-over-lidar
 ```
 
-(or one pack for both: `--id upper-cumberland --bbox=-85.75,35.80,-84.85,36.30`, about 330 tiles). Rough size is 8 MB per town pack. Expect
-roughly 30-40 minutes per town on a 4-core machine and longer on a small server; interrupted builds resume. Try
-`--limit 4` first. This area is mostly forest on the Cumberland Plateau: the lidar clutter there is dominated by tree canopy, which is
-the point of using it.
+`--buildings-over-lidar` adds Overture building footprints where the lidar saw open ground (so buildings put up since the survey
+show up) and leaves buildings the lidar measured as measured. Try `--limit 4` first. At zoom 14 the lidar is read at the same
+depth as before, so for the finest detail also try `--lidar-depth 8` (about eight times the lidar data per tile, so slower and
+heavier on memory: keep `--workers 1` on a 16 GB machine).

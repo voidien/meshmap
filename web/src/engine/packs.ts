@@ -135,7 +135,8 @@ export class PackSampler {
     const inPack = new Uint8Array(n);
     const packIds: (string | null)[] = new Array(n).fill(null);
     let anyClutter = false;
-    const zooms = [...new Set(this.packs.map((p) => p.zoom))];
+    // finest first: where a fine pack and a coarse one overlap, the fine one wins
+    const zooms = [...new Set(this.packs.map((p) => p.zoom))].sort((a, b) => b - a);
     const plan: { i: number; p: PackInfo; px: number; py: number }[] = [];
     for (let i = 0; i < n; i++) {
       for (const z of zooms) {

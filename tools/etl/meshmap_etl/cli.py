@@ -36,6 +36,7 @@ def cmd_build(a) -> int:
         lidar_depth=a.lidar_depth,
         canopy_stat=a.canopy_stat,
         buildings=not a.no_buildings,
+        buildings_over_lidar=a.buildings_over_lidar,
         overture_release=a.overture_release,
         dem_url=a.dem_url,
         block=a.block,
@@ -131,6 +132,7 @@ def main(argv=None) -> int:
     b.add_argument("--lidar-depth", type=int, default=7, help="octree depth to read (7 is about 3.7 m between points: plenty for 15 m pixels; each level is 8x more data)")
     b.add_argument("--canopy-stat", default="max", choices=["max", "q3", "med", "average"], help="how 1 m canopy heights are summarised per pixel (max matched lidar best in the Nashville test)")
     b.add_argument("--no-buildings", action="store_true")
+    b.add_argument("--buildings-over-lidar", action="store_true", help="also add Overture building footprints where the lidar saw open ground, so buildings put up since the survey appear (lidar buildings are kept as measured)")
     b.add_argument("--overture-release", help="Overture release (default: the latest)")
     b.add_argument("--dem-url", help="URL or path template with {name}, to use your own 3DEP files")
     b.add_argument("--workers", type=int, default=2)

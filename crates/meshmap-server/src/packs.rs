@@ -123,10 +123,11 @@ impl PackSet {
         Self { packs, stamp: Self::stamp_of(dir) }
     }
 
-    /// The distinct tile zooms of the packs (usually just one).
+    /// The distinct tile zooms of the packs, finest (highest zoom) first: where a fine pack and a coarse one overlap, the
+    /// fine one wins.
     pub fn zooms(&self) -> Vec<u32> {
         let mut z: Vec<u32> = self.packs.iter().map(|p| p.zoom).collect();
-        z.sort_unstable();
+        z.sort_unstable_by(|a, b| b.cmp(a));
         z.dedup();
         z
     }

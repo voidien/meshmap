@@ -97,6 +97,18 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   possible site). Candidates are high points only, so a valley town that needs a low site is not found. Tall masts, towers and
   existing buildings are not considered. No comparison with a human planner's choices or with measurements.
 
+## Finer packs and newer buildings (v8)
+
+- Overlapping packs: the server and the browser sample the finest pack first and fall back to coarser ones; tested on the server
+  with a generated zoom-14 pack over the zoom-13 fixture (fine wins inside it, coarse outside it, clutter still taken from the
+  coarse pack where the fine one has none) and in the browser sampler with both packs listed in the "wrong" order.
+- `--buildings-over-lidar`: unit tested with stand-in sources: a footprint over lidar open ground (below 2 m) is added, a building the
+  lidar measured keeps its lidar height even if the footprint says taller, lidar-only builds leave pixels without lidar empty, and
+  auto builds fill them from buildings.
+- **Not validated:** against real new construction in the Cookeville/Crossville area (the Overture footprints and their heights are
+  themselves estimates), or the build time and memory of zoom-14 packs with `--lidar-depth 8` on a small server. Building
+  footprints say nothing about a building's roof shape or material.
+
 ## Antenna patterns, publishing, comments, field readings (v6)
 
 - Antenna patterns: the same cases are tested in Rust (`meshmap-core/src/antenna.rs`) and TypeScript (`web/src/antenna.test.ts`):
