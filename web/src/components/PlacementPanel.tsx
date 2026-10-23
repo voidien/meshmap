@@ -156,7 +156,7 @@ export function PlacementPanel(p: Props) {
           {p.hasStale ? <div className="lmeta warn">Out of date: nodes or settings changed since these were computed.</div> : null}
           <div className="lmeta">
             {f1(r.targetKm2)} km² target · {r.baselinePct < 0.05 ? "nothing covered yet" : `${f1(r.baselinePct)} % already covered`} · {r.candidates} high points considered
-            {r.terrain === "clutter" && typeof r.clutterShare === "number" ? ` · ${Math.round(r.clutterShare * 100)} % has clutter data` : ""}
+            {r.terrain !== "bare" && typeof r.clutterShare === "number" ? ` · ${Math.round(r.clutterShare * 100)} % has clutter data` : ""}
           </div>
           {describeStop(r) ? <div className="lmeta">{describeStop(r)}</div> : null}
           <ol className="sites">

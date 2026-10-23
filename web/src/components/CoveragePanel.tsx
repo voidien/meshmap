@@ -67,10 +67,10 @@ export function CoveragePanel({ layers, staleKeys, selectedNode, nodeCount, radi
                     Covers {km2(l.result.stats.coveredKm2)} km² of {km2(l.result.stats.predictedKm2)} km² predicted
                     {l.kind === "network" ? ` · ${km2(l.result.stats.redundantKm2)} km² reached by 2+ nodes` : ""}
                   </div>
-                  {l.result.terrain === "clutter" && typeof l.result.clutterShare === "number" ? (
+                  {l.result.terrain !== "bare" && typeof l.result.clutterShare === "number" ? (
                     <div className={`lmeta ${(l.result.clutterShare as number) < 0.95 ? "warn" : ""}`}>
                       Trees and buildings: {Math.round((l.result.clutterShare as number) * 100)} % of the area has clutter data
-                      {(l.result.clutterShare as number) < 0.95 ? "; the rest is predicted over bare earth, so it is optimistic there" : ""}
+                      {(l.result.clutterShare as number) < 0.95 ? "; the rest (grey hatching on the map) is predicted over bare earth, so it is optimistic there" : ""}
                     </div>
                   ) : l.result.terrain === "bare" ? (
                     <div className="lmeta">Bare-earth model</div>
@@ -111,7 +111,7 @@ export function CoveragePanel({ layers, staleKeys, selectedNode, nodeCount, radi
         </div>
       ) : null}
       <p className="hint">
-        Margin = predicted signal at a client device minus the receiver sensitivity (Longley-Rice over bare-earth terrain, no trees or buildings). Nothing is drawn where the margin is below 0 dB. An estimate, like everything here.
+        Margin = predicted signal at a client device minus the receiver sensitivity (Longley-Rice, with trees and buildings as set in the terrain model; grey hatching marks places with no tree or building data, predicted over bare earth). Nothing is drawn where the margin is below 0 dB. An estimate, like everything here.
       </p>
     </Card>
   );

@@ -239,6 +239,24 @@ async fn clutter_jobs_predict_less_coverage_than_bare_earth_where_a_pack_has_tre
     assert_eq!(far["result"]["clutterShare"].as_f64().unwrap(), 0.0);
     assert!(public.0.load(Ordering::Relaxed) > 0);
 
+    // pixels without clutter data are hatched grey, so a bare-earth patch does not pass for real coverage
+    let grey = |job: &Value| {
+        let url = job["result"]["images"]["margin"].as_str().unwrap().to_string();
+        url
+    };
+    let (_, png_far) = a.raw(Method::GET, &grey(&far), None).await;
+    let (_, png_in) = a.raw(Method::GET, &grey(&clutter), None).await;
+    let count_grey = |bytes: &[u8]| {
+        let dec = png::Decoder::new(std::io::Cursor::new(bytes));
+        let mut r = dec.read_info().unwrap();
+        let mut buf = vec![0; r.output_buffer_size()];
+        r.next_frame(&mut buf).unwrap();
+        buf.chunks(4).filter(|p| p[..3] == [110, 110, 110]).count()
+    };
+    assert!(count_grey(&png_far) > 100, "outside the pack the prediction is hatched");
+    // the fixture pack leaves a small corner of this disc uncovered
+    assert!(count_grey(&png_in) * 5 < count_grey(&png_far), "inside the pack little is hatched: {} vs {}", count_grey(&png_in), count_grey(&png_far));
+
     // unknown terrain modes are refused
     let (s, _) = a.json(Method::POST, &format!("/api/projects/{pid}/jobs"), Some(node_job("lidar", 36.0, -85.0))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);

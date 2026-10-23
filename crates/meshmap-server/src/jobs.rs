@@ -24,7 +24,7 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 /// Bump when the prediction method changes, so old cached results are not reused.
-pub const MODEL_VERSION: &str = "cov-2";
+pub const MODEL_VERSION: &str = "cov-3";
 pub const MAX_NODES: usize = 400;
 const MAX_QUEUED_PER_USER: i64 = 25;
 
@@ -437,6 +437,35 @@ fn margin_rgba(v: u8) -> [u8; 4] {
     [c[0], c[1], c[2], 150]
 }
 
+/// Hatch the predicted pixels that lie outside every pack's clutter data: there the trees and buildings are simply missing,
+/// so the prediction is bare earth and would otherwise look like a (suspiciously) good-coverage square with a straight edge.
+fn hatch_without_clutter(rgba: &mut [u8], w: usize, h: usize, b: &meshmap_coverage::Bounds, packs: &crate::packs::PackSet) {
+    use crate::terrain::{lonlat_to_pixel, TILE};
+    let zooms = packs.zooms();
+    if zooms.is_empty() {
+        return;
+    }
+    let mut cache: HashMap<(u32, u32, u32), bool> = HashMap::new();
+    let corners: Vec<(u32, (f64, f64), (f64, f64))> = zooms.iter().map(|&z| (z, lonlat_to_pixel(b.west, b.north, z), lonlat_to_pixel(b.east, b.south, z))).collect();
+    for y in 0..h {
+        for x in 0..w {
+            let i = (y * w + x) * 4;
+            if rgba[i + 3] == 0 {
+                continue;
+            }
+            let (fx, fy) = ((x as f64 + 0.5) / w as f64, (y as f64 + 0.5) / h as f64);
+            let covered = corners.iter().any(|&(z, (x0, y0), (x1, y1))| {
+                let (px, py) = (x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy);
+                let key = (z, (px / TILE as f64) as u32, (py / TILE as f64) as u32);
+                *cache.entry(key).or_insert_with(|| packs.find(key.0, key.1, key.2).is_some_and(|(_, has_clutter)| has_clutter))
+            });
+            if !covered && (x + y) % 8 < 4 {
+                rgba[i..i + 4].copy_from_slice(&[110, 110, 110, 130]);
+            }
+        }
+    }
+}
+
 fn count_rgba(best: u8, count: u8) -> [u8; 4] {
     if best == NO_DATA || count == 0 {
         return [0, 0, 0, 0];
@@ -531,7 +560,10 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
 
     let result = if req.kind == "coverage_node" {
         let raster = node_raster(ctx, req, 0, hash, &sampler, (0.0, 0.97), "", true)?;
-        let rgba: Vec<u8> = raster.data.iter().flat_map(|&v| margin_rgba(v)).collect();
+        let mut rgba: Vec<u8> = raster.data.iter().flat_map(|&v| margin_rgba(v)).collect();
+        if req.terrain != "bare" {
+            hatch_without_clutter(&mut rgba, raster.width, raster.height, &raster.bounds, &packs);
+        }
         write_png("margin.png", raster.width, raster.height, &rgba)?;
         let net = meshmap_coverage::composite_network(&[&raster]).map_err(Fail::Failed)?;
         json!({
@@ -572,7 +604,10 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
         }
         (ctx.progress)(0.96, "Combining nodes");
         let net = builder.finish();
-        let rgba: Vec<u8> = net.best.iter().flat_map(|&v| margin_rgba(v)).collect();
+        let mut rgba: Vec<u8> = net.best.iter().flat_map(|&v| margin_rgba(v)).collect();
+        if req.terrain != "bare" {
+            hatch_without_clutter(&mut rgba, net.width, net.height, &net.bounds, &packs);
+        }
         write_png("margin.png", net.width, net.height, &rgba)?;
         let rgba: Vec<u8> = net.best.iter().zip(&net.count).flat_map(|(&b, &c)| count_rgba(b, c)).collect();
         write_png("count.png", net.width, net.height, &rgba)?;
