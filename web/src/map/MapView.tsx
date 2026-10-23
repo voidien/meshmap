@@ -309,7 +309,8 @@ export function MapView(p: Props) {
     }
     for (const n of c.nodes) {
       let m = markers.current.get(n.id);
-      if (m) m.setDraggable(!c.readOnly);
+      // only the selected node can be dragged: a first tap selects, so a swipe across the map can't move one by accident
+      if (m) m.setDraggable(!c.readOnly && c.selectedNodeId === n.id);
       if (!m) {
         const el = document.createElement("div");
         el.className = "node-marker";
@@ -319,7 +320,7 @@ export function MapView(p: Props) {
           if (!moved) latest.current.onNodeSelect(n.id);
           moved = false;
         });
-        m = new maplibregl.Marker({ element: el, draggable: !c.readOnly }).setLngLat([n.lon, n.lat]).addTo(map);
+        m = new maplibregl.Marker({ element: el, draggable: !c.readOnly && c.selectedNodeId === n.id }).setLngLat([n.lon, n.lat]).addTo(map);
         let raf = 0;
         const report = (dragging: boolean) => {
           const ll = m!.getLngLat();

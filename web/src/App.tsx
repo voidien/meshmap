@@ -386,12 +386,29 @@ export function App({ auth }: { auth: AuthContext }) {
     [setProject, pickingArea],
   );
 
+  const dragOrigin = useRef<{ id: string; lat: number; lon: number } | null>(null);
+  const undoTimer = useRef(0);
+  const [undoMove, setUndoMove] = useState<{ id: string; lat: number; lon: number } | null>(null);
+
   const onNodeMove = useCallback(
     (id: string, lat: number, lon: number, isDragging: boolean) => {
+      if (isDragging && !dragOrigin.current) {
+        const n = nodeById.get(id);
+        if (n) dragOrigin.current = { id, lat: n.lat, lon: n.lon };
+      }
       patchNode(id, { lat, lon });
       setDragging(isDragging);
+      if (!isDragging && dragOrigin.current) {
+        const o = dragOrigin.current;
+        dragOrigin.current = null;
+        if (Math.abs(o.lat - lat) > 1e-7 || Math.abs(o.lon - lon) > 1e-7) {
+          window.clearTimeout(undoTimer.current);
+          setUndoMove(o);
+          undoTimer.current = window.setTimeout(() => setUndoMove(null), 10000);
+        }
+      }
     },
-    [patchNode],
+    [patchNode, nodeById],
   );
 
   const onNodeSelect = useCallback((id: string | null) => {
@@ -802,6 +819,21 @@ export function App({ auth }: { auth: AuthContext }) {
         <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
           {menuOpen ? "◀ Hide menu" : "☰ Menu"}
         </button>
+        {undoMove && nodeById.get(undoMove.id) ? (
+          <div className="undo-toast" role="status">
+            Moved “{nodeById.get(undoMove.id)!.name}”
+            <button
+              id="undo-move"
+              onClick={() => {
+                patchNode(undoMove.id, { lat: undoMove.lat, lon: undoMove.lon });
+                window.clearTimeout(undoTimer.current);
+                setUndoMove(null);
+              }}
+            >
+              Undo
+            </button>
+          </div>
+        ) : null}
         <MapView
           nodes={project.nodes}
           links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}
