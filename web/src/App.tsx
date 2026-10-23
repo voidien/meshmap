@@ -79,6 +79,21 @@ export function App({ auth }: { auth: AuthContext }) {
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | null>(null);
+  const [menuOpen, setMenuOpen] = useState(() => store.get("meshmap.menu") !== "0");
+  const toggleMenu = useCallback(() => {
+    setMenuOpen((v) => {
+      store.set("meshmap.menu", v ? "0" : "1");
+      return !v;
+    });
+  }, []);
+  // let the map take the new width
+  useEffect(() => {
+    const t = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+      (window as unknown as { __meshmap?: { resize: () => void } }).__meshmap?.resize();
+    }, 30);
+    return () => clearTimeout(t);
+  }, [menuOpen]);
   const [fieldMode, setFieldMode] = useState(false);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
@@ -237,12 +252,13 @@ export function App({ auth }: { auth: AuthContext }) {
       if (e.key === "]") step(1);
       else if (e.key === "[") step(-1);
       else if (e.key === "`") flip();
+      else if (e.key === "m" || e.key === "M") toggleMenu();
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, flip]);
+  }, [step, flip, toggleMenu]);
 
   const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
 
@@ -508,8 +524,8 @@ export function App({ auth }: { auth: AuthContext }) {
   }
 
   return (
-    <div className="app">
-      <aside className="side">
+    <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
+      <aside className="side" aria-hidden={!menuOpen}>
         <header>
           <h1>meshmap</h1>
           <span className="ver">v8 · estimates only</span>
@@ -743,6 +759,9 @@ export function App({ auth }: { auth: AuthContext }) {
         </section>
       </aside>
       <main className="mapwrap">
+        <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
+          {menuOpen ? "◀ Hide menu" : "☰ Menu"}
+        </button>
         <MapView
           nodes={project.nodes}
           links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}

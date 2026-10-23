@@ -249,3 +249,11 @@ ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8p
 .switcher { padding: 8px; }
 .legend.card { padding: 4px 8px; }
 .toolbar button { padding: 4px 8px; white-space: nowrap; }
+
+.sidetoggle { position: absolute; top: 10px; left: 10px; z-index: 4; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.maplayers { left: 124px; }
+.app.menu-hidden { grid-template-columns: 1fr; }
+.app.menu-hidden .side { display: none; }
+@media (max-width: 800px) {
+  .app.menu-hidden { grid-template-columns: 1fr; grid-template-rows: 100% 0; }
+}

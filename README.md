@@ -7,7 +7,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-
 public ~30 m tiles and the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see
 [`docs/validation.md`](docs/validation.md)). No clutter (trees, buildings) yet.
 
-The side panels (comments, mesh health, coverage, suggestions, settings, nodes, links, import/export) start **collapsed** to save scrolling: click a heading to open or close it, or use *Expand all* / *Collapse all* above them. Your choice is remembered, and selecting a node opens its panel. The map cursor is a thin **precision crosshair** by default (red while a click will place something); change it under *Layers* → *Cursor on the map* (precision crosshair, standard crosshair, or the hand).
+The side panels (comments, mesh health, coverage, suggestions, settings, nodes, links, import/export) start **collapsed** to save scrolling: click a heading to open or close it, or use *Expand all* / *Collapse all* above them. Your choice is remembered, and selecting a node opens its panel. The whole menu can be hidden with **◀ Hide menu** (top left of the map, or press **M**) so the map fills the window; **☰ Menu** brings it back, and the choice is remembered. The map cursor is a thin **precision crosshair** by default (red while a click will place something); change it under *Layers* → *Cursor on the map* (precision crosshair, standard crosshair, or the hand).
 
 Everything in this guide, the architecture and plan, the validation notes and the terrain-pack guide is also available inside the app under **Help** (top of the left panel).
 
