@@ -81,3 +81,19 @@ docker compose --profile etl run --rm etl build --id crossville-z14 --zoom 14 --
 show up) and leaves buildings the lidar measured as measured. Try `--limit 4` first. At zoom 14 the lidar is read at the same
 depth as before, so for the finest detail also try `--lidar-depth 8` (about eight times the lidar data per tile, so slower and
 heavier on memory: keep `--workers 1` on a 16 GB machine).
+
+## Example: Nashville to Knoxville
+
+`tools/etl/build-corridor.sh` builds three more zoom-13 packs around the upper-cumberland one: **south-cumberland** (south of
+35.80 N, 176 tiles), **nashville-west** (-86.95 to -85.75, 420 tiles) and **knoxville-east** (-84.85 to -83.70 and down to 35.55 N,
+648 tiles), about 1,250 tiles and roughly 125 MB. USGS lidar covers the whole corridor: Middle Tennessee 2018 (Nashville), the
+27-county Cumberland Plateau 2015-16 survey, and Eastern Tennessee 2016 / Blount County (Knoxville). Where a tile has no lidar the
+build falls back to canopy + buildings by itself. Two tiles south of Hinch were built and verified as a test (about 80 s); the full
+run takes many hours, so start it on the server and let it resume if interrupted:
+
+```bash
+LIMIT=4 tools/etl/build-corridor.sh south-cumberland    # quick try
+tools/etl/build-corridor.sh                             # everything (resumable)
+```
+
+The server picks new packs up without a restart; then press *Predict* again. Map areas still without tree data are hatched grey.
