@@ -7,6 +7,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-
 public ~30 m tiles and the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see
 [`docs/validation.md`](docs/validation.md)). No clutter (trees, buildings) yet.
 
+Everything in this guide, the architecture and plan, the validation notes and the terrain-pack guide is also available inside the app under **Help** (top of the left panel).
+
 ## Layout
 
 ```

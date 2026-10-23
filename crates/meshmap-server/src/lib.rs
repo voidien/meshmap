@@ -5,6 +5,7 @@ pub mod admin;
 pub mod auth;
 pub mod collab;
 pub mod db;
+pub mod docs_api;
 pub mod error;
 pub mod jobs;
 pub mod jobs_api;
@@ -36,6 +37,7 @@ pub fn build_app(state: Shared) -> Router {
         .merge(collab::routes())
         .merge(jobs_api::routes())
         .merge(packs_api::routes())
+        .merge(docs_api::routes())
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), auth::same_origin_writes));
 

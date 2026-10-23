@@ -214,3 +214,21 @@ ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8p
 .ctxmenu .ctxhead { font-weight: 600; padding: 2px 4px; }
 .ctxmenu .ctxinfo { padding: 2px 4px 6px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
 .ctxmenu button { text-align: left; }
+
+.modal.help { width: min(1000px, 96vw); max-height: 92vh; display: flex; flex-direction: column; }
+.helpbody { display: grid; grid-template-columns: 230px 1fr; gap: 16px; min-height: 0; flex: 1; overflow: hidden; }
+.helptoc { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; font-size: 13px; padding-right: 8px; border-right: 1px solid var(--line); }
+.helptoc a { text-decoration: none; color: inherit; padding: 2px 4px; border-radius: 4px; }
+.helptoc a:hover { background: #eef2ff; }
+.helptoc a.l3 { padding-left: 16px; color: var(--muted, #667); }
+.doc { overflow-y: auto; padding-right: 8px; line-height: 1.5; }
+.doc h1 { font-size: 22px; } .doc h2 { font-size: 18px; margin-top: 22px; border-bottom: 1px solid var(--line); padding-bottom: 2px; } .doc h3 { font-size: 15px; margin-top: 16px; }
+.doc pre { background: #f3f4f6; border-radius: 6px; padding: 8px 10px; overflow-x: auto; font-size: 12.5px; }
+.doc code { background: #f3f4f6; border-radius: 3px; padding: 0 3px; font-size: 12.5px; }
+.doc pre code { background: none; padding: 0; }
+.doc table { border-collapse: collapse; margin: 8px 0; font-size: 13px; display: block; overflow-x: auto; }
+.doc th, .doc td { border: 1px solid var(--line); padding: 3px 8px; vertical-align: top; }
+.doc th { background: #f3f4f6; }
+.doc blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--line); color: var(--muted, #556); }
+.doc .doc-file { font-family: ui-monospace, monospace; font-size: 12.5px; }
+@media (max-width: 760px) { .helpbody { grid-template-columns: 1fr; } .helptoc { display: none; } }

@@ -39,7 +39,11 @@ WORKDIR /app
 COPY --from=server /src/target/release/meshmap-server /app/meshmap-server
 COPY --from=web /web/dist /app/web
 COPY deploy/entrypoint.sh /app/entrypoint.sh
-ENV MESHMAP_DATA_DIR=/app/data MESHMAP_STATIC_DIR=/app/web PORT=8080 RUST_LOG=info
+# the documentation shown under Help in the app
+COPY README.md /app/doc/README.md
+COPY docs/ARCHITECTURE.md docs/validation.md /app/doc/docs/
+COPY tools/etl/README.md /app/doc/tools/etl/README.md
+ENV MESHMAP_DATA_DIR=/app/data MESHMAP_STATIC_DIR=/app/web MESHMAP_DOCS_DIR=/app/doc PORT=8080 RUST_LOG=info
 VOLUME /app/data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["/app/meshmap-server", "healthcheck"]

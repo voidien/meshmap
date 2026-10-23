@@ -37,7 +37,29 @@ async function request<T>(method: string, path: string, body?: unknown, extra?: 
   return json as T;
 }
 
+/** GET a plain-text answer (documentation); errors are reported the same way as for JSON. */
+async function getText(path: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(path, { credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, "Can't reach the server. Check your connection.");
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = `Request failed (${res.status})`;
+    try {
+      msg = (JSON.parse(text) as { error?: string }).error ?? msg;
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  return text;
+}
+
 export const api = {
+  text: getText,
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body: unknown = {}) => request<T>("POST", path, body),
   put: <T>(path: string, body: unknown, extra?: RequestInit) => request<T>("PUT", path, body, extra),

@@ -20,6 +20,8 @@ pub struct Config {
     pub terrain_url: String,
     /// Folder of terrain packs (bare earth + clutter) built by `tools/etl`.
     pub packs_dir: PathBuf,
+    /// Root the documentation files are read from (`README.md`, `docs/*.md`); the repository root when run from a checkout.
+    pub docs_dir: PathBuf,
 }
 
 impl Config {
@@ -27,6 +29,7 @@ impl Config {
         Self {
             cache_dir: data_dir.join("cache"),
             packs_dir: data_dir.join("packs"),
+            docs_dir: PathBuf::from("."),
             cache_mb: 2000,
             terrain_url: crate::terrain::DEFAULT_URL.to_string(),
             data_dir,

@@ -3,7 +3,11 @@
 .env
 .git
 data
-docs
 target
 web/dist
 web/src/wasm/pkg
+# the documentation is shown inside the app
+!README.md
+!docs/ARCHITECTURE.md
+!docs/validation.md
+!tools/etl/README.md

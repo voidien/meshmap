@@ -1,6 +1,6 @@
-# meshmap — Architecture Proposal (v0)
+# meshmap — Architecture and plan
 
-Status: proposal, no code yet. Open decisions are listed in §14.
+Status: this began as the design proposal and is kept as the plan. The app is built in the steps of §15; where what was built differs from what is written here (for example SQLite instead of Postgres, link analysis in the browser, no separate tile server), §15 says so. Open decisions are listed in §14.
 
 ## 1. Guiding decisions
 

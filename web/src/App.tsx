@@ -9,6 +9,7 @@ import type { Comment, FieldReading } from "./collab";
 import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPanel";
 import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
 import { linkKey } from "./engine/analysis";
+import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { PublishDialog } from "./components/PublishDialog";
@@ -76,7 +77,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | null>(null);
+  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
@@ -520,6 +521,7 @@ export function App({ auth }: { auth: AuthContext }) {
             {sync.saveState === "saving" ? "Saving…" : sync.saveState === "error" ? "Not saved" : readOnly ? "View only" : "Saved"}
           </span>
           {auth.user.role === "admin" ? <button onClick={() => setDialog("admin")}>Admin</button> : null}
+          <button onClick={() => setDialog("help")} id="help-btn">Help</button>
           <button onClick={() => setDialog("account")}>Account</button>
         </div>
         {sync.error ? <p className="banner warn">Can't save right now: {sync.error}. Your changes stay in this tab and are retried.</p> : null}
@@ -772,6 +774,7 @@ export function App({ auth }: { auth: AuthContext }) {
           )
         ) : null}
       </main>
+      {dialog === "help" ? <HelpDialog onClose={() => setDialog(null)} /> : null}
       {dialog === "account" ? <AccountMenu auth={auth} onClose={() => setDialog(null)} /> : null}
       {dialog === "admin" ? <AdminPanel meId={auth.user.id} onClose={() => setDialog(null)} /> : null}
       {dialog === "publish" && ownProject.id ? <PublishDialog project={ownProject} onClose={() => setDialog(null)} onChanged={() => setPubReload((n) => n + 1)} /> : null}
