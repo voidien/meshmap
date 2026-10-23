@@ -871,6 +871,7 @@ version = "0.1.0"
 dependencies = [
  "meshmap-itm",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
