@@ -511,8 +511,44 @@ export function MapView(p: Props) {
         map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
       }
     };
-    if (map.isStyleLoaded()) apply();
+    // isStyleLoaded() is false while tiles are loading (after any pan), and "load" fires only once, so wait for the style itself
+    if (map.getSource("dem")) apply();
     else map.once("load", apply);
+
+    // Rotating and tilting only in 3D: two fingers on touch, middle-button drag with a mouse
+    const canvas = map.getCanvas();
+    if (p.terrain3d) {
+      map.touchPitch.enable();
+      map.touchZoomRotate.enableRotation();
+    } else {
+      map.touchPitch.disable();
+      map.touchZoomRotate.disableRotation();
+    }
+    let last: { x: number; y: number } | null = null;
+    const down = (e: MouseEvent) => {
+      if (!p.terrain3d || e.button !== 1) return;
+      e.preventDefault();
+      last = { x: e.clientX, y: e.clientY };
+    };
+    const move = (e: MouseEvent) => {
+      if (!last) return;
+      map.jumpTo({
+        bearing: map.getBearing() + (e.clientX - last.x) * 0.4,
+        pitch: Math.max(0, Math.min(80, map.getPitch() - (e.clientY - last.y) * 0.3)),
+      });
+      last = { x: e.clientX, y: e.clientY };
+    };
+    const up = () => {
+      last = null;
+    };
+    canvas.addEventListener("mousedown", down);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      canvas.removeEventListener("mousedown", down);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
   }, [p.terrain3d]);
 
   const width = container.current?.clientWidth ?? 9999;
