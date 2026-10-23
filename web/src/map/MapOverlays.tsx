@@ -105,6 +105,8 @@ export function LayersControl({ value, onChange }: { value: MapLayers; onChange:
 
 /** Live readout of the ground under the cursor. */
 export function ElevationReadout({ spot, busy }: { spot: SpotInfo | null; busy: boolean }) {
+  // on a touch screen there is no pointer to hover with, so do not show the hint (it only covers the map credits)
+  if (!spot && typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches) return null;
   if (!spot) return <div className="elev-readout" id="elev-readout"><span className="lmeta">Move the pointer over the map for elevation. Right-click for more.</span></div>;
   return (
     <div className="elev-readout" id="elev-readout" aria-live="off">

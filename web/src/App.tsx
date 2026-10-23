@@ -94,6 +94,7 @@ export function App({ auth }: { auth: AuthContext }) {
     }, 30);
     return () => clearTimeout(t);
   }, [menuOpen]);
+  const sideRef = useRef<HTMLElement>(null);
   const [fieldMode, setFieldMode] = useState(false);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
@@ -192,6 +193,10 @@ export function App({ auth }: { auth: AuthContext }) {
     [cov.layers, pubProject],
   );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
+  // the selected node's panel is at the top of the menu: show it
+  useEffect(() => {
+    if (selectedNode) sideRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [selectedNode]);
   const placement = usePlacement(project.id);
   const placementTemplate = project.nodes.find((n) => n.id === templateId) ?? null;
   const placementReq = useMemo(
@@ -525,12 +530,10 @@ export function App({ auth }: { auth: AuthContext }) {
 
   return (
     <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
-      <aside className="side" aria-hidden={!menuOpen}>
-        <header>
-          <h1>meshmap</h1>
-          <span className="ver">v8 · estimates only</span>
-        </header>
+      <aside className="side" aria-hidden={!menuOpen} ref={sideRef}>
         <div className="userbar">
+          <h1>meshmap</h1>
+          <span className="ver" title="estimates only">v8</span>
           <span className="who" title={auth.user.username}>
             {auth.user.displayName}
           </span>
@@ -602,6 +605,11 @@ export function App({ auth }: { auth: AuthContext }) {
             )}
           </>
         ) : null}
+        {sel ? (
+          <fieldset className="plain" disabled={readOnly} id="selected-node">
+            <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
+          </fieldset>
+        ) : null}
         {section === "mine" ? (
         <ProjectSwitcher
           projects={projects}
@@ -640,9 +648,25 @@ export function App({ auth }: { auth: AuthContext }) {
           </span>
         </div>
 
+        {sel ? null : <p className="hint tight">{readOnly ? "View only." : "“+ Node”, then click the map. Click a link for its profile."}</p>}
+
+        {ready ? (
         <fieldset className="plain" disabled={readOnly}>
-        {sel ? <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} /> : <p className="hint tight">{readOnly ? "View only." : "“+ Node”, then click the map. Click a link for its profile."}</p>}
+        <NodeList
+            nodes={project.nodes}
+            links={allLinks}
+            focusId={selectedNode}
+            checked={checked}
+            onFocus={focusNode}
+            onToggle={toggleChecked}
+            onSetChecked={(ids) => setChecked(new Set(ids))}
+            onBulk={patchMany}
+            onDeleteMany={deleteMany}
+            onAddAt={addNodeAt}
+          />
         </fieldset>
+        ) : null}
+        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => { setSelectedLink(k); setSelectedNode(null); }} />
 
         {project.id && (pubProject || section === "mine") ? (
           <CommentsPanel
@@ -654,26 +678,6 @@ export function App({ auth }: { auth: AuthContext }) {
             title={pubProject ? "Comments on this published project" : "Comments"}
           />
         ) : null}
-        <MeshHealthPanel
-          nodes={project.nodes}
-          health={health}
-          failure={failure}
-          options={healthOpts}
-          onOptions={setHealthOpts}
-          readOnly={readOnly}
-          onFocus={focusNode}
-          onLink={(a, b) => { setSelectedLink(linkKey(a, b)); setSelectedNode(null); }}
-          onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
-        />
-        {pubProject ? null : <ComparePanel
-          current={project}
-          currentLinks={allLinks}
-          projects={projects}
-          otherId={other?.id ?? null}
-          otherLinks={otherAllLinks}
-          busy={otherStatus.busy}
-          onChange={setCompareId}
-        />}
         {pubProject ? null : <CoveragePanel
           layers={cov.layers}
           staleKeys={cov.staleKeys}
@@ -686,6 +690,17 @@ export function App({ auth }: { auth: AuthContext }) {
           onRemove={cov.remove}
           onChange={cov.patch}
         />}
+        <MeshHealthPanel
+          nodes={project.nodes}
+          health={health}
+          failure={failure}
+          options={healthOpts}
+          onOptions={setHealthOpts}
+          readOnly={readOnly}
+          onFocus={focusNode}
+          onLink={(a, b) => { setSelectedLink(linkKey(a, b)); setSelectedNode(null); }}
+          onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
+        />
         {pubProject ? null : <PlacementPanel
           nodes={project.nodes}
           area={placementArea}
@@ -714,27 +729,18 @@ export function App({ auth }: { auth: AuthContext }) {
           onZoom={(x) => setFocus({ lat: x.lat, lon: x.lon, key: Date.now() })}
           onAdd={addSuggestion}
         />}
+        {pubProject ? null : <ComparePanel
+          current={project}
+          currentLinks={allLinks}
+          projects={projects}
+          otherId={other?.id ?? null}
+          otherLinks={otherAllLinks}
+          busy={otherStatus.busy}
+          onChange={setCompareId}
+        />}
         <fieldset className="plain" disabled={readOnly}>
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
         </fieldset>
-        {ready ? (
-        <fieldset className="plain" disabled={readOnly}>
-        <NodeList
-            nodes={project.nodes}
-            links={allLinks}
-            focusId={selectedNode}
-            checked={checked}
-            onFocus={focusNode}
-            onToggle={toggleChecked}
-            onSetChecked={(ids) => setChecked(new Set(ids))}
-            onBulk={patchMany}
-            onDeleteMany={deleteMany}
-            onAddAt={addNodeAt}
-          />
-        </fieldset>
-        ) : null}
-        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => { setSelectedLink(k); setSelectedNode(null); }} />
-
         <Card id="export" title="Import / export">
           <div className="btnrow">
             <button onClick={() => fileInput.current?.click()}>Import files…</button>
