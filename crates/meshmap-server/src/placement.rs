@@ -18,10 +18,11 @@ use meshmap_core::presets::{radio, sensitivity_dbm};
 use meshmap_coverage::{mercator, Elevation, Raster, COVERED_MIN};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use crate::mesh_health::fragility;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 
-pub const PLACEMENT_VERSION: &str = "place-1";
+pub const PLACEMENT_VERSION: &str = "place-2";
 const MAX_CANDIDATES: usize = 40;
 const MAX_ANCHORS_CHECKED: usize = 16;
 
@@ -79,6 +80,14 @@ pub struct PlacementRequest {
     pub min_gain_km2: f64,
     #[serde(default)]
     pub backhaul: Option<BackhaulIn>,
+    /// "coverage" (the default: newly covered area) or "redundancy" (sites that remove single points of failure and bridges
+    /// of the existing network; needs the backhaul rules to decide what counts as a link)
+    #[serde(default = "d_goal")]
+    pub goal: String,
+}
+
+fn d_goal() -> String {
+    "coverage".into()
 }
 
 fn d_cov_radius() -> f64 {
@@ -128,6 +137,12 @@ impl PlacementRequest {
         }
         if !(0.5..=50.0).contains(&self.min_spacing_km) || !(0.0..=2000.0).contains(&self.min_relief_m) || !(0.0..=10000.0).contains(&self.min_gain_km2) {
             return bad("Spacing, relief or minimum gain is out of range.");
+        }
+        if !matches!(self.goal.as_str(), "coverage" | "redundancy") {
+            return bad("The goal must be \"coverage\" or \"redundancy\".");
+        }
+        if self.goal == "redundancy" && (self.backhaul.is_none() || self.existing.len() < 2) {
+            return bad("Strengthening the network needs at least two existing nodes and the link rules (margin and distance).");
         }
         if let Some(b) = &self.backhaul {
             if !(-20.0..=60.0).contains(&b.min_margin_db) || !(1.0..=100.0).contains(&b.max_km) {
@@ -299,6 +314,62 @@ fn link_between(req: &PlacementRequest, sampler: &Sampler, a: (&NodeIn, f64, f64
     Some((r.margin_db, r.clearance_pct, class))
 }
 
+/// All links from a candidate to the nearest nodes of the network, strongest first (cached per candidate and node).
+#[allow(clippy::too_many_arguments)]
+fn links_to_anchors(req: &PlacementRequest, sampler: &Sampler, bh: &BackhaulIn, cands: &[Candidate], cand_nodes: &[NodeIn], anchors: &[Anchor], c: usize, cache: &mut HashMap<(usize, usize), Option<LinkInfo>>) -> Vec<LinkInfo> {
+    let mut near: Vec<(usize, f64)> = anchors.iter().enumerate().map(|(k, an)| (k, haversine_m(cands[c].lat, cands[c].lon, an.lat, an.lon))).filter(|x| x.1 <= bh.max_km * 1000.0).collect();
+    near.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let mut links = Vec::new();
+    for &(k, d) in near.iter().take(MAX_ANCHORS_CHECKED) {
+        let key = (c, anchors[k].index + if anchors[k].kind == "existing" { 0 } else { 100_000 });
+        let info = cache
+            .entry(key)
+            .or_insert_with(|| {
+                link_between(req, sampler, (&cand_nodes[c], cands[c].lat, cands[c].lon), (&anchors[k].node, anchors[k].lat, anchors[k].lon))
+                    .map(|(m, cl, class)| LinkInfo { anchor: k, distance_km: d / 1000.0, margin_db: m, clearance_pct: cl, class })
+            })
+            .clone();
+        if let Some(mut i) = info {
+            i.anchor = k; // the cache is keyed by node, the anchor's position in the list can move
+            links.push(i);
+        }
+    }
+    links.sort_by(|a, b| b.margin_db.total_cmp(&a.margin_db));
+    links
+}
+
+fn is_good(bh: &BackhaulIn, l: &LinkInfo) -> bool {
+    l.margin_db >= bh.min_margin_db && !(bh.avoid_obstructed && l.class == "obstructed")
+}
+
+/// Usable links between the existing nodes (each node's nearest neighbours within the longest link), as pairs of node positions.
+fn existing_edges(req: &PlacementRequest, sampler: &Sampler, bh: &BackhaulIn, ctx: &Ctx) -> Result<Vec<(usize, usize)>, Fail> {
+    let n = req.existing.len();
+    let mut pairs: HashSet<(usize, usize)> = HashSet::new();
+    for i in 0..n {
+        let mut near: Vec<(usize, f64)> = (0..n).filter(|&j| j != i).map(|j| (j, haversine_m(req.existing[i].lat, req.existing[i].lon, req.existing[j].lat, req.existing[j].lon))).filter(|x| x.1 <= bh.max_km * 1000.0).collect();
+        near.sort_by(|a, b| a.1.total_cmp(&b.1));
+        for &(j, _) in near.iter().take(MAX_ANCHORS_CHECKED) {
+            pairs.insert((i.min(j), i.max(j)));
+        }
+    }
+    let mut pairs: Vec<(usize, usize)> = pairs.into_iter().collect();
+    pairs.sort_unstable();
+    let mut out = Vec::new();
+    for (k, &(i, j)) in pairs.iter().enumerate() {
+        cancelled(ctx)?;
+        (ctx.progress)(0.92 + 0.02 * k as f64 / pairs.len().max(1) as f64, "Checking links between your nodes");
+        let (a, b) = (&req.existing[i], &req.existing[j]);
+        if let Some((m, _, class)) = link_between(req, sampler, (a, a.lat, a.lon), (b, b.lat, b.lon)) {
+            let l = LinkInfo { anchor: 0, distance_km: 0.0, margin_db: m, clearance_pct: 0.0, class };
+            if is_good(bh, &l) {
+                out.push((i, j));
+            }
+        }
+    }
+    Ok(out)
+}
+
 // ---- the job -----------------------------------------------------------------------------------------------------
 
 fn bits_new(n: usize) -> Vec<u64> {
@@ -375,8 +446,12 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     // coverage of the existing nodes and of every candidate (cached like heatmaps)
     let total_jobs = (req.existing.len() + cands.len()) as f64;
     let mut done = 0.0;
+    let redundancy = req.goal == "redundancy";
     let mut covered = bits_new(cells.len());
     for (i, e) in req.existing.iter().enumerate() {
+        if redundancy {
+            break; // strengthening the network is about links, not area: no coverage rasters
+        }
         let cr = req.cov_req(e);
         let h = node_hash(&cr, &cr.nodes[0], &tid);
         let span = (0.1 + 0.8 * done / total_jobs, 0.1 + 0.8 * (done + 1.0) / total_jobs);
@@ -391,6 +466,11 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     let mut cand_nodes: Vec<NodeIn> = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         let node = NodeIn { lat: c.lat, lon: c.lon, name: None, pattern: None, ..req.template.clone() };
+        if redundancy {
+            cand_bits.push(bits_new(cells.len()));
+            cand_nodes.push(node);
+            continue;
+        }
         let cr = req.cov_req(&node);
         let h = node_hash(&cr, &cr.nodes[0], &tid);
         let span = (0.1 + 0.8 * done / total_jobs, 0.1 + 0.8 * (done + 1.0) / total_jobs);
@@ -416,6 +496,8 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     let mut stop = "count";
     let baseline_pct = 100.0 * baseline as f64 / cells.len().max(1) as f64;
     let mut link_cache: HashMap<(usize, usize), Option<LinkInfo>> = HashMap::new();
+    // links between the existing nodes, for the redundancy goal; grows with every pick
+    let mut graph_edges: Vec<(usize, usize)> = if redundancy { existing_edges(req, &sampler, req.backhaul.as_ref().expect("validated"), ctx)? } else { vec![] };
 
     for round in 0..req.count {
         cancelled(ctx)?;
@@ -423,7 +505,52 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
         order.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         let mut chosen: Option<(usize, usize, Vec<LinkInfo>)> = None;
         let mut rejected_for_backhaul = false;
-        for &(gain, c) in &order {
+        // (weakness before, after, weak nodes before, fixed nodes) for the redundancy goal
+        let mut fix: Option<(usize, usize, Vec<String>, Vec<String>)> = None;
+        if redundancy {
+            let bh = req.backhaul.as_ref().expect("validated");
+            let base = fragility(anchors.len(), &graph_edges);
+            if base.score == 0 {
+                stop = "strong";
+                break;
+            }
+            let mut best: Option<(usize, usize, usize, Vec<LinkInfo>)> = None;
+            for &(gain, c) in &order {
+                let links: Vec<LinkInfo> = links_to_anchors(req, &sampler, bh, &cands, &cand_nodes, &anchors, c, &mut link_cache).into_iter().filter(|l| is_good(bh, l)).collect();
+                if links.is_empty() {
+                    continue;
+                }
+                let mut e = graph_edges.clone();
+                e.extend(links.iter().map(|l| (l.anchor, anchors.len())));
+                let after = fragility(anchors.len() + 1, &e).score;
+                if after >= base.score {
+                    continue;
+                }
+                let reduction = base.score - after;
+                if best.as_ref().is_none_or(|b| (reduction, gain) > (b.0, b.1)) {
+                    best = Some((reduction, gain, c, links));
+                }
+            }
+            match best {
+                Some((_, gain, c, links)) => {
+                    let mut e = graph_edges.clone();
+                    e.extend(links.iter().map(|l| (l.anchor, anchors.len())));
+                    let after = fragility(anchors.len() + 1, &e);
+                    let name = |i: usize| anchors.get(i).map_or_else(|| format!("Suggested site {}", round + 1), |a| a.name.clone());
+                    let weak_before: Vec<String> = base.spofs.iter().map(|&i| name(i)).collect();
+                    let weak_after: HashSet<usize> = after.spofs.iter().copied().collect();
+                    let fixed: Vec<String> = base.spofs.iter().filter(|i| !weak_after.contains(i)).map(|&i| name(i)).chain(base.stranded.iter().filter(|i| !after.stranded.contains(i)).map(|&i| name(i))).collect();
+                    fix = Some((base.score, after.score, weak_before, fixed));
+                    graph_edges.extend(links.iter().map(|l| (l.anchor, anchors.len())));
+                    chosen = Some((c, gain, links));
+                }
+                None => {
+                    stop = "redundancy";
+                    break;
+                }
+            }
+        }
+        for &(gain, c) in order.iter().filter(|_| !redundancy) {
             if gain as f64 * cell_km2 < req.min_gain_km2.max(1e-9) {
                 stop = "gain";
                 break;
@@ -436,26 +563,9 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                 chosen = Some((c, gain, vec![]));
                 break;
             }
-            // link to the nearest nodes of the network
-            let mut near: Vec<(usize, f64)> = anchors.iter().enumerate().map(|(k, an)| (k, haversine_m(cands[c].lat, cands[c].lon, an.lat, an.lon))).filter(|x| x.1 <= bh.max_km * 1000.0).collect();
-            near.sort_by(|a, b| a.1.total_cmp(&b.1));
-            let mut links = Vec::new();
-            for &(k, d) in near.iter().take(MAX_ANCHORS_CHECKED) {
-                let key = (c, anchors[k].index + if anchors[k].kind == "existing" { 0 } else { 100_000 });
-                let info = link_cache
-                    .entry(key)
-                    .or_insert_with(|| {
-                        link_between(req, &sampler, (&cand_nodes[c], cands[c].lat, cands[c].lon), (&anchors[k].node, anchors[k].lat, anchors[k].lon))
-                            .map(|(m, cl, class)| LinkInfo { anchor: k, distance_km: d / 1000.0, margin_db: m, clearance_pct: cl, class })
-                    })
-                    .clone();
-                if let Some(i) = info {
-                    links.push(i);
-                }
-            }
-            links.sort_by(|a, b| b.margin_db.total_cmp(&a.margin_db));
+            let links = links_to_anchors(req, &sampler, bh, &cands, &cand_nodes, &anchors, c, &mut link_cache);
             // good = enough margin and, unless allowed, not blocked
-            let good: Vec<LinkInfo> = links.iter().filter(|l| l.margin_db >= bh.min_margin_db && !(bh.avoid_obstructed && l.class == "obstructed")).cloned().collect();
+            let good: Vec<LinkInfo> = links.iter().filter(|l| is_good(bh, l)).cloned().collect();
             let joins_suggestions = !bh.connect_suggestions || !anchors.iter().any(|a| a.kind == "suggestion") || good.iter().any(|l| anchors[l.anchor].kind == "suggestion");
             if !good.is_empty() && joins_suggestions {
                 chosen = Some((c, gain, good));
@@ -484,12 +594,16 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                 json!({ "to": an.kind, "index": an.index, "name": an.name, "distanceKm": l.distance_km, "marginDb": l.margin_db, "clearancePct": l.clearance_pct, "class": l.class })
             })
             .collect();
-        picks.push(json!({
+        let mut pick = json!({
             "rank": round + 1, "lat": cand.lat, "lon": cand.lon, "elevM": cand.elev_m, "reliefM": cand.relief_m,
             "newKm2": gain as f64 * cell_km2, "newPct": 100.0 * gain as f64 / cells.len().max(1) as f64,
             "soloKm2": solo as f64 * cell_km2, "cumulativePct": 100.0 * covered_now as f64 / cells.len().max(1) as f64,
             "backhaul": back, "backhaulChecked": req.backhaul.is_some() && !anchors.is_empty(),
-        }));
+        });
+        if let Some((before, after, weak, fixed)) = fix {
+            pick["redundancy"] = json!({ "weaknessBefore": before, "weaknessAfter": after, "weakNodes": weak, "fixed": fixed });
+        }
+        picks.push(pick);
         anchors.push(Anchor { lat: cand.lat, lon: cand.lon, node: cand_nodes[c].clone(), name: format!("Suggested site {}", round + 1), kind: "suggestion", index: round });
         (ctx.progress)(0.92 + 0.07 * (round + 1) as f64 / req.count as f64, "Choosing sites");
     }
@@ -501,7 +615,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     let result = json!({
         "kind": "placement", "hash": hash, "images": {},
         "area": { "lat": a.lat, "lon": a.lon, "radiusKm": a.radius_km }, "targetKm2": target_km2, "baselinePct": baseline_pct,
-        "candidates": cands.len(), "requested": req.count, "stoppedBecause": stop, "suggestions": picks,
+        "goal": req.goal, "candidates": cands.len(), "requested": req.count, "stoppedBecause": stop, "suggestions": picks,
         "terrain": req.terrain, "clutterShare": share,
     });
     jobs::atomic_write(&jobs::cache_path(&ctx.state.cfg.cache_dir, hash, "json"), result.to_string().as_bytes()).map_err(|e| Fail::Failed(format!("cannot write the cache: {e}")))?;

@@ -20,7 +20,11 @@ export interface Backhaul {
 
 export const DEFAULT_BACKHAUL: Backhaul = { minMarginDb: 6, maxKm: 30, avoidObstructed: true, connectSuggestions: true };
 
+export type PlacementGoal = "coverage" | "redundancy";
+
 export interface PlacementOptions {
+  /** coverage: sites that newly cover the most area; redundancy: sites that remove single points of failure and bridges of the network */
+  goal: PlacementGoal;
   count: number;
   coverageRadiusKm: number;
   minSpacingKm: number;
@@ -31,6 +35,7 @@ export interface PlacementOptions {
 }
 
 export const DEFAULT_PLACEMENT: PlacementOptions = {
+  goal: "coverage",
   count: 3,
   coverageRadiusKm: 15,
   minSpacingKm: 3,
@@ -61,6 +66,8 @@ export interface Suggestion {
   cumulativePct: number;
   backhaul: BackhaulLink[];
   backhaulChecked: boolean;
+  /** only with the redundancy goal */
+  redundancy?: { weaknessBefore: number; weaknessAfter: number; weakNodes: string[]; fixed: string[] };
 }
 
 export interface PlacementResult {
@@ -71,7 +78,8 @@ export interface PlacementResult {
   baselinePct: number;
   candidates: number;
   requested: number;
-  stoppedBecause: "count" | "gain" | "backhaul";
+  goal?: PlacementGoal;
+  stoppedBecause: "count" | "gain" | "backhaul" | "redundancy" | "strong";
   suggestions: Suggestion[];
   terrain: "bare" | "clutter";
   clutterShare?: number | null;
@@ -123,6 +131,7 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
       },
     },
     terrain: s.terrainMode,
+    goal: o.goal,
     count: o.count,
     coverageRadiusKm: o.coverageRadiusKm,
     resolutionM: Math.max(100, Math.round((o.coverageRadiusKm * 1000) / 75 / 50) * 50),
@@ -146,6 +155,12 @@ export function circleRing(lat: number, lon: number, radiusKm: number, steps = 9
 }
 
 export function describeStop(r: PlacementResult): string {
+  if (r.goal === "redundancy") {
+    const n = r.suggestions.length;
+    if (r.stoppedBecause === "strong") return n === 0 ? "Nothing to fix: no node or link is a single point of failure, with the link rules you set." : `Stopped after ${n}: the network no longer has a single point of failure.`;
+    if (r.stoppedBecause === "redundancy") return n === 0 ? "No site in this area would make the network stronger. Widen the area, allow longer links or a lower margin." : `Stopped after ${n}: no remaining site would make it stronger.`;
+    return n < r.requested ? `${n} of ${r.requested} sites.` : "";
+  }
   const n = r.suggestions.length;
   if (n === 0 && r.stoppedBecause === "backhaul") return "No high point has a good enough link back to your network (enough margin, and not blocked). Lower the margin, allow a longer link, or allow blocked paths.";
   if (n === 0) return "No site adds enough new coverage. Lower the minimum gain or widen the area.";

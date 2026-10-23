@@ -271,3 +271,35 @@ async fn new_sites_connect_to_each_other_and_to_the_network_with_good_links() {
     assert_eq!(loose["state"], "done", "{loose}");
     assert_ne!(loose["result"]["hash"], job["result"]["hash"]);
 }
+
+#[tokio::test]
+async fn the_redundancy_goal_closes_a_bridge_and_stops_when_nothing_is_weak() {
+    let (app, _) = setup(Arc::new(Hills { calls: AtomicUsize::new(0) }));
+    let mut c = admin(&app).await;
+    let pid = project(&mut c, "p").await;
+    let rules = json!({ "minMarginDb": 0.0, "maxKm": 30.0, "avoidObstructed": false, "connectSuggestions": false });
+
+    // two nodes joined by one link: that link is a bridge, a third node linking to both closes the ring
+    let area = json!({ "lat": 36.0, "lon": -84.96, "radiusKm": 12.0 });
+    let weak = run(&mut c, &pid, request(json!({ "goal": "redundancy", "count": 1, "area": area, "existing": [node(36.0, -85.0), node(36.0, -84.92)], "backhaul": rules }))).await;
+    assert_eq!(weak["state"], "done", "{weak}");
+    assert_eq!(weak["result"]["goal"], "redundancy");
+    let sug = weak["result"]["suggestions"].as_array().unwrap();
+    assert_eq!(sug.len(), 1, "{}", weak["result"]);
+    let red = &sug[0]["redundancy"];
+    assert!(red["weaknessBefore"].as_u64().unwrap() > red["weaknessAfter"].as_u64().unwrap(), "{red}");
+    assert_eq!(red["weaknessAfter"], 0, "{red}");
+    assert!(sug[0]["backhaul"].as_array().unwrap().len() >= 2, "a ring needs links to both nodes: {}", sug[0]);
+
+    // a triangle that is already linked has nothing to fix
+    let ring = run(&mut c, &pid, request(json!({ "goal": "redundancy", "count": 2, "area": area, "existing": [node(36.0, -85.0), node(36.0, -84.92), node(36.03, -84.96)], "backhaul": rules }))).await;
+    assert_eq!(ring["state"], "done", "{ring}");
+    assert_eq!(ring["result"]["suggestions"].as_array().unwrap().len(), 0);
+    assert_eq!(ring["result"]["stoppedBecause"], "strong");
+
+    // the goal needs the link rules and at least two nodes
+    let (s, _) = c.post(&format!("/api/projects/{pid}/jobs"), request(json!({ "goal": "redundancy", "existing": [node(36.0, -85.0), node(36.0, -84.92)] }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = c.post(&format!("/api/projects/{pid}/jobs"), request(json!({ "goal": "speed" }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+}

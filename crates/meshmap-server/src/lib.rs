@@ -10,6 +10,7 @@ pub mod error;
 pub mod jobs;
 pub mod jobs_api;
 pub mod packs;
+pub mod mesh_health;
 pub mod packs_api;
 pub mod passkeys;
 pub mod placement;

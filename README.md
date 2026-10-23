@@ -149,6 +149,13 @@ of the area, counting what your nodes and the earlier picks already cover. Each 
 total, elevation and relief, and the links back to your network; "Add as node" turns a site into a node. Results are cached
 like heatmaps.
 
+**Goal: strengthen the network.** Switch *Goal* to *Strengthen the network* to place sites for sturdiness instead of area. The server
+builds the graph of your nodes (a link counts when it meets the link rules), finds its single points of failure and bridges the same way
+the Mesh health card does, and picks the site whose links to two or more existing nodes lowers a *weakness score* the most: the number of
+nodes cut off by each single node or link failure, plus five for each node not connected to the main group. A stray node joined by a chain
+counts as progress; the next pick can close the ring. It needs at least two nodes and skips the heatmaps, so it runs faster. It stops when
+nothing is weak any more ("Nothing to fix") or no site in the area helps. Gateways, hop limits and traffic are not part of the score.
+
 ## Publishing, comments, antenna patterns, field mode, site reports
 
 - **Publish** (project switcher): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).

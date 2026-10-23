@@ -36,7 +36,25 @@ export function PlacementPanel(p: Props) {
   const r = p.job?.state === "done" ? p.job.result : null;
   return (
     <Card id="placement" domId="placement-panel" title="Suggest new sites">
-      <p className="hint">Finds high ground in an area and picks the sites that newly cover the most of it, one after another, counting what your nodes already cover.</p>
+      <label className="field wide">
+        <span>Goal</span>
+        <select
+          id="placement-goal"
+          value={o.goal}
+          onChange={(e) => {
+            const goal = e.target.value as PlacementOptions["goal"];
+            set({ goal, ...(goal === "redundancy" && !o.backhaul ? { backhaul: { ...DEFAULT_BACKHAUL } } : {}) });
+          }}
+        >
+          <option value="coverage">Cover more area</option>
+          <option value="redundancy">Strengthen the network (remove single points of failure)</option>
+        </select>
+      </label>
+      {o.goal === "redundancy" ? (
+        <p className="hint">Finds high ground in the area and picks the sites that make your network sturdier: ones that link two parts of it, so losing one node or link no longer cuts nodes off. Uses the link rules below to decide what counts as a link, and needs at least two nodes.</p>
+      ) : (
+        <p className="hint">Finds high ground in an area and picks the sites that newly cover the most of it, one after another, counting what your nodes already cover.</p>
+      )}
 
       <div className="btnrow">
         <button className={p.picking ? "on" : ""} onClick={() => p.onPick(!p.picking)}>
@@ -82,8 +100,8 @@ export function PlacementPanel(p: Props) {
       )}
 
       <label className="check">
-        <input type="checkbox" checked={o.backhaul !== null} onChange={(e) => set({ backhaul: e.target.checked ? { ...DEFAULT_BACKHAUL } : null })} />
-        Each new site must link back to the network
+        <input type="checkbox" checked={o.backhaul !== null} disabled={o.goal === "redundancy"} onChange={(e) => set({ backhaul: e.target.checked ? { ...DEFAULT_BACKHAUL } : null })} />
+        {o.goal === "redundancy" ? "Link rules (what counts as a link)" : "Each new site must link back to the network"}
       </label>
       {o.backhaul ? (
         <>
@@ -91,10 +109,10 @@ export function PlacementPanel(p: Props) {
           <input type="checkbox" checked={o.backhaul.avoidObstructed} onChange={(e) => set({ backhaul: { ...o.backhaul!, avoidObstructed: e.target.checked } })} />
           Ignore blocked paths (a link must have a clear enough line of sight, not just enough margin)
         </label>
-        <label className="check">
+        {o.goal === "redundancy" ? null : <label className="check">
           <input type="checkbox" checked={o.backhaul.connectSuggestions} onChange={(e) => set({ backhaul: { ...o.backhaul!, connectSuggestions: e.target.checked } })} />
           Link the new sites to each other (each one after the first must reach an earlier suggestion)
-        </label>
+        </label>}
         <div className="grid2">
           <label className="field">
             <span>Minimum link margin (dB)</span>
@@ -132,7 +150,7 @@ export function PlacementPanel(p: Props) {
       ) : null}
 
       <div className="btnrow">
-        <button className="on" id="placement-run" disabled={!p.area || p.running} onClick={p.onRun}>
+        <button className="on" id="placement-run" disabled={!p.area || p.running || (o.goal === "redundancy" && p.nodes.length < 2)} onClick={p.onRun}>
           Suggest sites
         </button>
         {p.running ? <button onClick={p.onCancel}>Cancel</button> : null}
@@ -155,7 +173,7 @@ export function PlacementPanel(p: Props) {
         <div className="suggestions">
           {p.hasStale ? <div className="lmeta warn">Out of date: nodes or settings changed since these were computed.</div> : null}
           <div className="lmeta">
-            {f1(r.targetKm2)} km² target · {r.baselinePct < 0.05 ? "nothing covered yet" : `${f1(r.baselinePct)} % already covered`} · {r.candidates} high points considered
+            {r.goal === "redundancy" ? `${r.candidates} high points considered` : `${f1(r.targetKm2)} km² target · ${r.baselinePct < 0.05 ? "nothing covered yet" : `${f1(r.baselinePct)} % already covered`} · ${r.candidates} high points considered`}
             {r.terrain !== "bare" && typeof r.clutterShare === "number" ? ` · ${Math.round(r.clutterShare * 100)} % has clutter data` : ""}
           </div>
           {describeStop(r) ? <div className="lmeta">{describeStop(r)}</div> : null}
@@ -164,12 +182,18 @@ export function PlacementPanel(p: Props) {
               <li key={s.rank}>
                 <div className="lrow">
                   <b className="rank">{s.rank}</b>
-                  <span>
-                    +{f1(s.newKm2)} km² ({f1(s.newPct)} % of the area) → {f1(s.cumulativePct)} % covered
-                  </span>
+                  {s.redundancy ? (
+                    <span>
+                      {s.redundancy.fixed.length ? `Takes the strain off ${s.redundancy.fixed.join(", ")}` : "Adds a second route"} (weakness score {s.redundancy.weaknessBefore} → {s.redundancy.weaknessAfter}, lower is stronger)
+                    </span>
+                  ) : (
+                    <span>
+                      +{f1(s.newKm2)} km² ({f1(s.newPct)} % of the area) → {f1(s.cumulativePct)} % covered
+                    </span>
+                  )}
                 </div>
                 <div className="lmeta">
-                  {s.lat.toFixed(5)}, {s.lon.toFixed(5)} · {Math.round(s.elevM)} m elevation, {Math.round(s.reliefM)} m above its surroundings · covers {f1(s.soloKm2)} km² on its own
+                  {s.lat.toFixed(5)}, {s.lon.toFixed(5)} · {Math.round(s.elevM)} m elevation, {Math.round(s.reliefM)} m above its surroundings{s.redundancy ? "" : ` · covers ${f1(s.soloKm2)} km² on its own`}
                 </div>
                 {s.backhaul.length ? (
                   <ul className="lmeta backhaul">
