@@ -133,6 +133,7 @@ like heatmaps.
 3. **Drag a node**: links update live (coarser terrain sampling while dragging, full resolution on release).
 4. **Click a link** (map or list): terrain profile with earth curvature (k-factor), direct ray, first Fresnel zone
    (inner band = 60 %), loss/margin numbers in both directions.
+4b. **Pick a spot on the profile**: in a link's profile click anywhere (or use *Highest ridge between* / *Worst obstruction*) to mark it; it shows on the map, with its distance, ground height and how far it is above or below the line of sight. *Place a node here* adds a node at exactly that spot, and its links appear straight away. The highest ridge skips the first and last 5 % of the path, because a node usually already sits on a summit.
 5. **3D terrain** toggle: tilted MapLibre terrain.
 6. **Save/Open JSON**, Nodes/Links CSV, GeoJSON, KML exports, and **MeshCore** `coverage_layers_*.json` import/export
    (Open JSON / MeshCore auto-detects the format; `antenna_height_a` = node antenna height, `antenna_height_b` = client height; letters and `overlays` are preserved). All projects autosave in this browser.

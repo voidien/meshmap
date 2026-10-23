@@ -274,3 +274,7 @@ ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8p
   .panelbar { margin: 0 2px; }
   .card.collapsible > .cardhead { padding: 7px 10px; }
 }
+
+.pickbar { margin: 4px 0 6px; padding: 6px 8px; border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 8px; font-size: 13px; }
+.pickbar .btnrow { margin: 4px 0 0; }
+.pickbar #pick-info { margin-top: 4px; }

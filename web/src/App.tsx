@@ -95,6 +95,7 @@ export function App({ auth }: { auth: AuthContext }) {
     return () => clearTimeout(t);
   }, [menuOpen]);
   const sideRef = useRef<HTMLElement>(null);
+  const [profilePoint, setProfilePoint] = useState<{ lat: number; lon: number } | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
@@ -772,6 +773,7 @@ export function App({ auth }: { auth: AuthContext }) {
           nodes={project.nodes}
           links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}
           health={healthMarks}
+          profilePoint={profilePoint}
           ghostNodes={other?.nodes ?? NO_NODES}
           ghostLinks={ghostLinks}
           fitKey={`${project.id}|${other?.id ?? ""}`}
@@ -799,7 +801,7 @@ export function App({ auth }: { auth: AuthContext }) {
         />
         {selLink && nodeById.get(selLink.a) && nodeById.get(selLink.b) ? (
           selLink.result ? (
-            <ProfileChart a={nodeById.get(selLink.a)!} b={nodeById.get(selLink.b)!} settings={project.settings} onClose={() => setSelectedLink(null)} />
+            <ProfileChart a={nodeById.get(selLink.a)!} b={nodeById.get(selLink.b)!} settings={project.settings} onClose={() => setSelectedLink(null)} readOnly={readOnly || !!pubProject} onCursor={setProfilePoint} onPlaceNode={(lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)} />
           ) : (
             <div className="chart-panel"><div className="chart-head"><strong>{selLink.warning}</strong><span className="spacer" /><button onClick={() => setSelectedLink(null)}>✕</button></div></div>
           )

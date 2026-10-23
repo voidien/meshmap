@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { analyzeWithProfile, SPACING_FULL_M } from "../engine/analysis";
 import { LINK_COLORS } from "../map/MapView";
+import { highestAwayFromEnds, pointOnPath } from "../profilePick";
 import type { LinkResult, MeshNode, Settings, TerrainMode } from "../types";
 import type { ProfileData } from "../engine/analysis";
 
@@ -9,6 +10,11 @@ interface Props {
   b: MeshNode;
   settings: Settings;
   onClose: () => void;
+  /** Put a new node at a spot picked on the profile. */
+  onPlaceNode?: (lat: number, lon: number) => void;
+  /** The spot under the pointer / picked, for showing on the map (null = none). */
+  onCursor?: (pt: { lat: number; lon: number } | null) => void;
+  readOnly?: boolean;
 }
 
 const W = 960;
@@ -24,15 +30,17 @@ function niceTicks(lo: number, hi: number, count: number): number[] {
   return out;
 }
 
-export function ProfileChart({ a, b, settings, onClose }: Props) {
+export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, readOnly = false }: Props) {
   const [data, setData] = useState<ProfileData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
 
   useEffect(() => {
     let live = true;
     setData(null);
     setError(null);
+    setPicked(null);
     analyzeWithProfile(a, b, settings, SPACING_FULL_M, true)
       .then((d) => live && setData(d))
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
@@ -40,6 +48,54 @@ export function ProfileChart({ a, b, settings, onClose }: Props) {
       live = false;
     };
   }, [a, b, settings]);
+
+  const high = useMemo(() => (data ? highestAwayFromEnds(data.dist, data.elev) : null), [data]);
+
+  const pointAt = (i: number) => pointOnPath(a, b, data!.dist, i);
+
+  // show the spot under the pointer (or the picked one) on the map
+  useEffect(() => {
+    const i = hover ?? picked;
+    onCursor?.(data && i !== null ? pointAt(i) : null);
+  }, [hover, picked, data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onCursor?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickBar = data ? (
+    <div className="pickbar" id="pickbar">
+      <div className="btnrow">
+        {high !== null ? (
+          <button id="pick-highest" onClick={() => setPicked(high)}>
+            ▲ Highest ridge between
+          </button>
+        ) : null}
+        {data.dist.length > 2 ? (
+          <button id="pick-worst" onClick={() => setPicked(Math.min(data.dist.length - 2, Math.max(1, data.result.worst_index)))}>
+            ◎ Worst obstruction
+          </button>
+        ) : null}
+      </div>
+      {picked !== null ? (
+        <>
+          <div id="pick-info">
+            <b>{(data.dist[picked] / 1000).toFixed(2)} km</b> from {a.name.trim() || "A"} ({((data.dist[data.dist.length - 1] - data.dist[picked]) / 1000).toFixed(2)} km from {b.name.trim() || "B"}) · ground <b>{Math.round(data.elev[picked])} m</b>
+            {data.clutter && data.clutter[picked] >= 1 ? ` (+${Math.round(data.clutter[picked])} m trees/buildings)` : ""} ·{" "}
+            {(() => {
+              const gap = data.result.series.ray_m[picked] - data.result.series.terrain_eff_m[picked];
+              return gap >= 0 ? `${Math.round(gap)} m below the line of sight` : `${Math.round(-gap)} m above the line of sight`;
+            })()}
+          </div>
+          <div className="btnrow">
+            <button className="on" id="place-here" disabled={readOnly || !onPlaceNode} title={readOnly ? "View only" : "Add a node at this spot"} onClick={() => onPlaceNode?.(pointAt(picked).lat, pointAt(picked).lon)}>
+              Place a node here
+            </button>
+            <button onClick={() => setPicked(null)}>Clear</button>
+          </div>
+        </>
+      ) : (
+        <p className="hint tight">Tap the profile to pick a spot, or jump to the highest point, then place a node there.</p>
+      )}
+    </div>
+  ) : null;
 
   return (
     <div className="chart-panel">
@@ -59,14 +115,14 @@ export function ProfileChart({ a, b, settings, onClose }: Props) {
       </div>
       {error ? <p className="err">Could not load terrain: {error}</p> : null}
       {!data && !error ? <p className="hint">Sampling terrain…</p> : null}
-      {data ? <Body data={data} a={a} b={b} settings={settings} hover={hover} setHover={setHover} /> : null}
+      {data ? <Body data={data} a={a} b={b} settings={settings} hover={hover} setHover={setHover} picked={picked} onPick={setPicked} high={high} extra={pickBar} /> : null}
     </div>
   );
 }
 
 /** The terrain profile drawing: also used (without hover) in printed site reports. */
-export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover?: number | null; setHover?: (i: number | null) => void }) {
-  const { data, a, b, settings, hover = null, setHover = () => undefined } = props;
+export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover?: number | null; setHover?: (i: number | null) => void; picked?: number | null; onPick?: (i: number) => void; high?: number | null }) {
+  const { data, a, b, settings, hover = null, setHover = () => undefined, picked = null, onPick, high = null } = props;
   const { dist, elev, result: r, bare, withClutter } = data;
   const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
   const n = dist.length;
@@ -94,16 +150,21 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
   const xTicks = niceTicks(0, total / 1000, 8);
   const worstX = X(r.worst_dist_m);
 
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const indexAt = (e: React.MouseEvent<SVGSVGElement>): number | null => {
     const box = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - box.left) / box.width) * W;
     const d = ((x - M.l) / (W - M.l - M.r)) * total;
-    setHover(d < 0 || d > total ? null : Math.round((d / total) * (n - 1)));
+    return d < 0 || d > total ? null : Math.round((d / total) * (n - 1));
+  };
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => setHover(indexAt(e));
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const i = indexAt(e);
+    if (i !== null && onPick) onPick(Math.min(n - 2, Math.max(1, i))); // the nodes' own spots are not places for a new node
   };
 
 
   return (
-        <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onClick={onClick} style={onPick ? { cursor: "crosshair" } : undefined}>
           <path d={terrainFill} fill="#b59a73" opacity={0.85} />
           {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={0.75} /> : null}
           <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
@@ -141,6 +202,18 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
           <text x={12} y={H / 2} textAnchor="middle" className="axis" transform={`rotate(-90 12 ${H / 2})`}>
             elevation (m)
           </text>
+          {high !== null && n > 2 ? (
+            <g>
+              <path d={`M${X(dist[high])},${Y(elev[high]) - 4}l-6,-11h12z`} fill="#7c3aed" stroke="#fff" strokeWidth={1} />
+              <text x={X(dist[high])} y={Y(elev[high]) - 19} textAnchor="middle" className="tick" fill="#5b21b6">{Math.round(elev[high])} m</text>
+            </g>
+          ) : null}
+          {picked !== null ? (
+            <g>
+              <line x1={X(dist[picked])} x2={X(dist[picked])} y1={M.t} y2={H - M.b} stroke="#7c3aed" strokeWidth={1.5} strokeDasharray="4 3" />
+              <circle cx={X(dist[picked])} cy={Y(s.terrain_eff_m[picked])} r={5.5} fill="#7c3aed" stroke="#fff" strokeWidth={1.5} />
+            </g>
+          ) : null}
           {hover !== null ? (
             <g>
               <line x1={X(dist[hover])} x2={X(dist[hover])} y1={M.t} y2={H - M.b} stroke="#111" opacity={0.4} />
@@ -151,8 +224,8 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
   );
 }
 
-function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void }) {
-  const { data, a, b, settings, hover, setHover } = props;
+function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void; picked: number | null; onPick: (i: number) => void; high: number | null; extra: ReactNode }) {
+  const { data, a, b, settings, hover, setHover, picked, onPick, high, extra } = props;
   const { dist, elev, result: r, bare, withClutter } = data;
   const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
   const s = r.series;
@@ -162,7 +235,8 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
 
   return (
     <div className="chart-body">
-      <ProfileSvg data={data} a={a} b={b} settings={settings} hover={hover} setHover={setHover} />
+      <ProfileSvg data={data} a={a} b={b} settings={settings} hover={hover} setHover={setHover} picked={picked} onPick={onPick} high={high} />
+      {extra}
       <div className="legend-line">
         <span><i className="sw" style={{ background: "#b59a73" }} />terrain + earth curvature (k={Number(settings.k.toFixed(2))})</span>
         <span><i className="sw" style={{ background: "#1d4ed8" }} />direct ray</span>

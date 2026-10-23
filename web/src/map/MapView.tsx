@@ -37,6 +37,8 @@ interface Props {
   selectedLinkKey: string | null;
   /** The area being planned for and the sites suggested for it. */
   placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
+  /** A spot on a link's profile (hovered or picked), shown on the map. */
+  profilePoint?: { lat: number; lon: number } | null;
   /** Mesh health marks per node id (CSS classes such as `h-spof`). */
   health?: Record<string, string>;
   /** Field mode: where the phone is, and the readings taken so far. */
@@ -197,6 +199,9 @@ export function MapView(p: Props) {
       map.addLayer({ id: "field-me-area", type: "fill", source: "field-me-area", paint: { "fill-color": "#2563eb", "fill-opacity": 0.12 } });
       map.addLayer({ id: "field-readings", type: "circle", source: "field-readings", paint: { "circle-radius": 6, "circle-color": ["get", "color"], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
       map.addLayer({ id: "field-me", type: "circle", source: "field-me", paint: { "circle-radius": 8, "circle-color": "#2563eb", "circle-stroke-color": "#fff", "circle-stroke-width": 3 } });
+      map.addSource("profile-point", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "profile-point-ring", type: "circle", source: "profile-point", paint: { "circle-radius": 13, "circle-color": "#7c3aed", "circle-opacity": 0.18, "circle-stroke-color": "#7c3aed", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "profile-point-dot", type: "circle", source: "profile-point", paint: { "circle-radius": 4, "circle-color": "#7c3aed", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
       map.addSource("beams", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({ id: "beams-fill", type: "fill", source: "beams", paint: { "fill-color": "#2457d6", "fill-opacity": 0.14 } });
       map.addLayer({ id: "beams-line", type: "line", source: "beams", paint: { "line-color": "#2457d6", "line-width": 1.2, "line-opacity": 0.7 } });
@@ -245,6 +250,7 @@ export function MapView(p: Props) {
       refreshContours();
       syncAll();
       syncPlacement();
+      syncProfilePoint();
       syncField();
     });
 
@@ -414,6 +420,17 @@ export function MapView(p: Props) {
     });
   }
   useEffect(syncPlacement, [p.placement]);
+
+  function syncProfilePoint() {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const pt = latest.current.profilePoint;
+    (map.getSource("profile-point") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: pt ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [pt.lon, pt.lat] } }] : [],
+    });
+  }
+  useEffect(syncProfilePoint, [p.profilePoint]);
 
   function syncField() {
     const map = mapRef.current;
