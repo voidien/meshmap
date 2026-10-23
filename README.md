@@ -118,6 +118,14 @@ Terrain model* picks which one colors links and heatmaps. Heatmap cards say how 
 treated as solid obstacles or as **foliage loss** (Weissberger, per metre of ray inside the canopy; with a *leaf on/off* switch and a *scale*
 you calibrate). Both antennas stay on the ground (heights are above ground).
 
+### Working without signal (installable app)
+The app can be installed to the home screen (browser menu → *Install app* / *Add to Home screen*; needs HTTPS) and keeps itself, the project
+you last opened and everything the map fetched on the phone. In Field mode, **Work offline** saves an area (around you, or all project
+nodes) before you leave signal: terrain for predictions, trees and buildings, and a small set of map tiles (capped, because the
+OpenStreetMap servers ask users not to bulk-download). Offline you can open the app, see the map and nodes, get predictions, and record
+readings, which upload when you are back online. You cannot edit the project, sign in or run heatmap jobs offline. Signing out clears the
+kept account data. The first load must be online, and iPhone browsers may discard stored data after a few weeks of not using the app.
+
 ### Calibrating foliage from field readings
 Take readings (Field mode: tap a reading at your location with the node you can hear, or *Import CSV*: columns
 `lat,lon,rssi[,snr,node,note,time,accuracy]`), some in the open near a node (these check antenna/power settings) and some through trees at

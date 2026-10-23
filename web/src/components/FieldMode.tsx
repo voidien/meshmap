@@ -6,6 +6,7 @@ import { predictAt } from "../engine/fieldPredict";
 import { compass, DELTA_COLORS, deltaClass, fmtDistance, nearestNodes, readingsCsv, type ReadingRow } from "../fieldMath";
 import { flushQueue, loadQueue, newReadingId, saveQueue, type NewReading } from "../fieldQueue";
 import { parseReadingsCsv } from "../readingsImport";
+import { OfflinePanel } from "./OfflinePanel";
 import { RadioPanel } from "./RadioPanel";
 import { MapView } from "../map/MapView";
 import type { Link, MeshNode, Project } from "../types";
@@ -304,6 +305,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
             ) : null}
           </ul>
         ) : null}
+        {tab === "here" ? <OfflinePanel nodes={project.nodes} pos={pos ? { lat: pos.lat, lon: pos.lon } : null} /> : null}
 
         {tab === "record" ? (
           <fieldset className="plain" disabled={!canWrite}>
