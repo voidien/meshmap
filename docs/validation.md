@@ -97,6 +97,28 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   possible site). Candidates are high points only, so a valley town that needs a low site is not found. Tall masts, towers and
   existing buildings are not considered. No comparison with a human planner's choices or with measurements.
 
+## Antenna patterns, publishing, comments, field readings (v6)
+
+- Antenna patterns: the same cases are tested in Rust (`meshmap-core/src/antenna.rs`) and TypeScript (`web/src/antenna.test.ts`):
+  0 dB on axis, 3 dB down at half the beamwidth, symmetric, limited to the front-to-back ratio, bearings wrap around north,
+  tables are rotated and interpolated. In the coverage engine a directional antenna gives the same margin straight ahead, exactly
+  the front-to-back figure less behind, and the pattern value 90 degrees off axis (`meshmap-coverage`); in jobs, an omni pattern
+  and no pattern share a cache entry, a directional one does not, and invalid patterns are rejected (`tests/jobs.rs`). Links use the
+  gain of *each* antenna toward the other end (a browser test points a node away from its neighbour and sees the margin fall
+  by about 20 dB, then aims it back and sees it return). MSI Planet and CSV parsing are unit tested.
+  **Not validated:** against measured patterns or a reference tool; the vertical plane is not modelled; pattern files in
+  formats other than MSI Planet/CSV are not read.
+- Publishing, comments and readings (`crates/meshmap-server/tests/collab.rs`): the published copy is frozen and strips node notes
+  unless the owner includes them; the private project id is never shown to others; only the owner can publish, update or
+  withdraw (and an administrator can take down); comments follow who can see the project (an outsider gets 404); viewers
+  can comment but cannot delete others' comments; withdrawing a publication removes its comments; field readings are
+  idempotent by id, validated, and limited by role.
+- Field mode and site report were exercised in a real browser against real terrain (24 checks: GPS position from the browser,
+  nearest node, predicted signal, saving a reading, saving one while offline and uploading it later, the report's sections and
+  drawings, publishing, a second user browsing, commenting and copying). Queue behaviour, distance/bearing maths and the CSV are unit tested.
+  **Not validated:** GPS accuracy handling on real phones, battery use, behaviour with a very weak data connection, or
+  printing the report on every browser. The map picture in a report depends on the map tiles allowing it to be read back.
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.

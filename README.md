@@ -111,6 +111,14 @@ of the area, counting what your nodes and the earlier picks already cover. Each 
 total, elevation and relief, and the links back to your network; "Add as node" turns a site into a node. Results are cached
 like heatmaps.
 
+## Publishing, comments, antenna patterns, field mode, site reports
+
+- **Publish** (project switcher): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).
+- **Comments**: on a project (everyone it is shared with, viewers included) or on a published copy (everyone). Comment on the project, a selected node or a selected link; the owner (or the author) can resolve or delete.
+- **Antenna patterns** (node panel): omnidirectional, directional (beamwidth, front-to-back, pointing direction, "aim at node") or an imported MSI Planet / CSV pattern file. Links and heatmaps use the gain in the direction of each link. Horizontal plane only.
+- **Field mode** (button in the toolbar; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
+- **Site report** (node panel): a printable page with the location, a map picture, equipment, antenna pattern, expected links with terrain profiles, coverage numbers if computed, field readings, comments and the assumptions. Use *Print or save as PDF*.
+
 ## What to verify
 
 1. **Add nodes**: "+ Add node", click the map; edit height, TX power, gain, cable loss, preset, status, notes.
@@ -140,7 +148,8 @@ like heatmaps.
 12. **Placement**: in *Suggest new sites* click "Around my nodes" (or pick an area on the map), set 2 sites and click
     *Suggest sites*; numbered markers appear with the km² each adds and its links; "Add as node" adds one. Turning the backhaul
     requirement off, or raising its margin, changes the result.
-13. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+13. **v6 features**: select a node and set a directional antenna aimed away from a neighbour (its margin drops); post a comment; click *Site report*; click *Publish*, then sign in as another user and open *Published*; in *Field mode* (allow location) record a reading and see it listed with the prediction.
+14. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

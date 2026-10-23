@@ -125,7 +125,7 @@ impl PlacementRequest {
         }
         // the nodes and shared settings are checked like a network heatmap's
         let mut nodes = self.existing.clone();
-        nodes.push(NodeIn { lat: a.lat, lon: a.lon, ..self.template.clone() });
+        nodes.push(NodeIn { lat: a.lat, lon: a.lon, pattern: None, ..self.template.clone() });
         jobs::validate(&CoverageRequest { kind: "coverage_network".into(), nodes, ..self.cov_req(&self.template) })
     }
 
@@ -243,14 +243,14 @@ struct LinkInfo {
     class: String,
 }
 
-fn endpoint(n: &NodeIn, noise_figure_db: f64) -> (Endpoint, u8, f64) {
+fn endpoint(n: &NodeIn, toward_deg: f64, noise_figure_db: f64) -> (Endpoint, u8, f64) {
     let p = PRESETS.iter().find(|p| p.id == n.preset_id).expect("validated");
-    (Endpoint { h_agl_m: n.height_m, tx_dbm: n.tx_dbm, gain_dbi: n.gain_dbi, cable_loss_db: n.cable_loss_db, sensitivity_dbm: sensitivity_dbm(p.sf, p.bw_khz, noise_figure_db) }, p.sf, p.bw_khz)
+    (Endpoint { h_agl_m: n.height_m, tx_dbm: n.tx_dbm, gain_dbi: n.gain_dbi + n.pattern.as_ref().map_or(0.0, |p| p.rel_gain_db(toward_deg)), cable_loss_db: n.cable_loss_db, sensitivity_dbm: sensitivity_dbm(p.sf, p.bw_khz, noise_figure_db) }, p.sf, p.bw_khz)
 }
 
 fn link_between(req: &PlacementRequest, sampler: &Sampler, a: (&NodeIn, f64, f64), b: (&NodeIn, f64, f64)) -> Option<(f64, f64, String)> {
-    let (ea, sfa, bwa) = endpoint(a.0, req.settings.noise_figure_db);
-    let (eb, sfb, bwb) = endpoint(b.0, req.settings.noise_figure_db);
+    let (ea, sfa, bwa) = endpoint(a.0, meshmap_core::geo::bearing_deg(a.1, a.2, b.1, b.2), req.settings.noise_figure_db);
+    let (eb, sfb, bwb) = endpoint(b.0, meshmap_core::geo::bearing_deg(b.1, b.2, a.1, a.2), req.settings.noise_figure_db);
     if sfa != sfb || bwa != bwb {
         return None;
     }
@@ -373,7 +373,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     let mut cand_bits: Vec<Vec<u64>> = Vec::with_capacity(cands.len());
     let mut cand_nodes: Vec<NodeIn> = Vec::new();
     for (i, c) in cands.iter().enumerate() {
-        let node = NodeIn { lat: c.lat, lon: c.lon, name: None, ..req.template.clone() };
+        let node = NodeIn { lat: c.lat, lon: c.lon, name: None, pattern: None, ..req.template.clone() };
         let cr = req.cov_req(&node);
         let h = node_hash(&cr, &cr.nodes[0], &tid);
         let span = (0.1 + 0.8 * done / total_jobs, 0.1 + 0.8 * (done + 1.0) / total_jobs);

@@ -81,6 +81,47 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS jobs_queue ON jobs(state, created_at);
 CREATE INDEX IF NOT EXISTS jobs_project ON jobs(project_id, created_at);
 CREATE INDEX IF NOT EXISTS jobs_hash ON jobs(input_hash);
+CREATE TABLE IF NOT EXISTS publications (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE,
+    owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL,
+    description  TEXT NOT NULL DEFAULT '',
+    data         TEXT NOT NULL,
+    node_count   INTEGER NOT NULL DEFAULT 0,
+    source_revision INTEGER NOT NULL DEFAULT 0,
+    published_at INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS comments (
+    id             TEXT PRIMARY KEY,
+    project_id     TEXT REFERENCES projects(id) ON DELETE CASCADE,
+    publication_id TEXT REFERENCES publications(id) ON DELETE CASCADE,
+    author_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+    target_kind    TEXT NOT NULL CHECK (target_kind IN ('project', 'node', 'link')),
+    target_ref     TEXT NOT NULL DEFAULT '',
+    body           TEXT NOT NULL,
+    created_at     INTEGER NOT NULL,
+    resolved       INTEGER NOT NULL DEFAULT 0,
+    CHECK ((project_id IS NULL) <> (publication_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS comments_project ON comments(project_id);
+CREATE INDEX IF NOT EXISTS comments_publication ON comments(publication_id);
+CREATE TABLE IF NOT EXISTS field_readings (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+    node_ref   TEXT,
+    lat        REAL NOT NULL,
+    lon        REAL NOT NULL,
+    accuracy_m REAL,
+    rssi_dbm   REAL,
+    snr_db     REAL,
+    note       TEXT NOT NULL DEFAULT '',
+    taken_at   INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS readings_project ON field_readings(project_id);
 CREATE TABLE IF NOT EXISTS artifacts (
     hash      TEXT PRIMARY KEY,
     bytes     INTEGER NOT NULL,

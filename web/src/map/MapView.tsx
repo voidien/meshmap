@@ -7,6 +7,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 maplibregl.setWorkerUrl(workerUrl);
 import { TERRAIN_TILE_URL } from "../engine/terrain";
 import { circleRing, type Area } from "../placement";
+import { beamGeoJSON } from "./beams";
 import type { Link, MeshNode } from "../types";
 
 export const LINK_COLORS = { clear: "#1a9850", marginal: "#e0a800", obstructed: "#d73027", none: "#8a8a8a" } as const;
@@ -32,6 +33,8 @@ interface Props {
   selectedLinkKey: string | null;
   /** The area being planned for and the sites suggested for it. */
   placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
+  /** Field mode: where the phone is, and the readings taken so far. */
+  field?: { me: { lat: number; lon: number; accuracyM: number } | null; readings: { id: string; lat: number; lon: number; color: string }[] };
   addMode: boolean;
   /** Next click chooses the planning area instead. */
   pickMode: boolean;
@@ -125,6 +128,15 @@ export function MapView(p: Props) {
       map.addSource("placement-area", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({ id: "placement-fill", type: "fill", source: "placement-area", paint: { "fill-color": "#7c3aed", "fill-opacity": 0.06 } });
       map.addLayer({ id: "placement-line", type: "line", source: "placement-area", paint: { "line-color": "#7c3aed", "line-width": 2, "line-dasharray": [3, 2] } });
+      map.addSource("field-me-area", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("field-readings", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("field-me", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "field-me-area", type: "fill", source: "field-me-area", paint: { "fill-color": "#2563eb", "fill-opacity": 0.12 } });
+      map.addLayer({ id: "field-readings", type: "circle", source: "field-readings", paint: { "circle-radius": 6, "circle-color": ["get", "color"], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+      map.addLayer({ id: "field-me", type: "circle", source: "field-me", paint: { "circle-radius": 8, "circle-color": "#2563eb", "circle-stroke-color": "#fff", "circle-stroke-width": 3 } });
+      map.addSource("beams", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "beams-fill", type: "fill", source: "beams", paint: { "fill-color": "#2457d6", "fill-opacity": 0.14 } });
+      map.addLayer({ id: "beams-line", type: "line", source: "beams", paint: { "line-color": "#2457d6", "line-width": 1.2, "line-opacity": 0.7 } });
       map.addSource("links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addSource("ghost-links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addSource("ghost-nodes", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -168,6 +180,7 @@ export function MapView(p: Props) {
       loaded.current = true;
       syncAll();
       syncPlacement();
+      syncField();
     });
 
     map.on("click", (e) => {
@@ -207,6 +220,7 @@ export function MapView(p: Props) {
     syncMarkers(map, c);
     if (loaded.current) {
       (map.getSource("links") as maplibregl.GeoJSONSource | undefined)?.setData(linksGeoJSON(c.nodes, c.links));
+      (map.getSource("beams") as maplibregl.GeoJSONSource | undefined)?.setData(beamGeoJSON(c.nodes));
       (map.getSource("ghost-links") as maplibregl.GeoJSONSource | undefined)?.setData(linksGeoJSON(c.ghostNodes, c.ghostLinks));
       (map.getSource("ghost-nodes") as maplibregl.GeoJSONSource | undefined)?.setData(pointsGeoJSON(c.ghostNodes));
       map.setFilter("links-selected", ["==", ["get", "key"], c.selectedLinkKey ?? ""]);
@@ -293,6 +307,17 @@ export function MapView(p: Props) {
     });
   }
   useEffect(syncPlacement, [p.placement]);
+
+  function syncField() {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const f = latest.current.field;
+    const set = (id: string, features: unknown[]) => (map.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features } as never);
+    set("field-readings", (f?.readings ?? []).map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "Point", coordinates: [r.lon, r.lat] } })));
+    set("field-me", f?.me ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [f.me.lon, f.me.lat] } }] : []);
+    set("field-me-area", f?.me && f.me.accuracyM > 0 ? [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circleRing(f.me.lat, f.me.lon, Math.min(f.me.accuracyM, 2000) / 1000, 48)] } }] : []);
+  }
+  useEffect(syncField, [p.field]);
 
   // coverage heatmaps: one image source + raster layer each, kept in step with the list
   useEffect(() => {

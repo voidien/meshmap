@@ -3,6 +3,7 @@
 pub mod account;
 pub mod admin;
 pub mod auth;
+pub mod collab;
 pub mod db;
 pub mod error;
 pub mod jobs;
@@ -32,6 +33,7 @@ pub fn build_app(state: Shared) -> Router {
         .merge(passkeys::routes())
         .merge(admin::routes())
         .merge(projects::routes())
+        .merge(collab::routes())
         .merge(jobs_api::routes())
         .merge(packs_api::routes())
         .layer(DefaultBodyLimit::max(8 * 1024 * 1024))

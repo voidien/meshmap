@@ -78,7 +78,7 @@ const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 export function placementRequest(area: Area, template: MeshNode | null, existing: MeshNode[], s: Settings, o: PlacementOptions) {
   const t = template ?? { heightM: 10, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: "long_fast", clientHeightM: 1 };
-  const nodeIn = (n: Pick<MeshNode, "heightM" | "txDbm" | "gainDbi" | "cableLossDb" | "presetId" | "clientHeightM">, lat: number, lon: number, name?: string) => ({
+  const nodeIn = (n: Pick<MeshNode, "heightM" | "txDbm" | "gainDbi" | "cableLossDb" | "presetId" | "clientHeightM"> & { antenna?: MeshNode["antenna"] }, lat: number, lon: number, name?: string) => ({
     lat: round6(lat),
     lon: round6(lon),
     heightM: n.heightM,
@@ -87,6 +87,7 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
     cableLossDb: n.cableLossDb,
     presetId: n.presetId,
     clientHeightM: n.clientHeightM,
+    ...(n.antenna && n.antenna.kind !== "omni" ? { pattern: n.antenna } : {}),
     ...(name ? { name } : {}),
   });
   return {

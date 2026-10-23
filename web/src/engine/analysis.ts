@@ -1,5 +1,6 @@
 import { wasm, getPresets } from "./wasm";
 import { terrain } from "./terrain";
+import { relGainDb } from "../antenna";
 import type { Link, LinkResult, MeshNode, Preset, Settings } from "../types";
 
 export interface Endpoint {
@@ -21,12 +22,14 @@ export function presetById(id: string): Preset {
   return presetMap.get(id) ?? presetMap.get("long_fast")!;
 }
 
-export function endpointOf(n: MeshNode, s: Settings): Endpoint {
+/** One end of a link; with `toward`, the antenna gain is the one in the direction of the other end (directional antennas). */
+export function endpointOf(n: MeshNode, s: Settings, toward?: { lat: number; lon: number }): Endpoint {
   const p = presetById(n.presetId);
+  const pattern = toward && n.antenna ? relGainDb(n.antenna, wasm.bearing_deg(n.lat, n.lon, toward.lat, toward.lon)) : 0;
   return {
     h_agl_m: n.heightM,
     tx_dbm: n.txDbm,
-    gain_dbi: n.gainDbi,
+    gain_dbi: n.gainDbi + pattern,
     cable_loss_db: n.cableLossDb,
     sensitivity_dbm: wasm.sensitivity_dbm(p.sf, p.bw_khz, s.noiseFigureDb),
   };
@@ -37,7 +40,7 @@ export function linkKey(a: string, b: string): string {
 }
 
 const nodeSig = (n: MeshNode) =>
-  [n.lat.toFixed(6), n.lon.toFixed(6), n.heightM, n.txDbm, n.gainDbi, n.cableLossDb, n.presetId].join(",");
+  [n.lat.toFixed(6), n.lon.toFixed(6), n.heightM, n.txDbm, n.gainDbi, n.cableLossDb, n.presetId, n.antenna ? JSON.stringify(n.antenna) : ""].join(",");
 
 const settingsSig = (s: Settings) =>
   [s.freqMhz, s.k, s.marginalMarginDb, s.noiseFigureDb, s.itmClimate, s.itmN0, s.groundEpsilon, s.groundSigma, s.verticalPolarization, s.confidencePct, s.reliabilityPct].join(",");
@@ -109,8 +112,8 @@ export async function analyzeWithProfile(
   const { bare: elev, clutter } = await terrain.profile(lats, lons);
   const both = wasm.analyze_link_both(
     linkParams(s),
-    endpointOf(a, s),
-    endpointOf(b, s),
+    endpointOf(a, s, b),
+    endpointOf(b, s, a),
     dist,
     elev,
     clutter ?? new Float64Array(0),
@@ -136,7 +139,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
   if (px.sf !== py.sf || px.bw_khz !== py.bw_khz) {
     link = { key, a: x.id, b: y.id, class: "none", distanceM, warning: "Radio presets differ (SF/BW): LoRa cannot demodulate across presets." };
   } else {
-    const [mAb, mBa] = wasm.fspl_margins(endpointOf(x, s), endpointOf(y, s), distanceM, s.freqMhz);
+    const [mAb, mBa] = wasm.fspl_margins(endpointOf(x, s, y), endpointOf(y, s, x), distanceM, s.freqMhz);
     if (Math.min(mAb, mBa) < 0) {
       link = { key, a: x.id, b: y.id, class: "none", distanceM, warning: "Out of range even in free space." };
     } else {

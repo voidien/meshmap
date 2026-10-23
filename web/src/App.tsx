@@ -3,6 +3,15 @@ import { useProjectSync } from "./useProjectSync";
 import { useCoverage } from "./useCoverage";
 import { CoveragePanel } from "./components/CoveragePanel";
 import { PlacementPanel } from "./components/PlacementPanel";
+import { buildSiteReport } from "./siteReport";
+import { captureMap } from "./map/capture";
+import type { Comment, FieldReading } from "./collab";
+import { FieldMode } from "./components/FieldMode";
+import { CommentsPanel } from "./components/CommentsPanel";
+import { PublishDialog } from "./components/PublishDialog";
+import { PublishedGallery } from "./components/PublishedGallery";
+import { api } from "./api";
+import type { Publication } from "./collab";
 import { usePlacement } from "./usePlacement";
 import { DEFAULT_PLACEMENT, placementRequest, type Area, type PlacementOptions, type Suggestion } from "./placement";
 import type { AuthContext } from "./auth/AuthGate";
@@ -64,7 +73,12 @@ export function App({ auth }: { auth: AuthContext }) {
   const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [dialog, setDialog] = useState<"account" | "admin" | "share" | null>(null);
+  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | null>(null);
+  const [fieldMode, setFieldMode] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [section, setSection] = useState<"mine" | "published">("mine");
+  const [viewPub, setViewPub] = useState<Publication | null>(null);
+  const [pubReload, setPubReload] = useState(0);
   const [activeId, setActiveId] = useState<string | null>(() => store.get(`meshmap.active.${auth.user.id}`));
   const [previousId, setPreviousId] = useState<string | null>(null);
   const [localProjects, setLocalProjects] = useState<Project[]>([]);
@@ -72,7 +86,17 @@ export function App({ auth }: { auth: AuthContext }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const projects = sync.projects;
-  const project: Project = projects.find((p) => p.id === activeId) ?? projects[0] ?? { id: "", name: "Loading…", nodes: [], settings: { ...DEFAULT_SETTINGS }, role: "viewer" };
+  const ownProject: Project = projects.find((p) => p.id === activeId) ?? projects[0] ?? { id: "", name: "Loading…", nodes: [], settings: { ...DEFAULT_SETTINGS }, role: "viewer" };
+  /** A published copy being looked at: shown like a project the user can only view. */
+  const pubProject = useMemo<Project | null>(
+    () => {
+      if (section !== "published") return null;
+      if (!viewPub?.data) return { id: "", name: "", nodes: [], settings: { ...DEFAULT_SETTINGS }, role: "viewer" };
+      return { id: `pub:${viewPub.id}`, name: viewPub.title, nodes: viewPub.data.nodes, settings: { ...DEFAULT_SETTINGS, ...viewPub.data.settings }, overlays: viewPub.data.overlays, role: "viewer" };
+    },
+    [section, viewPub],
+  );
+  const project: Project = pubProject ?? ownProject;
   const readOnly = project.role === "viewer";
   const other = compareId && compareId !== project.id ? projects.find((p) => p.id === compareId) ?? null : null;
   const conflict = sync.conflicts[project.id];
@@ -84,11 +108,11 @@ export function App({ auth }: { auth: AuthContext }) {
   /** Update the open project (same signature as a useState setter). */
   const setProject = useCallback(
     (update: Project | ((p: Project) => Project)) => {
-      if (!project.id) return;
+      if (!project.id || pubProject) return;
       sync.update(project.id, (p) => (typeof update === "function" ? update(p) : update));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project.id, sync.update],
+    [project.id, sync.update, pubProject],
   );
 
   useEffect(() => {
@@ -109,10 +133,10 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
 
-  const cov = useCoverage(project.id, project.nodes, project.settings, dataReady);
+  const cov = useCoverage(project.id, project.nodes, project.settings, dataReady && !pubProject);
   const coverageImages = useMemo(
     () =>
-      cov.layers
+      (pubProject ? [] : cov.layers)
         .filter((l) => l.visible && l.result)
         .map((l) => ({
           id: l.key.replace(":", "-"),
@@ -120,7 +144,7 @@ export function App({ auth }: { auth: AuthContext }) {
           bounds: l.result!.bounds,
           opacity: l.opacity,
         })),
-    [cov.layers],
+    [cov.layers, pubProject],
   );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
   const placement = usePlacement(project.id);
@@ -191,6 +215,60 @@ export function App({ auth }: { auth: AuthContext }) {
   }, [step, flip]);
 
   const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
+
+  /** Build the printable site report for a node and open it in a new tab. */
+  const makeReport = async (node: MeshNode) => {
+    // open the tab now (while the click still counts as a user action); fill it when the report is ready
+    const win = window.open("", "_blank");
+    setReportBusy(true);
+    try {
+      const scope = pubProject && viewPub ? `/api/published/${viewPub.id}/comments` : `/api/projects/${project.id}/comments`;
+      const [comments, readings, mapImage] = await Promise.all([
+        api.get<Comment[]>(scope).catch(() => [] as Comment[]),
+        pubProject ? Promise.resolve([] as FieldReading[]) : api.get<FieldReading[]>(`/api/projects/${project.id}/readings`).catch(() => [] as FieldReading[]),
+        captureMap(node.lat, node.lon, 14),
+      ]);
+      const layer = pubProject ? undefined : cov.layers.find((l) => l.key === `node:${node.id}` && l.result);
+      const html = await buildSiteReport({
+        project,
+        node,
+        links: allLinks,
+        comments,
+        readings,
+        mapImage,
+        generatedBy: auth.user.displayName,
+        coverage: layer?.result ? { coveredKm2: layer.result.stats.coveredKm2, predictedKm2: layer.result.stats.predictedKm2, radiusKm: project.settings.coverageRadiusKm, terrain: layer.result.terrain } : null,
+      });
+      const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      if (win) win.location.href = url;
+      else download(`${slug}-${node.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "node"}-site-report.html`, html, "text/html");
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+    } catch (e) {
+      win?.close();
+      fail(e);
+    } finally {
+      setReportBusy(false);
+    }
+  };
+
+  const openPublication = async (p: Publication) => {
+    try {
+      const full = await api.get<Publication>(`/api/published/${p.id}`);
+      setViewPub(full);
+      setSelectedNode(null);
+      setSelectedLink(null);
+      setCompareId(null);
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const copyPublication = async () => {
+    if (!viewPub?.data) return;
+    const d = viewPub.data;
+    await addProject(`${viewPub.title} (copy)`, { nodes: structuredClone(d.nodes), settings: { ...DEFAULT_SETTINGS, ...d.settings }, overlays: d.overlays });
+    setSection("mine");
+    setViewPub(null);
+  };
 
   const addProject = async (name: string, from?: Pick<Project, "nodes" | "settings" | "overlays">) => {
     try {
@@ -386,12 +464,25 @@ export function App({ auth }: { auth: AuthContext }) {
 
   if (loadError) return <div className="boot err">Failed to load the link engine (WASM): {loadError}</div>;
 
+  if (fieldMode && ready && ownProject.id && !pubProject) {
+    return (
+      <FieldMode
+        project={ownProject}
+        links={allLinks}
+        readOnly={ownProject.role === "viewer"}
+        onClose={() => setFieldMode(false)}
+        onMoveNode={(id, lat, lon) => patchNode(id, { lat, lon })}
+        onPatchNode={patchNode}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <aside className="side">
         <header>
           <h1>meshmap</h1>
-          <span className="ver">v5 · estimates only</span>
+          <span className="ver">v6 · estimates only</span>
         </header>
         <div className="userbar">
           <span className="who" title={auth.user.username}>
@@ -431,6 +522,35 @@ export function App({ auth }: { auth: AuthContext }) {
             </div>
           </div>
         ) : null}
+        <div className="tabs" role="tablist" aria-label="Section">
+          <button role="tab" aria-selected={section === "mine"} className={section === "mine" ? "on" : ""} onClick={() => { setSection("mine"); setSelectedNode(null); setSelectedLink(null); }}>
+            My projects
+          </button>
+          <button role="tab" id="tab-published" aria-selected={section === "published"} className={section === "published" ? "on" : ""} onClick={() => { setSection("published"); setSelectedNode(null); setSelectedLink(null); }}>
+            Published
+          </button>
+        </div>
+        {section === "published" ? (
+          <>
+            <PublishedGallery openId={viewPub?.id ?? null} onOpen={(p) => void openPublication(p)} reloadKey={pubReload} />
+            {viewPub && pubProject ? (
+              <section className="card" id="published-open">
+                <h3>{viewPub.title}</h3>
+                <div className="lmeta">
+                  by {viewPub.owner.displayName} · {viewPub.nodeCount} nodes · read only
+                </div>
+                {viewPub.description ? <p className="pdesc-full">{viewPub.description}</p> : null}
+                <div className="btnrow">
+                  <button className="on" onClick={() => void copyPublication()}>Copy to my projects</button>
+                  <button onClick={() => setViewPub(null)}>Close</button>
+                </div>
+              </section>
+            ) : (
+              <p className="hint card">Open a published project to look at its map and links.</p>
+            )}
+          </>
+        ) : null}
+        {section === "mine" ? (
         <ProjectSwitcher
           projects={projects}
           activeId={project.id}
@@ -441,10 +561,12 @@ export function App({ auth }: { auth: AuthContext }) {
           onDuplicate={duplicateProject}
           onDelete={() => void deleteProject()}
           onShare={() => setDialog("share")}
+          onPublish={() => setDialog("publish")}
         />
-        <input className="pname" value={project.name} readOnly={readOnly || project.role !== "owner"} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" title={project.role === "owner" ? "" : "Only the owner can rename"} />
+        ) : null}
+        {section === "mine" ? <input className="pname" value={project.name} readOnly={readOnly || project.role !== "owner"} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" title={project.role === "owner" ? "" : "Only the owner can rename"} /> : null}
         <div className="toolbar">
-          <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly}>
+          <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
             {addMode ? "Click the map…" : "+ Add node"}
           </button>
           <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)}>
@@ -452,6 +574,9 @@ export function App({ auth }: { auth: AuthContext }) {
           </button>
           <button className={showLabels ? "on" : ""} onClick={() => setShowLabels((v) => !v)} title="Show node names on the map">
             Names
+          </button>
+          <button id="field-mode-btn" onClick={() => setFieldMode(true)} disabled={!ready || !!pubProject || !project.id} title="Phone-friendly view for standing at a site: GPS, predicted signal here, record readings">
+            Field mode
           </button>
         </div>
         <div className="status">
@@ -464,10 +589,20 @@ export function App({ auth }: { auth: AuthContext }) {
         </div>
 
         <fieldset className="plain" disabled={readOnly}>
-        {sel ? <NodePanel node={sel} connections={connections} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} /> : <p className="hint card">{readOnly ? "You can look at this project but not change it." : "Click “Add node”, then click the map. Drag nodes to see links update. Click a link for its terrain profile."}</p>}
+        {sel ? <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} /> : <p className="hint card">{readOnly ? "You can look at this project but not change it." : "Click “Add node”, then click the map. Drag nodes to see links update. Click a link for its terrain profile."}</p>}
         </fieldset>
 
-        <ComparePanel
+        {project.id && (pubProject || section === "mine") ? (
+          <CommentsPanel
+            key={project.id}
+            scope={pubProject ? { kind: "publication", id: viewPub!.id } : { kind: "project", id: project.id }}
+            nodes={project.nodes}
+            selectedNode={sel}
+            selectedLink={selLink ? { key: selLink.key, label: `${nodeById.get(selLink.a)?.name.trim() || "?"} – ${nodeById.get(selLink.b)?.name.trim() || "?"}` } : null}
+            title={pubProject ? "Comments on this published project" : "Comments"}
+          />
+        ) : null}
+        {pubProject ? null : <ComparePanel
           current={project}
           currentLinks={allLinks}
           projects={projects}
@@ -475,8 +610,8 @@ export function App({ auth }: { auth: AuthContext }) {
           otherLinks={otherAllLinks}
           busy={otherStatus.busy}
           onChange={setCompareId}
-        />
-        <CoveragePanel
+        />}
+        {pubProject ? null : <CoveragePanel
           layers={cov.layers}
           staleKeys={cov.staleKeys}
           selectedNode={sel}
@@ -487,8 +622,8 @@ export function App({ auth }: { auth: AuthContext }) {
           onCancel={(k) => void cov.cancel(k)}
           onRemove={cov.remove}
           onChange={cov.patch}
-        />
-        <PlacementPanel
+        />}
+        {pubProject ? null : <PlacementPanel
           nodes={project.nodes}
           area={placementArea}
           onArea={setPlacementArea}
@@ -515,7 +650,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onClear={placement.clear}
           onZoom={(x) => setFocus({ lat: x.lat, lon: x.lon, key: Date.now() })}
           onAdd={addSuggestion}
-        />
+        />}
         <fieldset className="plain" disabled={readOnly}>
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
         </fieldset>
@@ -594,6 +729,7 @@ export function App({ auth }: { auth: AuthContext }) {
       </main>
       {dialog === "account" ? <AccountMenu auth={auth} onClose={() => setDialog(null)} /> : null}
       {dialog === "admin" ? <AdminPanel meId={auth.user.id} onClose={() => setDialog(null)} /> : null}
+      {dialog === "publish" && ownProject.id ? <PublishDialog project={ownProject} onClose={() => setDialog(null)} onChanged={() => setPubReload((n) => n + 1)} /> : null}
       {dialog === "share" && project.id ? (
         <ShareDialog
           project={project}

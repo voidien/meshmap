@@ -64,8 +64,9 @@ export function ProfileChart({ a, b, settings, onClose }: Props) {
   );
 }
 
-function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void }) {
-  const { data, a, b, settings, hover, setHover } = props;
+/** The terrain profile drawing: also used (without hover) in printed site reports. */
+export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover?: number | null; setHover?: (i: number | null) => void }) {
+  const { data, a, b, settings, hover = null, setHover = () => undefined } = props;
   const { dist, elev, result: r, bare, withClutter } = data;
   const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
   const n = dist.length;
@@ -100,57 +101,68 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
     setHover(d < 0 || d > total ? null : Math.round((d / total) * (n - 1)));
   };
 
+
+  return (
+        <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+          <path d={terrainFill} fill="#b59a73" opacity={0.85} />
+          {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={0.75} /> : null}
+          <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
+          {showClutter ? <path d={path(s.terrain_eff_m)} fill="none" stroke="#1f5f2f" strokeWidth={1.2} /> : null}
+          <path d={poly(upper, lower)} fill="#4f8ff7" opacity={0.15} />
+          <path d={poly(inner(1), inner(-1))} fill="#4f8ff7" opacity={0.22} />
+          <path d={path(s.ray_m)} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
+          {[0, total].map((d, i) => {
+            const node = i ? b : a;
+            const ground = i ? elev[n - 1] : elev[0];
+            return (
+              <g key={i}>
+                <line x1={X(d)} x2={X(d)} y1={Y(ground)} y2={Y(ground + node.heightM)} stroke="#111" strokeWidth={3} />
+                <circle cx={X(d)} cy={Y(ground + node.heightM)} r={4} fill="#111" />
+              </g>
+            );
+          })}
+          {n > 2 ? <circle cx={worstX} cy={Y(s.terrain_eff_m[r.worst_index])} r={5} fill="none" stroke={LINK_COLORS[r.class]} strokeWidth={2.5} /> : null}
+          {yTicks.map((v) => (
+            <g key={v}>
+              <line x1={M.l} x2={W - M.r} y1={Y(v)} y2={Y(v)} stroke="#000" opacity={0.08} />
+              <text x={M.l - 6} y={Y(v) + 4} textAnchor="end" className="tick">
+                {Math.round(v)}
+              </text>
+            </g>
+          ))}
+          {xTicks.map((v) => (
+            <text key={v} x={X(v * 1000)} y={H - M.b + 16} textAnchor="middle" className="tick">
+              {v}
+            </text>
+          ))}
+          <text x={W / 2} y={H - 4} textAnchor="middle" className="axis">
+            distance (km)
+          </text>
+          <text x={12} y={H / 2} textAnchor="middle" className="axis" transform={`rotate(-90 12 ${H / 2})`}>
+            elevation (m)
+          </text>
+          {hover !== null ? (
+            <g>
+              <line x1={X(dist[hover])} x2={X(dist[hover])} y1={M.t} y2={H - M.b} stroke="#111" opacity={0.4} />
+              <circle cx={X(dist[hover])} cy={Y(s.terrain_eff_m[hover])} r={3.5} fill="#6b5836" />
+            </g>
+          ) : null}
+        </svg>
+  );
+}
+
+function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void }) {
+  const { data, a, b, settings, hover, setHover } = props;
+  const { dist, elev, result: r, bare, withClutter } = data;
+  const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
+  const s = r.series;
   const sensA = r.rx_ab_dbm - r.margin_ab_db;
   const sensB = r.rx_ba_dbm - r.margin_ba_db;
   const f = (v: number, d = 1) => v.toFixed(d);
 
   return (
     <div className="chart-body">
-      <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-        <path d={terrainFill} fill="#b59a73" opacity={0.85} />
-        {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={0.75} /> : null}
-        <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
-        {showClutter ? <path d={path(s.terrain_eff_m)} fill="none" stroke="#1f5f2f" strokeWidth={1.2} /> : null}
-        <path d={poly(upper, lower)} fill="#4f8ff7" opacity={0.15} />
-        <path d={poly(inner(1), inner(-1))} fill="#4f8ff7" opacity={0.22} />
-        <path d={path(s.ray_m)} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
-        {[0, total].map((d, i) => {
-          const node = i ? b : a;
-          const ground = i ? elev[n - 1] : elev[0];
-          return (
-            <g key={i}>
-              <line x1={X(d)} x2={X(d)} y1={Y(ground)} y2={Y(ground + node.heightM)} stroke="#111" strokeWidth={3} />
-              <circle cx={X(d)} cy={Y(ground + node.heightM)} r={4} fill="#111" />
-            </g>
-          );
-        })}
-        {n > 2 ? <circle cx={worstX} cy={Y(s.terrain_eff_m[r.worst_index])} r={5} fill="none" stroke={LINK_COLORS[r.class]} strokeWidth={2.5} /> : null}
-        {yTicks.map((v) => (
-          <g key={v}>
-            <line x1={M.l} x2={W - M.r} y1={Y(v)} y2={Y(v)} stroke="#000" opacity={0.08} />
-            <text x={M.l - 6} y={Y(v) + 4} textAnchor="end" className="tick">
-              {Math.round(v)}
-            </text>
-          </g>
-        ))}
-        {xTicks.map((v) => (
-          <text key={v} x={X(v * 1000)} y={H - M.b + 16} textAnchor="middle" className="tick">
-            {v}
-          </text>
-        ))}
-        <text x={W / 2} y={H - 4} textAnchor="middle" className="axis">
-          distance (km)
-        </text>
-        <text x={12} y={H / 2} textAnchor="middle" className="axis" transform={`rotate(-90 12 ${H / 2})`}>
-          elevation (m)
-        </text>
-        {hover !== null ? (
-          <g>
-            <line x1={X(dist[hover])} x2={X(dist[hover])} y1={M.t} y2={H - M.b} stroke="#111" opacity={0.4} />
-            <circle cx={X(dist[hover])} cy={Y(s.terrain_eff_m[hover])} r={3.5} fill="#6b5836" />
-          </g>
-        ) : null}
-      </svg>
+      <ProfileSvg data={data} a={a} b={b} settings={settings} hover={hover} setHover={setHover} />
       <div className="legend-line">
         <span><i className="sw" style={{ background: "#b59a73" }} />terrain + earth curvature (k={Number(settings.k.toFixed(2))})</span>
         <span><i className="sw" style={{ background: "#1d4ed8" }} />direct ray</span>

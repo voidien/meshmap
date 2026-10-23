@@ -441,3 +441,40 @@ async fn each_nodes_own_client_height_is_part_of_the_prediction() {
     let (s, _) = a.post(&url, with_height(-1.0)).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn antenna_patterns_change_the_prediction_and_are_validated() {
+    let (app, _) = setup(Arc::new(Hills { calls: AtomicUsize::new(0) }));
+    let mut c = admin(&app).await;
+    let pid = project(&mut c, "p").await;
+    let with = |pattern: Value| {
+        let mut n = node(36.0, -85.0);
+        n["pattern"] = pattern;
+        json!({ "kind": "coverage_node", "nodes": [n], "radiusKm": 10.0, "resolutionM": 250.0 })
+    };
+    let run_job = |req: Value| {
+        let mut c2 = Client { app: app.clone(), cookie: c.cookie.clone() };
+        let pid = pid.clone();
+        async move {
+            let (s, j) = c2.post(&format!("/api/projects/{pid}/jobs"), req).await;
+            assert!(s == StatusCode::ACCEPTED || s == StatusCode::OK, "{s} {j}");
+            let id = j["id"].as_str().unwrap().to_string();
+            wait_for(&mut c2, &id, &["done", "failed"]).await
+        }
+    };
+    let omni = run_job(with(json!({ "kind": "omni" }))).await;
+    let none = run_job(json!({ "kind": "coverage_node", "nodes": [node(36.0, -85.0)], "radiusKm": 10.0, "resolutionM": 250.0 })).await;
+    let yagi = run_job(with(json!({ "kind": "directional", "azimuthDeg": 90.0, "beamwidthDeg": 40.0, "frontToBackDb": 25.0 }))).await;
+    for j in [&omni, &none, &yagi] {
+        assert_eq!(j["state"], "done", "{j}");
+    }
+    // "omni" and "no pattern" are the same question
+    assert_eq!(omni["result"]["hash"], none["result"]["hash"]);
+    // a directional antenna is a different question with a different answer
+    assert_ne!(omni["result"]["hash"], yagi["result"]["hash"]);
+    let area = |j: &Value| j["result"]["stats"]["coveredKm2"].as_f64().unwrap();
+    assert!(area(&yagi) < area(&omni), "{} vs {}", area(&yagi), area(&omni));
+    // nonsense is refused
+    let (s, v) = c.post(&format!("/api/projects/{pid}/jobs"), with(json!({ "kind": "directional", "azimuthDeg": 0.0, "beamwidthDeg": 0.0, "frontToBackDb": 10.0 }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
+}

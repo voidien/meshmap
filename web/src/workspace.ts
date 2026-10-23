@@ -1,3 +1,4 @@
+import { cleanAntenna } from "./antenna";
 import { uid } from "./id";
 import { DEFAULT_SETTINGS, type MeshNode, type Project, type Settings } from "./types";
 
@@ -35,6 +36,7 @@ export function parseProject(raw: unknown): Project | null {
       txDbm: num(n.txDbm, 22),
       gainDbi: num(n.gainDbi, 3),
       cableLossDb: num(n.cableLossDb, 0.5),
+      antenna: cleanAntenna(n.antenna),
       presetId: typeof n.presetId === "string" ? n.presetId : "long_fast",
       status: n.status === "installed" ? "installed" : "planned",
       notes: typeof n.notes === "string" ? n.notes : "",

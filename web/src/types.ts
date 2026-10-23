@@ -1,3 +1,9 @@
+/** Horizontal antenna pattern (gain relative to the antenna's peak); omni when a node has none. */
+export type AntennaPattern =
+  | { kind: "omni" }
+  | { kind: "directional"; azimuthDeg: number; beamwidthDeg: number; frontToBackDb: number }
+  | { kind: "table"; azimuthDeg: number; gainsDb: number[] };
+
 export type NodeStatus = "planned" | "installed";
 export type LinkClass = "clear" | "marginal" | "obstructed" | "none";
 
@@ -15,6 +21,8 @@ export interface MeshNode {
   txDbm: number;
   gainDbi: number;
   cableLossDb: number;
+  /** Absent = omni. */
+  antenna?: AntennaPattern;
   presetId: string;
   status: NodeStatus;
   notes: string;

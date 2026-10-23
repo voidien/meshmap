@@ -2,6 +2,7 @@
 
 use crate::grid::{inverse_mercator, mercator, Bounds};
 use crate::{encode_margin, Elevation, NO_DATA};
+use meshmap_core::antenna::AntennaPattern;
 use meshmap_core::geo::{bearing_deg, destination, haversine_m};
 use meshmap_core::link::ItmSettings;
 use meshmap_core::rf::fspl_db;
@@ -19,6 +20,8 @@ pub struct NodeParams {
     pub tx_dbm: f64,
     pub gain_dbi: f64,
     pub cable_loss_db: f64,
+    /// Horizontal pattern of the node's antenna (`gain_dbi` is its peak); omni by default.
+    pub pattern: AntennaPattern,
     /// Receiver sensitivity of the node's radio preset, dBm (the client must use the same preset).
     pub sensitivity_dbm: f64,
     /// The client device at the far end.
@@ -114,8 +117,8 @@ fn itm_loss(p: &NodeParams, pfl: &[f64]) -> Result<f64, String> {
 }
 
 /// Margin in dB for a given basic transmission loss.
-fn margin(p: &NodeParams, loss_db: f64) -> f64 {
-    let eirp = p.tx_dbm + p.gain_dbi - p.cable_loss_db;
+fn margin(p: &NodeParams, loss_db: f64, az_deg: f64) -> f64 {
+    let eirp = p.tx_dbm + p.gain_dbi + p.pattern.rel_gain_db(az_deg) - p.cable_loss_db;
     eirp - loss_db + p.client_gain_dbi - p.client_cable_loss_db - p.sensitivity_dbm
 }
 
@@ -169,7 +172,7 @@ pub(crate) fn radial_margins(
             }
         };
         if let Some(l) = loss {
-            *slot = margin(p, l) as f32;
+            *slot = margin(p, l, az_deg) as f32;
         }
     }
     out
@@ -275,6 +278,7 @@ mod tests {
             h_agl_m: 10.0,
             tx_dbm: 22.0,
             gain_dbi: 3.0,
+            pattern: AntennaPattern::Omni,
             cable_loss_db: 0.5,
             sensitivity_dbm: -131.5,
             client_h_agl_m: 2.0,
@@ -315,12 +319,30 @@ mod tests {
             let pfl = pfl_from_elevations(p.resolution_m, &elev[..=j]);
             let input = ItmInput { h_tx_m: p.h_agl_m, h_rx_m: p.client_h_agl_m, pfl: &pfl, climate: 5, n0: 301.0, f_mhz: 915.0, pol: Polarization::Vertical, epsilon: 15.0, sigma: 0.005, mdvar: 3 };
             let loss = p2p_cr(&input, 50.0, 50.0).unwrap().a_db;
-            let expected = margin(&p, loss);
+            let expected = margin(&p, loss, az);
             assert!((m[j] as f64 - expected).abs() < 1e-3, "j={j}: {} vs {expected}", m[j]);
         }
         assert!(m[0].is_nan());
         // very short distances use free space
-        assert!((m[1] as f64 - margin(&p, fspl_db(p.resolution_m, 915.0))).abs() < 1e-3);
+        assert!((m[1] as f64 - margin(&p, fspl_db(p.resolution_m, 915.0), az)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_directional_antenna_reaches_further_ahead_than_behind() {
+        let mut p = params();
+        p.pattern = AntennaPattern::Directional { azimuth_deg: 90.0, beamwidth_deg: 60.0, front_to_back_db: 20.0 };
+        let flat = |_: f64, _: f64| 100.0;
+        let omni = run(&params(), &flat).unwrap();
+        let dir = run(&p, &flat).unwrap();
+        let d = 2.0 / 111.2; // about 2 km
+        let lon_step = d / 36.0_f64.to_radians().cos();
+        let east = |r: &Raster| at(r, 36.0, -85.0 + lon_step).unwrap();
+        let west = |r: &Raster| at(r, 36.0, -85.0 - lon_step).unwrap();
+        assert!((east(&dir) - east(&omni)).abs() < 0.6, "no loss straight ahead");
+        assert!((west(&omni) - west(&dir) - 20.0).abs() < 0.6, "20 dB less behind: {} vs {}", west(&omni), west(&dir));
+        let north = at(&dir, 36.0 + d, -85.0).unwrap();
+        let off = AntennaPattern::Directional { azimuth_deg: 90.0, beamwidth_deg: 60.0, front_to_back_db: 20.0 }.rel_gain_db(0.0);
+        assert!((at(&omni, 36.0 + d, -85.0).unwrap() + off - north).abs() < 0.6, "90 degrees off axis follows the pattern");
     }
 
     #[test]

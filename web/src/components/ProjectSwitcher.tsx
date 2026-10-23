@@ -10,10 +10,11 @@ interface Props {
   onDuplicate: () => void;
   onDelete: () => void;
   onShare: () => void;
+  onPublish: () => void;
 }
 
 /** Quick switching between setups. Keyboard: `[` previous, `]` next, `` ` `` flip to the last one. */
-export function ProjectSwitcher({ projects, activeId, canFlip, onSelect, onFlip, onNew, onDuplicate, onDelete, onShare }: Props) {
+export function ProjectSwitcher({ projects, activeId, canFlip, onSelect, onFlip, onNew, onDuplicate, onDelete, onShare, onPublish }: Props) {
   return (
     <section className="card switcher">
       <div className="switchrow">
@@ -35,6 +36,9 @@ export function ProjectSwitcher({ projects, activeId, canFlip, onSelect, onFlip,
         </button>
         <button onClick={onShare} title="Who can see and edit this project">
           Share{projects.find((p) => p.id === activeId)?.members?.length ? ` (${projects.find((p) => p.id === activeId)?.members?.length})` : ""}
+        </button>
+        <button onClick={onPublish} title="Put a read-only copy in the Published section for everyone on this site">
+          Publish
         </button>
         <button onClick={onDelete} className="danger" disabled={projects.length < 2 || projects.find((p) => p.id === activeId)?.role !== "owner"} title="Only the owner can delete a project">
           Delete

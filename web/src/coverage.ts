@@ -41,6 +41,7 @@ export function coverageRequest(kind: "coverage_node" | "coverage_network", node
       txDbm: n.txDbm,
       gainDbi: n.gainDbi,
       cableLossDb: n.cableLossDb,
+      ...(n.antenna && n.antenna.kind !== "omni" ? { pattern: n.antenna } : {}),
       presetId: n.presetId,
       clientHeightM: n.clientHeightM,
     })),

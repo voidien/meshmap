@@ -44,6 +44,9 @@ pub struct NodeIn {
     /// Height of the client device this node is predicted against; the request's client height when absent.
     #[serde(default)]
     pub client_height_m: Option<f64>,
+    /// Horizontal antenna pattern; omni when absent.
+    #[serde(default)]
+    pub pattern: Option<meshmap_core::antenna::AntennaPattern>,
     /// Only used to label results.
     #[serde(default)]
     pub name: Option<String>,
@@ -159,6 +162,9 @@ pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
         if ![n.tx_dbm, n.gain_dbi, n.cable_loss_db].iter().all(|v| v.is_finite()) {
             return bad(format!("{who}: invalid power settings."));
         }
+        if let Some(Err(e)) = n.pattern.as_ref().map(|p| p.validate()) {
+            return bad(format!("{who}: {e}"));
+        }
     }
     Ok(())
 }
@@ -173,6 +179,7 @@ fn node_params(r: &CoverageRequest, n: &NodeIn) -> NodeParams {
         tx_dbm: n.tx_dbm,
         gain_dbi: n.gain_dbi,
         cable_loss_db: n.cable_loss_db,
+        pattern: n.pattern.clone().unwrap_or_default(),
         sensitivity_dbm: sensitivity_dbm(preset.sf, preset.bw_khz, r.settings.noise_figure_db),
         client_h_agl_m: n.client_height_m.unwrap_or(r.client.height_m),
         client_gain_dbi: r.client.gain_dbi,
@@ -202,7 +209,7 @@ pub fn node_hash(r: &CoverageRequest, n: &NodeIn, terrain_id: &str) -> String {
         "v": MODEL_VERSION,
         "terrain": terrain_id,
         "mode": r.terrain,
-        "node": { "lat": round(n.lat), "lon": round(n.lon), "h": n.height_m, "tx": n.tx_dbm, "g": n.gain_dbi, "c": n.cable_loss_db, "preset": n.preset_id },
+        "node": { "lat": round(n.lat), "lon": round(n.lon), "h": n.height_m, "tx": n.tx_dbm, "g": n.gain_dbi, "c": n.cable_loss_db, "preset": n.preset_id, "pattern": n.pattern.as_ref().filter(|p| !p.is_omni()) },
         "client": { "h": n.client_height_m.unwrap_or(r.client.height_m), "gain": r.client.gain_dbi, "cable": r.client.cable_loss_db },
         "settings": r.settings,
         "radiusKm": r.radius_km,
@@ -225,7 +232,7 @@ pub fn request_hash(r: &CoverageRequest, terrain_id: &str) -> String {
 #[derive(Debug, Clone)]
 pub enum JobRequest {
     Coverage(CoverageRequest),
-    Placement(crate::placement::PlacementRequest),
+    Placement(Box<crate::placement::PlacementRequest>),
 }
 
 impl JobRequest {
@@ -233,7 +240,7 @@ impl JobRequest {
     pub fn parse(v: Value) -> Result<Self, ApiError> {
         let bad = |e: serde_json::Error| ApiError::bad(format!("Invalid job request: {e}"));
         if v.get("kind").and_then(Value::as_str) == Some("placement") {
-            serde_json::from_value(v).map(Self::Placement).map_err(bad)
+            serde_json::from_value(v).map(|r| Self::Placement(Box::new(r))).map_err(bad)
         } else {
             serde_json::from_value(v).map(Self::Coverage).map_err(bad)
         }

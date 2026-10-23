@@ -1,5 +1,6 @@
 import { getPresets } from "../engine/wasm";
 import { LINK_COLORS } from "../map/MapView";
+import { AntennaEditor } from "./AntennaEditor";
 import type { Link, MeshNode } from "../types";
 
 export interface Connection {
@@ -10,12 +11,16 @@ export interface Connection {
 interface Props {
   node: MeshNode;
   connections: Connection[];
+  /** The project's other nodes (to aim a directional antenna at). */
+  others: MeshNode[];
   onChange: (patch: Partial<MeshNode>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onZoom: () => void;
   onOpenLink: (key: string) => void;
   onSelectNode: (id: string) => void;
+  onReport: () => void;
+  reportBusy: boolean;
 }
 
 function Num(props: { label: string; value: number; step?: number; unit?: string; min?: number; max?: number; onChange: (v: number) => void }) {
@@ -40,7 +45,7 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
   );
 }
 
-export function NodePanel({ node, connections, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode }: Props) {
+export function NodePanel({ node, connections, others, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
   const presets = getPresets();
   return (
     <section className="card">
@@ -58,6 +63,7 @@ export function NodePanel({ node, connections, onChange, onDelete, onDuplicate, 
         <Num label="Antenna gain" unit="dBi" value={node.gainDbi} step={0.1} onChange={(v) => onChange({ gainDbi: v })} />
         <Num label="Cable loss" unit="dB" value={node.cableLossDb} min={0} step={0.1} onChange={(v) => onChange({ cableLossDb: v })} />
       </div>
+      <AntennaEditor node={node} others={others} onChange={onChange} />
       <label className="field">
         <span>Radio preset</span>
         <select value={node.presetId} onChange={(e) => onChange({ presetId: e.target.value })}>
@@ -105,6 +111,9 @@ export function NodePanel({ node, connections, onChange, onDelete, onDuplicate, 
       </ul>
       <div className="row-actions">
         <button onClick={onZoom}>Zoom to</button>
+        <button id="site-report-btn" onClick={onReport} disabled={reportBusy} title="A printable one-page summary of this site">
+          {reportBusy ? "Preparing…" : "Site report"}
+        </button>
         <button onClick={onDuplicate} title="Copy this node (placed ~100 m away)">
           Duplicate
         </button>
