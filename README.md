@@ -105,7 +105,7 @@ treated as solid obstacles: there is no foliage loss, and both antennas stay on 
 ## Placement suggestions
 
 *Suggest new sites* (left panel) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),
-choose how many sites, and optionally require each to link back to the network with a minimum margin. The server finds the
+choose how many sites, and optionally require each to link back to the network with a minimum margin (blocked paths do not count even if diffraction leaves some margin) and to link to the sites already chosen, so the new sites form one connected group. The server finds the
 high points in the area, predicts coverage from each, and picks sites one at a time, each the one that newly covers the most
 of the area, counting what your nodes and the earlier picks already cover. Each result lists the new area covered, the running
 total, elevation and relief, and the links back to your network; "Add as node" turns a site into a node. Results are cached

@@ -246,3 +246,28 @@ async fn bad_requests_and_missing_high_ground_are_explained() {
     assert_eq!(job["state"], "failed");
     assert!(job["error"].as_str().unwrap().contains("relief"), "{job}");
 }
+
+#[tokio::test]
+async fn new_sites_connect_to_each_other_and_to_the_network_with_good_links() {
+    let (app, _) = setup(Arc::new(Hills { calls: AtomicUsize::new(0) }));
+    let mut c = admin(&app).await;
+    let pid = project(&mut c, "p").await;
+    let job = run(&mut c, &pid, request(json!({ "count": 3, "existing": [node(36.0, -85.0)], "backhaul": { "minMarginDb": 3.0, "maxKm": 40.0 } }))).await;
+    assert_eq!(job["state"], "done", "{job}");
+    let sug = job["result"]["suggestions"].as_array().unwrap();
+    assert!(sug.len() >= 2, "need at least two sites to check how they connect: {}", job["result"]);
+    for (i, s) in sug.iter().enumerate() {
+        let links = s["backhaul"].as_array().unwrap();
+        assert!(!links.is_empty(), "site {} has no link: {s}", i + 1);
+        // the default is to avoid blocked paths: nothing obstructed counts as a link
+        assert!(links.iter().all(|l| l["class"] != "obstructed" && l["marginDb"].as_f64().unwrap() >= 3.0), "{s}");
+        // every site after the first is joined to an earlier suggestion directly
+        if i > 0 {
+            assert!(links.iter().any(|l| l["to"] == "suggestion"), "site {} is not linked to an earlier suggestion: {s}", i + 1);
+        }
+    }
+    // turning the connection rule off is a different question
+    let loose = run(&mut c, &pid, request(json!({ "count": 3, "existing": [node(36.0, -85.0)], "backhaul": { "minMarginDb": 3.0, "maxKm": 40.0, "connectSuggestions": false, "avoidObstructed": false } }))).await;
+    assert_eq!(loose["state"], "done", "{loose}");
+    assert_ne!(loose["result"]["hash"], job["result"]["hash"]);
+}

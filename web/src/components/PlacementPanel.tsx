@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { describeStop, type Area, type PlacementJob, type PlacementOptions, type Suggestion } from "../placement";
+import { DEFAULT_BACKHAUL, describeStop, type Area, type PlacementJob, type PlacementOptions, type Suggestion } from "../placement";
 import type { MeshNode } from "../types";
 
 interface Props {
@@ -82,10 +82,19 @@ export function PlacementPanel(p: Props) {
       )}
 
       <label className="check">
-        <input type="checkbox" checked={o.backhaul !== null} onChange={(e) => set({ backhaul: e.target.checked ? { minMarginDb: 6, maxKm: 30 } : null })} />
+        <input type="checkbox" checked={o.backhaul !== null} onChange={(e) => set({ backhaul: e.target.checked ? { ...DEFAULT_BACKHAUL } : null })} />
         Each new site must link back to the network
       </label>
       {o.backhaul ? (
+        <>
+        <label className="check">
+          <input type="checkbox" checked={o.backhaul.avoidObstructed} onChange={(e) => set({ backhaul: { ...o.backhaul!, avoidObstructed: e.target.checked } })} />
+          Ignore blocked paths (a link must have a clear enough line of sight, not just enough margin)
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={o.backhaul.connectSuggestions} onChange={(e) => set({ backhaul: { ...o.backhaul!, connectSuggestions: e.target.checked } })} />
+          Link the new sites to each other (each one after the first must reach an earlier suggestion)
+        </label>
         <div className="grid2">
           <label className="field">
             <span>Minimum link margin (dB)</span>
@@ -96,6 +105,7 @@ export function PlacementPanel(p: Props) {
             <input type="number" min={1} max={100} step={1} value={o.backhaul.maxKm} onChange={(e) => set({ backhaul: { ...o.backhaul!, maxKm: Math.min(100, Math.max(1, num(e.target.value, 30))) } })} />
           </label>
         </div>
+        </>
       ) : null}
       <button className="linkbtn" onClick={() => setAdvanced((v) => !v)}>
         {advanced ? "Hide options" : "More options"}

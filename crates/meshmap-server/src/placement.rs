@@ -23,7 +23,7 @@ use std::sync::atomic::Ordering;
 
 pub const PLACEMENT_VERSION: &str = "place-1";
 const MAX_CANDIDATES: usize = 40;
-const MAX_ANCHORS_CHECKED: usize = 12;
+const MAX_ANCHORS_CHECKED: usize = 16;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +38,17 @@ pub struct AreaIn {
 pub struct BackhaulIn {
     pub min_margin_db: f64,
     pub max_km: f64,
+    /// A link whose path is blocked ("obstructed") does not count, even if diffraction leaves a positive margin.
+    #[serde(default = "yes")]
+    pub avoid_obstructed: bool,
+    /// Every site after the first must also have a good link to at least one earlier suggestion, so the new sites
+    /// form one connected group rather than each hanging off the existing network on its own.
+    #[serde(default = "yes")]
+    pub connect_suggestions: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -437,8 +448,11 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                 }
             }
             links.sort_by(|a, b| b.margin_db.total_cmp(&a.margin_db));
-            if links.first().is_some_and(|l| l.margin_db >= bh.min_margin_db) {
-                chosen = Some((c, gain, links));
+            // good = enough margin and, unless allowed, not blocked
+            let good: Vec<LinkInfo> = links.iter().filter(|l| l.margin_db >= bh.min_margin_db && !(bh.avoid_obstructed && l.class == "obstructed")).cloned().collect();
+            let joins_suggestions = !bh.connect_suggestions || !anchors.iter().any(|a| a.kind == "suggestion") || good.iter().any(|l| anchors[l.anchor].kind == "suggestion");
+            if !good.is_empty() && joins_suggestions {
+                chosen = Some((c, gain, good));
                 break;
             }
             rejected_for_backhaul = true;
@@ -458,7 +472,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
         let cand = &cands[c];
         let back: Vec<Value> = links
             .iter()
-            .take(3)
+            .take(6)
             .map(|l| {
                 let an = &anchors[l.anchor];
                 json!({ "to": an.kind, "index": an.index, "name": an.name, "distanceKm": l.distance_km, "marginDb": l.margin_db, "clearancePct": l.clearance_pct, "class": l.class })

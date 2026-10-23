@@ -8,6 +8,17 @@ export interface Area {
   radiusKm: number;
 }
 
+export interface Backhaul {
+  minMarginDb: number;
+  maxKm: number;
+  /** A blocked path does not count as a link, even if the predicted margin is positive. */
+  avoidObstructed: boolean;
+  /** Each site after the first must also link directly to an earlier suggestion. */
+  connectSuggestions: boolean;
+}
+
+export const DEFAULT_BACKHAUL: Backhaul = { minMarginDb: 6, maxKm: 30, avoidObstructed: true, connectSuggestions: true };
+
 export interface PlacementOptions {
   count: number;
   coverageRadiusKm: number;
@@ -15,7 +26,7 @@ export interface PlacementOptions {
   minReliefM: number;
   minGainKm2: number;
   /** null = new sites need no link back to the network */
-  backhaul: { minMarginDb: number; maxKm: number } | null;
+  backhaul: Backhaul | null;
 }
 
 export const DEFAULT_PLACEMENT: PlacementOptions = {
@@ -24,7 +35,7 @@ export const DEFAULT_PLACEMENT: PlacementOptions = {
   minSpacingKm: 3,
   minReliefM: 30,
   minGainKm2: 1,
-  backhaul: { minMarginDb: 6, maxKm: 30 },
+  backhaul: { ...DEFAULT_BACKHAUL },
 };
 
 export interface BackhaulLink {
@@ -134,9 +145,9 @@ export function circleRing(lat: number, lon: number, radiusKm: number, steps = 9
 
 export function describeStop(r: PlacementResult): string {
   const n = r.suggestions.length;
-  if (n === 0 && r.stoppedBecause === "backhaul") return "No high point could link back to your network with the required margin. Lower the margin, allow a longer link, or switch the requirement off.";
+  if (n === 0 && r.stoppedBecause === "backhaul") return "No high point has a good enough link back to your network (enough margin, and not blocked). Lower the margin, allow a longer link, or allow blocked paths.";
   if (n === 0) return "No site adds enough new coverage. Lower the minimum gain or widen the area.";
   if (r.stoppedBecause === "gain") return `Stopped after ${n}: the next best site would add less than the minimum gain.`;
-  if (r.stoppedBecause === "backhaul") return `Stopped after ${n}: no remaining site meets the backhaul requirement.`;
+  if (r.stoppedBecause === "backhaul") return `Stopped after ${n}: no remaining site has a good link to the network${n > 0 ? " and to the sites already chosen" : ""}.`;
   return n < r.requested ? `${n} of ${r.requested} sites.` : "";
 }
