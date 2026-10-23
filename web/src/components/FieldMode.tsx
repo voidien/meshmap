@@ -6,6 +6,7 @@ import { predictAt } from "../engine/fieldPredict";
 import { compass, DELTA_COLORS, deltaClass, fmtDistance, nearestNodes, readingsCsv, type ReadingRow } from "../fieldMath";
 import { flushQueue, loadQueue, newReadingId, saveQueue, type NewReading } from "../fieldQueue";
 import { parseReadingsCsv } from "../readingsImport";
+import { RadioPanel } from "./RadioPanel";
 import { MapView } from "../map/MapView";
 import type { Link, MeshNode, Project } from "../types";
 import { useGeolocation } from "../useGeolocation";
@@ -162,6 +163,17 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
     void sync();
   };
 
+  const saveHeard = (node: string, rs: number, sn: number, text: string) => {
+    if (!pos) return;
+    const reading: NewReading = { id: newReadingId(), nodeRef: node || null, lat: pos.lat, lon: pos.lon, accuracyM: pos.accuracyM || null, rssiDbm: rs, snrDb: sn, note: text, takenAt: Math.round(Date.now() / 1000) };
+    setQueue((q) => {
+      const next = [...q, reading];
+      saveQueue(project.id, next);
+      return next;
+    });
+    void sync();
+  };
+
   const remove = async (r: ReadingRow) => {
     if (queue.some((q) => q.id === r.id)) {
       const q = queue.filter((x) => x.id !== r.id);
@@ -296,6 +308,18 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
         {tab === "record" ? (
           <fieldset className="plain" disabled={!canWrite}>
             {!canWrite ? <p className="hint">Viewers can look but not record readings.</p> : null}
+            <RadioPanel
+              nodes={project.nodes}
+              canWrite={canWrite}
+              hasPosition={!!pos}
+              onUse={(id, rs, sn) => {
+                setNodeId(id);
+                setRssi(String(rs));
+                setSnr(String(sn));
+                setNote("from radio");
+              }}
+              onAutoSave={saveHeard}
+            />
             <label className="field">
               <span>Heard from node</span>
               <select value={nodeId} onChange={(e) => setNodeId(e.target.value)}>

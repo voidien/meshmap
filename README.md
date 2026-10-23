@@ -122,7 +122,15 @@ you calibrate). Both antennas stay on the ground (heights are above ground).
 Take readings (Field mode: tap a reading at your location with the node you can hear, or *Import CSV*: columns
 `lat,lon,rssi[,snr,node,note,time,accuracy]`), some in the open near a node (these check antenna/power settings) and some through trees at
 different depths and distances. Then open **Calibrate foliage** and *Use the best scale*. Readings can come from the app typed by hand, from a
-radio's app (note RSSI/SNR with location), or CSV. The app does not connect to a radio itself.
+radio's app (note RSSI/SNR with location), CSV, or **straight from a MeshCore radio** (below).
+
+### Connecting a MeshCore radio (Field mode → Record)
+*Connect with Bluetooth* or *Connect with USB* pairs a MeshCore **companion** radio with the page (Web Bluetooth: Chrome on Android or
+desktop, not iPhone/Safari; Web Serial: Chrome/Edge on desktop). The radio reports the RSSI/SNR of every packet it hears; the page uses only
+**adverts heard directly from a node (no repeater in between)**, because only those tell about one path. Put a project node's name on the
+fixed radio (the page matches adverts to project nodes by name, or pick the node in the list), send an advert from it, and walk. *Use* fills the
+form; *Save a reading automatically* records one per node every 10 s at your GPS position. Close the MeshCore phone app first: a radio talks
+to one app at a time. This follows the official meshcore.js protocol and is tested with simulated packets, **not yet with real hardware**.
 
 ## Placement suggestions
 
