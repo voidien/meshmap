@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectSync } from "./useProjectSync";
 import { useCoverage } from "./useCoverage";
 import { CoveragePanel } from "./components/CoveragePanel";
+import { PlacementPanel } from "./components/PlacementPanel";
+import { usePlacement } from "./usePlacement";
+import { DEFAULT_PLACEMENT, placementRequest, type Area, type PlacementOptions, type Suggestion } from "./placement";
 import type { AuthContext } from "./auth/AuthGate";
 import { AccountMenu } from "./components/AccountMenu";
 import { AdminPanel } from "./components/AdminPanel";
@@ -55,6 +58,10 @@ export function App({ auth }: { auth: AuthContext }) {
   const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [addMode, setAddMode] = useState(false);
+  const [placementArea, setPlacementArea] = useState<Area | null>(null);
+  const [pickingArea, setPickingArea] = useState(false);
+  const [placementOpts, setPlacementOpts] = useState<PlacementOptions>(DEFAULT_PLACEMENT);
+  const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dialog, setDialog] = useState<"account" | "admin" | "share" | null>(null);
@@ -116,6 +123,25 @@ export function App({ auth }: { auth: AuthContext }) {
     [cov.layers],
   );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
+  const placement = usePlacement(project.id);
+  const placementTemplate = project.nodes.find((n) => n.id === templateId) ?? null;
+  const placementReq = useMemo(
+    () => (placementArea ? placementRequest(placementArea, placementTemplate, project.nodes, project.settings, placementOpts) : null),
+    [placementArea, placementTemplate, project.nodes, project.settings, placementOpts],
+  );
+  const ranSig = useRef<string | null>(null);
+  const placementResult = placement.job?.state === "done" ? placement.job.result : null;
+  const placementSites = useMemo(() => (placementResult?.suggestions ?? []).map((x) => ({ rank: x.rank, lat: x.lat, lon: x.lon })), [placementResult]);
+  const placementOnMap = useMemo(() => ({ area: placementArea, sites: placementSites }), [placementArea, placementSites]);
+  const addSuggestion = (x: Suggestion) => {
+    const t = placementTemplate;
+    const n = newNode(project.nodes, x.lat, x.lon, `Site ${x.rank}`);
+    const node = t ? { ...n, heightM: t.heightM, clientHeightM: t.clientHeightM, txDbm: t.txDbm, gainDbi: t.gainDbi, cableLossDb: t.cableLossDb, presetId: t.presetId } : n;
+    setProject((p) => ({ ...p, nodes: [...p.nodes, node] }));
+    setSelectedNode(node.id);
+    setSelectedLink(null);
+    setFocus({ lat: x.lat, lon: x.lon, key: Date.now() });
+  };
   const selLink = selectedLink ? links.find((l) => l.key === selectedLink) ?? null : null;
   const counts = useMemo(() => {
     const c = { clear: 0, marginal: 0, obstructed: 0, none: 0 };
@@ -203,6 +229,11 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const onMapClick = useCallback(
     (lat: number, lon: number) => {
+      if (pickingArea) {
+        setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
+        setPickingArea(false);
+        return;
+      }
       const id = uid();
       setProject((p) => ({
         ...p,
@@ -215,7 +246,7 @@ export function App({ auth }: { auth: AuthContext }) {
       setSelectedLink(null);
       setAddMode(false);
     },
-    [setProject],
+    [setProject, pickingArea],
   );
 
   const onNodeMove = useCallback(
@@ -360,7 +391,7 @@ export function App({ auth }: { auth: AuthContext }) {
       <aside className="side">
         <header>
           <h1>meshmap</h1>
-          <span className="ver">v4 · estimates only</span>
+          <span className="ver">v5 · estimates only</span>
         </header>
         <div className="userbar">
           <span className="who" title={auth.user.username}>
@@ -457,6 +488,34 @@ export function App({ auth }: { auth: AuthContext }) {
           onRemove={cov.remove}
           onChange={cov.patch}
         />
+        <PlacementPanel
+          nodes={project.nodes}
+          area={placementArea}
+          onArea={setPlacementArea}
+          picking={pickingArea}
+          onPick={(on) => {
+            setPickingArea(on);
+            if (on) setAddMode(false);
+          }}
+          options={placementOpts}
+          onOptions={setPlacementOpts}
+          templateId={templateId}
+          onTemplate={setTemplateId}
+          job={placement.job}
+          error={placement.error}
+          running={placement.running}
+          readOnly={readOnly}
+          hasStale={!!placementReq && !!ranSig.current && ranSig.current !== JSON.stringify(placementReq)}
+          onRun={() => {
+            if (!placementReq) return;
+            ranSig.current = JSON.stringify(placementReq);
+            void placement.start(placementReq);
+          }}
+          onCancel={() => void placement.cancel()}
+          onClear={placement.clear}
+          onZoom={(x) => setFocus({ lat: x.lat, lon: x.lon, key: Date.now() })}
+          onAdd={addSuggestion}
+        />
         <fieldset className="plain" disabled={readOnly}>
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
         </fieldset>
@@ -517,6 +576,8 @@ export function App({ auth }: { auth: AuthContext }) {
           focus={focus}
           selectedLinkKey={selectedLink}
           addMode={addMode}
+          pickMode={pickingArea}
+          placement={placementOnMap}
           terrain3d={terrain3d}
           onMapClick={onMapClick}
           onNodeSelect={onNodeSelect}

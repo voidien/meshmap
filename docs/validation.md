@@ -83,6 +83,20 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   no foliage or building-penetration loss, seasons are ignored, and antennas stay on the ground (their height is above ground,
   not above clutter). Heatmaps over areas without clutter data silently use bare earth, which the UI reports as a percentage.
 
+## Placement suggestions: `crates/meshmap-server/src/placement.rs`
+
+- Server tests (`tests/placement.rs`, synthetic terrain): chosen sites lie inside the target; each pick's gain is positive and
+  never larger than the one before (the greedy property); cumulative coverage only grows; existing nodes count as already
+  covering (baseline above zero and a smaller first gain than from nothing) and no site is placed within 1 km of one; an
+  impossible backhaul requirement yields no sites and says why, and a feasible one lists each chosen site's links with
+  margins; bad requests are rejected and an area without enough relief is explained; asking twice is answered from the cache.
+- Manual run on real terrain (Asheville NC, one node, 20 km area, 2 sites, backhaul 6 dB): 43 % then 63 % covered, each
+  site listed with its elevation, relief and a link back to the network.
+- **Not validated:** the suggestions are only as good as the coverage prediction (see above), and the greedy method is the
+  standard approximation for maximum coverage (within 63 % of the best possible for the candidates considered, not of every
+  possible site). Candidates are high points only, so a valley town that needs a low site is not found. Tall masts, towers and
+  existing buildings are not considered. No comparison with a human planner's choices or with measurements.
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.

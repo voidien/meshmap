@@ -2,7 +2,7 @@
 
 use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
-use crate::jobs::{self, CoverageRequest, JobOut, JOB_COLS};
+use crate::jobs::{self, JobOut, JobRequest, JOB_COLS};
 use crate::projects::need_role;
 use crate::state::Shared;
 use axum::body::Body;
@@ -27,11 +27,12 @@ struct CreateQuery {
     cached_only: bool,
 }
 
-async fn create(State(state): State<Shared>, u: AuthUser, Path(project_id): Path<String>, Query(q): Query<CreateQuery>, Json(req): Json<CoverageRequest>) -> Result<Response, ApiError> {
+async fn create(State(state): State<Shared>, u: AuthUser, Path(project_id): Path<String>, Query(q): Query<CreateQuery>, Json(body): Json<serde_json::Value>) -> Result<Response, ApiError> {
     use axum::response::IntoResponse;
     let (pid, uid) = (project_id.clone(), u.user.id.clone());
     state.db.call(move |c| need_role(c, &pid, &uid).map(|_| ())).await?;
-    jobs::validate(&req)?;
+    let req = JobRequest::parse(body)?;
+    req.validate()?;
     if q.cached_only && !jobs::is_cached(&state, &req) {
         return Ok(StatusCode::NO_CONTENT.into_response());
     }

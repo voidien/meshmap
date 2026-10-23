@@ -133,3 +133,13 @@ fieldset.plain:disabled { opacity: .6; }
 .legend-row i { display: inline-block; width: 12px; height: 10px; margin-right: 4px; vertical-align: middle; border-radius: 2px; }
 .layers .lrow.wrap { flex-wrap: wrap; }
 .layers .lrow.wrap input[type=range] { min-width: 90px; }
+
+.site-marker { width: 26px; height: 26px; border-radius: 50%; background: #7c3aed; color: #fff; font: 700 13px/26px system-ui, sans-serif; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.5); }
+.suggestions { margin-top: 8px; }
+.sites { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.sites > li { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.sites .lrow { display: flex; align-items: center; gap: 8px; }
+.sites .rank { display: inline-block; min-width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: #7c3aed; color: #fff; font-size: 12px; }
+.sites .backhaul { margin: 2px 0 4px 16px; padding: 0; }
+.linkbtn { background: none; border: 0; color: var(--accent, #2457d6); padding: 2px 0; margin-bottom: 6px; cursor: pointer; text-decoration: underline; }
+.field.wide { grid-column: 1 / -1; }

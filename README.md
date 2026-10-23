@@ -102,6 +102,15 @@ Where a pack covers a path, a link's profile shows **bare earth and terrain + cl
 Terrain model* picks which one colors links and heatmaps. Heatmap cards say how much of the area had clutter data. Clutter is
 treated as solid obstacles: there is no foliage loss, and both antennas stay on the ground (heights are above ground).
 
+## Placement suggestions
+
+*Suggest new sites* (left panel) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),
+choose how many sites, and optionally require each to link back to the network with a minimum margin. The server finds the
+high points in the area, predicts coverage from each, and picks sites one at a time, each the one that newly covers the most
+of the area, counting what your nodes and the earlier picks already cover. Each result lists the new area covered, the running
+total, elevation and relief, and the links back to your network; "Add as node" turns a site into a node. Results are cached
+like heatmaps.
+
 ## What to verify
 
 1. **Add nodes**: "+ Add node", click the map; edit height, TX power, gain, cable loss, preset, status, notes.
@@ -128,7 +137,10 @@ treated as solid obstacles: there is no foliage loss, and both antennas stay on 
    The "Names" button toggles name labels on the map.
 11. **Clutter** (needs a pack): open a link across wooded or built-up ground; the profile shows the tree/building layer and a table
    with bare earth vs terrain + clutter. Flip *Terrain model* in settings and watch link colors and heatmaps change.
-12. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+12. **Placement**: in *Suggest new sites* click "Around my nodes" (or pick an area on the map), set 2 sites and click
+    *Suggest sites*; numbered markers appear with the km² each adds and its links; "Add as node" adds one. Turning the backhaul
+    requirement off, or raising its margin, changes the result.
+13. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

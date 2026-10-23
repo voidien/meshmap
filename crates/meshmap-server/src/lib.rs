@@ -10,6 +10,7 @@ pub mod jobs_api;
 pub mod packs;
 pub mod packs_api;
 pub mod passkeys;
+pub mod placement;
 pub mod projects;
 pub mod state;
 pub mod terrain;

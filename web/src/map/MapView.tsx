@@ -6,6 +6,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 
 maplibregl.setWorkerUrl(workerUrl);
 import { TERRAIN_TILE_URL } from "../engine/terrain";
+import { circleRing, type Area } from "../placement";
 import type { Link, MeshNode } from "../types";
 
 export const LINK_COLORS = { clear: "#1a9850", marginal: "#e0a800", obstructed: "#d73027", none: "#8a8a8a" } as const;
@@ -29,7 +30,11 @@ interface Props {
   /** Ask the map to centre on a point; a new `key` triggers a move. */
   focus: { lat: number; lon: number; key: number } | null;
   selectedLinkKey: string | null;
+  /** The area being planned for and the sites suggested for it. */
+  placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
   addMode: boolean;
+  /** Next click chooses the planning area instead. */
+  pickMode: boolean;
   terrain3d: boolean;
   onMapClick: (lat: number, lon: number) => void;
   onNodeSelect: (id: string | null) => void;
@@ -97,6 +102,7 @@ export function MapView(p: Props) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const loaded = useRef(false);
   const markers = useRef(new Map<string, maplibregl.Marker>());
+  const siteMarkers = useRef<maplibregl.Marker[]>([]);
   const latest = useRef(p);
   latest.current = p;
 
@@ -116,6 +122,9 @@ export function MapView(p: Props) {
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
     map.on("load", () => {
+      map.addSource("placement-area", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: "placement-fill", type: "fill", source: "placement-area", paint: { "fill-color": "#7c3aed", "fill-opacity": 0.06 } });
+      map.addLayer({ id: "placement-line", type: "line", source: "placement-area", paint: { "line-color": "#7c3aed", "line-width": 2, "line-dasharray": [3, 2] } });
       map.addSource("links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addSource("ghost-links", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addSource("ghost-nodes", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -158,11 +167,12 @@ export function MapView(p: Props) {
       });
       loaded.current = true;
       syncAll();
+      syncPlacement();
     });
 
     map.on("click", (e) => {
       const c = latest.current;
-      if (c.addMode && !c.readOnly) {
+      if (c.pickMode || (c.addMode && !c.readOnly)) {
         c.onMapClick(e.lngLat.lat, e.lngLat.lng);
         return;
       }
@@ -263,6 +273,27 @@ export function MapView(p: Props) {
 
   useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly]);
 
+  // the planning area and suggested sites
+  function syncPlacement() {
+    const map = mapRef.current;
+    if (!map || !loaded.current) return;
+    const pl = latest.current.placement;
+    const a = pl.area;
+    (map.getSource("placement-area") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: a ? [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circleRing(a.lat, a.lon, a.radiusKm)] } }] : [],
+    });
+    for (const m of siteMarkers.current) m.remove();
+    siteMarkers.current = pl.sites.map((s) => {
+      const el = document.createElement("div");
+      el.className = "site-marker";
+      el.textContent = String(s.rank);
+      el.title = `Suggested site ${s.rank}`;
+      return new maplibregl.Marker({ element: el }).setLngLat([s.lon, s.lat]).addTo(map);
+    });
+  }
+  useEffect(syncPlacement, [p.placement]);
+
   // coverage heatmaps: one image source + raster layer each, kept in step with the list
   useEffect(() => {
     const map = mapRef.current;
@@ -315,8 +346,8 @@ export function MapView(p: Props) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map) map.getCanvas().style.cursor = p.addMode ? "crosshair" : "";
-  }, [p.addMode]);
+    if (map) map.getCanvas().style.cursor = p.addMode || p.pickMode ? "crosshair" : "";
+  }, [p.addMode, p.pickMode]);
 
   useEffect(() => {
     const map = mapRef.current;

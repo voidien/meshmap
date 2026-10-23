@@ -44,6 +44,9 @@ pub struct NodeIn {
     /// Height of the client device this node is predicted against; the request's client height when absent.
     #[serde(default)]
     pub client_height_m: Option<f64>,
+    /// Only used to label results.
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,7 +113,7 @@ pub struct CoverageRequest {
     pub terrain: String,
 }
 
-fn default_terrain() -> String {
+pub(crate) fn default_terrain() -> String {
     "bare".into()
 }
 
@@ -188,7 +191,7 @@ pub fn terrain_id(state: &Shared) -> String {
     format!("{}|{}", state.jobs.terrain.id(), state.packs().fingerprint())
 }
 
-fn sha(v: &Value) -> String {
+pub(crate) fn sha(v: &Value) -> String {
     hex::encode(Sha256::digest(v.to_string().as_bytes()))
 }
 
@@ -216,6 +219,50 @@ pub fn request_hash(r: &CoverageRequest, terrain_id: &str) -> String {
     hashes.sort();
     hashes.dedup();
     sha(&json!({ "v": MODEL_VERSION, "kind": "network", "nodes": hashes, "resolutionM": r.resolution_m }))
+}
+
+/// Any job a client can ask for.
+#[derive(Debug, Clone)]
+pub enum JobRequest {
+    Coverage(CoverageRequest),
+    Placement(crate::placement::PlacementRequest),
+}
+
+impl JobRequest {
+    /// Pick the type by the request's `kind`.
+    pub fn parse(v: Value) -> Result<Self, ApiError> {
+        let bad = |e: serde_json::Error| ApiError::bad(format!("Invalid job request: {e}"));
+        if v.get("kind").and_then(Value::as_str) == Some("placement") {
+            serde_json::from_value(v).map(Self::Placement).map_err(bad)
+        } else {
+            serde_json::from_value(v).map(Self::Coverage).map_err(bad)
+        }
+    }
+    pub fn kind(&self) -> &str {
+        match self {
+            Self::Coverage(r) => &r.kind,
+            Self::Placement(r) => &r.kind,
+        }
+    }
+    pub fn validate(&self) -> Result<(), ApiError> {
+        match self {
+            Self::Coverage(r) => validate(r),
+            Self::Placement(r) => r.validate(),
+        }
+    }
+    pub fn hash(&self, terrain_id: &str) -> String {
+        match self {
+            Self::Coverage(r) => request_hash(r, terrain_id),
+            Self::Placement(r) => r.hash(terrain_id),
+        }
+    }
+    pub fn to_json(&self) -> Result<String, ApiError> {
+        let v = match self {
+            Self::Coverage(r) => serde_json::to_string(r),
+            Self::Placement(r) => serde_json::to_string(r),
+        };
+        v.map_err(|e| ApiError::internal(e.to_string()))
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -280,7 +327,7 @@ impl Jobs {
 }
 
 #[derive(Debug)]
-enum Fail {
+pub(crate) enum Fail {
     Cancelled,
     Failed(String),
 }
@@ -332,7 +379,7 @@ fn read_cov(path: &Path) -> Option<Raster> {
     Some(Raster { width: w, height: h, x0, y0, cell_m: cell, bounds: meshmap_coverage::Bounds { west, south, east, north }, data: b[37..].to_vec() })
 }
 
-fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -396,11 +443,11 @@ fn stats_json(s: &meshmap_coverage::NetworkStats) -> Value {
 
 // ---- executing a job ---------------------------------------------------------------------------------------------------
 
-struct Ctx<'a> {
-    state: &'a Shared,
-    cancel: &'a AtomicBool,
+pub(crate) struct Ctx<'a> {
+    pub(crate) state: &'a Shared,
+    pub(crate) cancel: &'a AtomicBool,
     /// fraction 0..=1 of the whole job, and a short message
-    progress: &'a (dyn Fn(f64, &str) + Sync),
+    pub(crate) progress: &'a (dyn Fn(f64, &str) + Sync),
 }
 
 fn terrain_prefetch(ctx: &Ctx, sampler: &Sampler, p: &NodeParams, span: (f64, f64), label: &str) -> Result<(), Fail> {
@@ -416,14 +463,17 @@ fn terrain_prefetch(ctx: &Ctx, sampler: &Sampler, p: &NodeParams, span: (f64, f6
 }
 
 /// The raster for one node: from the cache, or computed (terrain download, then prediction) and cached.
-fn node_raster(ctx: &Ctx, req: &CoverageRequest, i: usize, hash: &str, sampler: &Sampler, span: (f64, f64), label: &str) -> Result<Raster, Fail> {
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn node_raster(ctx: &Ctx, req: &CoverageRequest, i: usize, hash: &str, sampler: &Sampler, span: (f64, f64), label: &str, clear: bool) -> Result<Raster, Fail> {
     let dir = &ctx.state.cfg.cache_dir;
     if let Some(r) = read_cov(&cache_path(dir, hash, "cov")) {
         (ctx.progress)(span.1, &format!("{label}using cached result"));
         return Ok(r);
     }
     let p = node_params(req, &req.nodes[i]);
-    sampler.clear();
+    if clear {
+        sampler.clear();
+    }
     let split = span.0 + (span.1 - span.0) * 0.25;
     terrain_prefetch(ctx, sampler, &p, (span.0, split), label)?;
     let report = |f: f64| (ctx.progress)(split + (span.1 - split) * f, &format!("{label}predicting coverage"));
@@ -453,7 +503,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
     };
 
     let result = if req.kind == "coverage_node" {
-        let raster = node_raster(ctx, req, 0, hash, &sampler, (0.0, 0.97), "")?;
+        let raster = node_raster(ctx, req, 0, hash, &sampler, (0.0, 0.97), "", true)?;
         let rgba: Vec<u8> = raster.data.iter().flat_map(|&v| margin_rgba(v)).collect();
         write_png("margin.png", raster.width, raster.height, &rgba)?;
         let net = meshmap_coverage::composite_network(&[&raster]).map_err(Fail::Failed)?;
@@ -487,7 +537,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
                 (ctx.progress)(span.1, &format!("{label}duplicate"));
                 continue;
             }
-            let r = node_raster(ctx, req, i, &h, &sampler, span, &label)?;
+            let r = node_raster(ctx, req, i, &h, &sampler, span, &label, true)?;
             builder.merge(&r);
             if ctx.cancel.load(Ordering::Relaxed) {
                 return Err(Fail::Cancelled);
@@ -608,9 +658,13 @@ fn run_claimed(state: &Shared, job: &Claimed) {
         if let Some(v) = cached_result(&state.cfg.cache_dir, &job.hash) {
             return Ok(v);
         }
-        let req: CoverageRequest = serde_json::from_str(&job.params).map_err(|e| Fail::Failed(format!("bad job parameters: {e}")))?;
+        let v: Value = serde_json::from_str(&job.params).map_err(|e| Fail::Failed(format!("bad job parameters: {e}")))?;
+        let req = JobRequest::parse(v).map_err(|e| Fail::Failed(format!("bad job parameters: {}", e.message)))?;
         let ctx = Ctx { state, cancel: &cancel, progress: &progress };
-        execute(&ctx, &req, &job.hash)
+        match &req {
+            JobRequest::Coverage(r) => execute(&ctx, r, &job.hash),
+            JobRequest::Placement(r) => crate::placement::execute(&ctx, r, &job.hash),
+        }
     })();
 
     let t = now();
@@ -671,11 +725,12 @@ pub fn find_job(c: &Connection, id: &str) -> Result<Option<JobOut>, ApiError> {
 
 /// Insert a job for `project_id`: finished at once when the result is cached, attached to an identical
 /// queued/running job of the same project when there is one, else queued.
-pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageRequest) -> Result<(JobOut, bool), ApiError> {
+pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &JobRequest) -> Result<(JobOut, bool), ApiError> {
     let terrain_id = terrain_id(state);
-    let hash = request_hash(req, &terrain_id);
+    let hash = req.hash(&terrain_id);
     let cached = cached_result(&state.cfg.cache_dir, &hash);
-    let params_json = serde_json::to_string(req).map_err(|e| ApiError::internal(e.to_string()))?;
+    let params_json = req.to_json()?;
+    let kind = req.kind().to_string();
     let (pid, uid) = (project_id.to_string(), user_id.to_string());
     let dir = state.cfg.cache_dir.clone();
     state.db.blocking(|c| {
@@ -698,7 +753,7 @@ pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageReq
                 c.execute(
                     "INSERT INTO jobs (id, project_id, user_id, kind, input_hash, params, state, progress, message, result, created_at, started_at, finished_at) \
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'done', 1, 'Done (cached)', ?7, ?8, ?8, ?8)",
-                    params![id, pid, uid, req.kind, hash, params_json, v.to_string(), t],
+                    params![id, pid, uid, kind, hash, params_json, v.to_string(), t],
                 )?;
                 c.execute("UPDATE artifacts SET last_used = ?2 WHERE hash = ?1", params![hash, t])?;
                 let _ = record_artifact(c, &dir, &hash);
@@ -706,7 +761,7 @@ pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageReq
             None => {
                 c.execute(
                     "INSERT INTO jobs (id, project_id, user_id, kind, input_hash, params, state, progress, message, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', 0, 'Queued', ?7)",
-                    params![id, pid, uid, req.kind, hash, params_json, t],
+                    params![id, pid, uid, kind, hash, params_json, t],
                 )?;
             }
         }
@@ -715,6 +770,6 @@ pub fn submit(state: &Shared, project_id: &str, user_id: &str, req: &CoverageReq
 }
 
 /// Is there already a stored result for this request?
-pub fn is_cached(state: &Shared, req: &CoverageRequest) -> bool {
-    cached_result(&state.cfg.cache_dir, &request_hash(req, &terrain_id(state))).is_some()
+pub fn is_cached(state: &Shared, req: &JobRequest) -> bool {
+    cached_result(&state.cfg.cache_dir, &req.hash(&terrain_id(state))).is_some()
 }
