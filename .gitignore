@@ -5,3 +5,8 @@ web/src/wasm/pkg/
 *.log
 .env
 /data/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
