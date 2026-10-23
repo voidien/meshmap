@@ -7,6 +7,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-
 public ~30 m tiles and the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see
 [`docs/validation.md`](docs/validation.md)). No clutter (trees, buildings) yet.
 
+The side panels (comments, mesh health, coverage, suggestions, settings, nodes, links, import/export) start **collapsed** to save scrolling: click a heading to open or close it, or use *Expand all* / *Collapse all* above them. Your choice is remembered, and selecting a node opens its panel. The map cursor is a thin **precision crosshair** by default (red while a click will place something); change it under *Layers* → *Cursor on the map* (precision crosshair, standard crosshair, or the hand).
+
 Everything in this guide, the architecture and plan, the validation notes and the terrain-pack guide is also available inside the app under **Help** (top of the left panel).
 
 ## Layout
@@ -118,14 +120,14 @@ like heatmaps.
 - **Publish** (project switcher): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).
 - **Comments**: on a project (everyone it is shared with, viewers included) or on a published copy (everyone). Comment on the project, a selected node or a selected link; the owner (or the author) can resolve or delete.
 - **Antenna patterns** (node panel): omnidirectional, directional (beamwidth, front-to-back, pointing direction, "aim at node") or an imported MSI Planet / CSV pattern file. Links and heatmaps use the gain in the direction of each link. Horizontal plane only.
-- **Field mode** (button in the toolbar; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
+- **Field mode** (the *Field* button in the toolbar; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
 - **Elevation on the map**: the **Layers** button (top left of the map) switches shaded relief, **elevation colours** and **contour lines** (metres or feet; spacing follows the zoom, zoom in past about level 10 to see them). A readout at the bottom left shows the ground elevation under the pointer (and, where a terrain pack has clutter data, the height of trees/buildings and the surface height). **Right-click** anywhere for the same numbers, the data source, the nearest node with distance and direction, copy coordinates, add a node there, or start a site search around it. Elevations come from the same terrain data as the predictions (a pack where you have one, otherwise public ~30 m tiles), so they match the profiles; they are not survey-grade.
 - **Mesh health** (left panel): from the usable links (margin at or above a threshold in both directions) it shows how many nodes are connected, the separate groups, **single points of failure** (nodes whose loss cuts others off), **links that are the only way**, hop counts from your **gateways** (mark a node as Gateway in its panel; hop limit defaults to Meshtastic's 3), nodes that cannot reach a gateway, and a **what-if** that removes any node and shows who loses contact. Problems are marked on the map. Without a gateway, "connected" means part of the largest group; a lone gateway counts as a single point of failure.
 - **Site report** (node panel): a printable page with the location, a map picture, equipment, antenna pattern, expected links with terrain profiles, coverage numbers if computed, field readings, comments and the assumptions. Use *Print or save as PDF*.
 
 ## What to verify
 
-1. **Add nodes**: "+ Add node", click the map; edit height, TX power, gain, cable loss, preset, status, notes.
+1. **Add nodes**: "+ Node", click the map (or right-click the map and choose "Add a node here"); edit height, TX power, gain, cable loss, preset, status, notes.
 2. **Links**: nodes within *max range* (default 50 km) get colored links: green clear, yellow marginal, red obstructed.
    Out-of-range ("none") links are hidden unless enabled in settings.
 3. **Drag a node**: links update live (coarser terrain sampling while dragging, full resolution on release).

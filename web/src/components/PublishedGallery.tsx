@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Card } from "./Card";
 import { api } from "../api";
 import { ago, type Publication } from "../collab";
 
@@ -32,8 +33,7 @@ export function PublishedGallery({ openId, onOpen, reloadKey }: Props) {
   }, [items, q]);
 
   return (
-    <section className="card" id="published-gallery">
-      <h3>Published projects</h3>
+    <Card id="gallery" domId="published-gallery" title="Published projects" defaultOpen>
       <p className="hint">Shared by people on this site. Open one to look around, read and add comments, or copy it into your own projects.</p>
       <input type="search" placeholder="Search title, description or person…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search published projects" />
       {error ? <p className="err">{error}</p> : null}
@@ -53,6 +53,6 @@ export function PublishedGallery({ openId, onOpen, reloadKey }: Props) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }

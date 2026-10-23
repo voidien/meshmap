@@ -9,6 +9,7 @@ import type { Comment, FieldReading } from "./collab";
 import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPanel";
 import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
 import { linkKey } from "./engine/analysis";
+import { Card, openPanel, setAllPanels } from "./components/Card";
 import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
@@ -560,6 +561,11 @@ export function App({ auth }: { auth: AuthContext }) {
             Published
           </button>
         </div>
+        <div className="panelbar">
+          <span className="lmeta">Panels</span>
+          <button className="linkbtn" onClick={() => setAllPanels(true)}>Expand all</button>
+          <button className="linkbtn" onClick={() => setAllPanels(false)}>Collapse all</button>
+        </div>
         {section === "published" ? (
           <>
             <PublishedGallery openId={viewPub?.id ?? null} onOpen={(p) => void openPublication(p)} reloadKey={pubReload} />
@@ -597,16 +603,16 @@ export function App({ auth }: { auth: AuthContext }) {
         {section === "mine" ? <input className="pname" value={project.name} readOnly={readOnly || project.role !== "owner"} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" title={project.role === "owner" ? "" : "Only the owner can rename"} /> : null}
         <div className="toolbar">
           <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
-            {addMode ? "Click the map…" : "+ Add node"}
+            {addMode ? "Click the map…" : "+ Node"}
           </button>
-          <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)}>
-            3D terrain
+          <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)} title="Tilted 3D terrain">
+            3D
           </button>
           <button className={showLabels ? "on" : ""} onClick={() => setShowLabels((v) => !v)} title="Show node names on the map">
             Names
           </button>
           <button id="field-mode-btn" onClick={() => setFieldMode(true)} disabled={!ready || !!pubProject || !project.id} title="Phone-friendly view for standing at a site: GPS, predicted signal here, record readings">
-            Field mode
+            Field
           </button>
         </div>
         <div className="status">
@@ -619,7 +625,7 @@ export function App({ auth }: { auth: AuthContext }) {
         </div>
 
         <fieldset className="plain" disabled={readOnly}>
-        {sel ? <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} /> : <p className="hint card">{readOnly ? "You can look at this project but not change it." : "Click “Add node”, then click the map. Drag nodes to see links update. Click a link for its terrain profile."}</p>}
+        {sel ? <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} /> : <p className="hint tight">{readOnly ? "View only." : "“+ Node”, then click the map. Click a link for its profile."}</p>}
         </fieldset>
 
         {project.id && (pubProject || section === "mine") ? (
@@ -713,8 +719,7 @@ export function App({ auth }: { auth: AuthContext }) {
         ) : null}
         <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => { setSelectedLink(k); setSelectedNode(null); }} />
 
-        <section className="card">
-          <h3>Import / export</h3>
+        <Card id="export" title="Import / export">
           <div className="btnrow">
             <button onClick={() => fileInput.current?.click()}>Import files…</button>
             <button onClick={() => download(`${slug}.meshmap.json`, JSON.stringify(project, null, 2), "application/json")}>Save JSON</button>
@@ -728,7 +733,7 @@ export function App({ auth }: { auth: AuthContext }) {
           </div>
           <input ref={fileInput} type="file" multiple accept=".json,application/json" hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) void importFiles(fs); e.target.value = ""; }} />
           <p className="hint">Import accepts meshmap JSON and MeshCore coverage_layers JSON; select several files to load each as its own project. Your projects are saved to your account automatically.</p>
-        </section>
+        </Card>
         <section className="legend card">
           <span><i style={{ background: "#1a9850" }} />clear</span>
           <span><i style={{ background: "#e0a800" }} />marginal</span>
@@ -763,7 +768,8 @@ export function App({ auth }: { auth: AuthContext }) {
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
           onPlanAround={pubProject ? undefined : (lat, lon) => {
             setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
-            setTimeout(() => document.getElementById("placement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+            openPanel("placement");
+            setTimeout(() => document.getElementById("placement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
           }}
         />
         {selLink && nodeById.get(selLink.a) && nodeById.get(selLink.b) ? (

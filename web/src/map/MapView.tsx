@@ -9,6 +9,7 @@ import { TERRAIN_TILE_URL } from "../engine/terrain";
 import { circleRing, type Area } from "../placement";
 import { beamGeoJSON } from "./beams";
 import { buildContours } from "./contours";
+import { cursorCss } from "./cursors";
 import { DEFAULT_LAYERS, ElevationReadout, LayersControl, loadLayers, MapContextMenu, RELIEF_STOPS, saveLayers, type MapLayers, type MenuState } from "./MapOverlays";
 import { terrain, type SpotInfo } from "../engine/terrain";
 import type { Link, MeshNode } from "../types";
@@ -130,6 +131,8 @@ export function MapView(p: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const contourTimer = useRef<number | undefined>(undefined);
   const contourSeq = useRef(0);
+  /** the cursor to show when the pointer is not over something clickable */
+  const baseCursor = useRef("");
   const latest = useRef(p);
   latest.current = p;
 
@@ -263,7 +266,7 @@ export function MapView(p: Props) {
     map.on("mousemove", (e) => {
       if (latest.current.addMode) return;
       const over = map.queryRenderedFeatures(e.point, { layers: ["links-hit"] }).length > 0;
-      map.getCanvas().style.cursor = over ? "pointer" : "";
+      map.getCanvas().style.cursor = over ? "pointer" : baseCursor.current;
     });
 
     return () => {
@@ -475,8 +478,9 @@ export function MapView(p: Props) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (map) map.getCanvas().style.cursor = p.addMode || p.pickMode ? "crosshair" : "";
-  }, [p.addMode, p.pickMode]);
+    baseCursor.current = cursorCss(layers.cursor, p.addMode || p.pickMode);
+    if (map) map.getCanvas().style.cursor = baseCursor.current;
+  }, [p.addMode, p.pickMode, layers.cursor]);
 
   useEffect(() => {
     const map = mapRef.current;

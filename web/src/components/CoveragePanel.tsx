@@ -1,4 +1,5 @@
 import { LEGEND } from "../coverage";
+import { Card } from "./Card";
 import type { CoverageLayer } from "../useCoverage";
 import type { MeshNode } from "../types";
 
@@ -20,8 +21,7 @@ const km2 = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
 /** Coverage heatmaps: start server jobs, watch their progress, tune how the results are drawn. */
 export function CoveragePanel({ layers, staleKeys, selectedNode, nodeCount, radiusKm, resolutionM, onRun, onCancel, onRemove, onChange }: Props) {
   return (
-    <section className="card">
-      <h3>Coverage heatmaps</h3>
+    <Card id="coverage" title="Coverage heatmaps">
       <div className="btnrow">
         <button disabled={!selectedNode} onClick={() => selectedNode && onRun("node", selectedNode.id)} title={selectedNode ? "" : "Select a node first"}>
           {selectedNode ? `Predict “${selectedNode.name.trim() || "node"}”` : "Predict selected node"}
@@ -113,6 +113,6 @@ export function CoveragePanel({ layers, staleKeys, selectedNode, nodeCount, radi
       <p className="hint">
         Margin = predicted signal at a client device minus the receiver sensitivity (Longley-Rice over bare-earth terrain, no trees or buildings). Nothing is drawn where the margin is below 0 dB. An estimate, like everything here.
       </p>
-    </section>
+    </Card>
   );
 }

@@ -18,7 +18,7 @@ export function ProjectSwitcher({ projects, activeId, canFlip, onSelect, onFlip,
   return (
     <section className="card switcher">
       <div className="switchrow">
-        <select value={activeId} onChange={(e) => onSelect(e.target.value)} aria-label="Switch project">
+        <select value={activeId} onChange={(e) => onSelect(e.target.value)} aria-label="Switch project" title="Keys: [ previous · ] next · ` flip back">
           {projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} ({p.nodes.length}){p.role && p.role !== "owner" ? ` · ${p.owner?.displayName ?? "shared"} (${p.role})` : ""}
@@ -44,9 +44,6 @@ export function ProjectSwitcher({ projects, activeId, canFlip, onSelect, onFlip,
           Delete
         </button>
       </div>
-      <p className="hint">
-        Keys: <kbd>[</kbd> previous · <kbd>]</kbd> next · <kbd>`</kbd> flip back
-      </p>
     </section>
   );
 }

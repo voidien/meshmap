@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Card } from "./Card";
 import { api } from "../api";
 import { ago, commentsUrl, type Comment, type CommentScope } from "../collab";
 import type { MeshNode } from "../types";
@@ -71,10 +72,7 @@ export function CommentsPanel({ scope, nodes, selectedNode, selectedLink, title 
 
   const open = comments.filter((c) => !c.resolved).length;
   return (
-    <section className="card" id="comments-panel">
-      <h3>
-        {title ?? "Comments"} <span className="count">({comments.length}{open !== comments.length ? `, ${open} open` : ""})</span>
-      </h3>
+    <Card id="comments" domId="comments-panel" title={<>{title ?? "Comments"} <span className="count">({comments.length}{open !== comments.length ? `, ${open} open` : ""})</span></>}>
       <label className="check">
         <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
         Show every comment, not just about {target.label}
@@ -106,6 +104,6 @@ export function CommentsPanel({ scope, nodes, selectedNode, selectedLink, title 
       <button className="on" disabled={!text.trim() || busy} onClick={() => void send()}>
         Post comment
       </button>
-    </section>
+    </Card>
   );
 }

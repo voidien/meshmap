@@ -1,4 +1,5 @@
 import { getPresets } from "../engine/wasm";
+import { Card } from "./Card";
 import { LINK_COLORS } from "../map/MapView";
 import { AntennaEditor } from "./AntennaEditor";
 import type { Link, MeshNode } from "../types";
@@ -48,8 +49,7 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
 export function NodePanel({ node, connections, others, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
   const presets = getPresets();
   return (
-    <section className="card">
-      <h3>Node</h3>
+    <Card id="node" title={`Node: ${node.name.trim() || "(unnamed)"}`} openWhen={node.id}>
       <label className="field">
         <span>Name</span>
         <input value={node.name} onChange={(e) => onChange({ name: e.target.value })} />
@@ -125,6 +125,6 @@ export function NodePanel({ node, connections, others, onChange, onDelete, onDup
           Delete node
         </button>
       </div>
-    </section>
+    </Card>
   );
 }

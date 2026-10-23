@@ -1,4 +1,5 @@
 import { LINK_COLORS } from "../map/MapView";
+import { Card } from "./Card";
 import type { Link, MeshNode } from "../types";
 
 interface Props {
@@ -16,8 +17,7 @@ export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
     (a, b) => ORDER[a.class] - ORDER[b.class] || (a.result?.margin_db ?? 0) - (b.result?.margin_db ?? 0),
   );
   return (
-    <section className="card">
-      <h3>Links ({links.length})</h3>
+    <Card id="links" title={`Links (${links.length})`}>
       {sorted.length === 0 ? <p className="hint">Add two or more nodes within range to see links.</p> : null}
       <ul className="links">
         {sorted.map((l) => (
@@ -32,6 +32,6 @@ export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
           </li>
         ))}
       </ul>
-    </section>
+    </Card>
   );
 }

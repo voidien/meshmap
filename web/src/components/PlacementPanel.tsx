@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Card } from "./Card";
 import { DEFAULT_BACKHAUL, describeStop, type Area, type PlacementJob, type PlacementOptions, type Suggestion } from "../placement";
 import type { MeshNode } from "../types";
 
@@ -34,8 +35,7 @@ export function PlacementPanel(p: Props) {
   const set = (patch: Partial<PlacementOptions>) => p.onOptions({ ...o, ...patch });
   const r = p.job?.state === "done" ? p.job.result : null;
   return (
-    <section className="card" id="placement-panel">
-      <h3>Suggest new sites</h3>
+    <Card id="placement" domId="placement-panel" title="Suggest new sites">
       <p className="hint">Finds high ground in an area and picks the sites that newly cover the most of it, one after another, counting what your nodes already cover.</p>
 
       <div className="btnrow">
@@ -194,6 +194,6 @@ export function PlacementPanel(p: Props) {
           </ol>
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

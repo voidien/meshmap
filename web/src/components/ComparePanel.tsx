@@ -1,4 +1,5 @@
 import { LINK_COLORS } from "../map/MapView";
+import { Card } from "./Card";
 import { diffLinks, diffNodes, summarize } from "../compare";
 import { wasm } from "../engine/wasm";
 import type { Link, MeshNode, Project } from "../types";
@@ -18,8 +19,7 @@ const dist = (a: number, b: number, c: number, d: number) => wasm.haversine_m(a,
 export function ComparePanel({ current, currentLinks, projects, otherId, otherLinks, busy, onChange }: Props) {
   const other = otherId ? projects.find((p) => p.id === otherId) ?? null : null;
   return (
-    <details className="card" open={!!other}>
-      <summary>Compare setups</summary>
+    <Card id="compare" title="Compare setups" openWhen={other?.id}>
       <label className="field">
         <span>Compare the open project with</span>
         <select value={otherId ?? ""} onChange={(e) => onChange(e.target.value || null)}>
@@ -32,7 +32,7 @@ export function ComparePanel({ current, currentLinks, projects, otherId, otherLi
         </select>
       </label>
       {other ? <Body current={current} currentLinks={currentLinks} other={other} otherLinks={otherLinks} busy={busy} /> : <p className="hint">Pick another project to draw it faintly on the map (dashed lines, grey dots) and see what changed.</p>}
-    </details>
+    </Card>
   );
 }
 

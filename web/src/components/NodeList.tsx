@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Card } from "./Card";
 import { getPresets } from "../engine/wasm";
 import type { Link, MeshNode, NodeStatus } from "../types";
 
@@ -86,10 +87,7 @@ export function NodeList(p: Props) {
   );
 
   return (
-    <section className="card">
-      <h3>
-        Nodes ({p.nodes.length}){checkedIds.length ? ` · ${checkedIds.length} ticked` : ""}
-      </h3>
+    <Card id="nodes" title={`Nodes (${p.nodes.length})${checkedIds.length ? ` · ${checkedIds.length} ticked` : ""}`}>
       <div className="nodes-tools">
         <input placeholder="Search name or notes…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search nodes" />
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort nodes">
@@ -191,6 +189,6 @@ export function NodeList(p: Props) {
         </button>
         {coords && !parsed ? <p className="hint err">Enter “latitude, longitude” in decimal degrees.</p> : null}
       </details>
-    </section>
+    </Card>
   );
 }

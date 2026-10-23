@@ -3,15 +3,17 @@ import { bearingDeg, compass, distanceM, fmtDistance } from "../fieldMath";
 import type { SpotInfo } from "../engine/terrain";
 import type { MeshNode } from "../types";
 import type { Units } from "./contours";
+import type { CursorKind } from "./cursors";
 
 export interface MapLayers {
   relief: boolean;
   contours: boolean;
   hillshade: boolean;
   units: Units;
+  cursor: CursorKind;
 }
 
-export const DEFAULT_LAYERS: MapLayers = { relief: false, contours: false, hillshade: true, units: "m" };
+export const DEFAULT_LAYERS: MapLayers = { relief: false, contours: false, hillshade: true, units: "m", cursor: "precise" };
 const KEY = "meshmap.maplayers";
 
 export function loadLayers(): MapLayers {
@@ -86,6 +88,14 @@ export function LayersControl({ value, onChange }: { value: MapLayers; onChange:
               </div>
             </div>
           ) : null}
+          <label className="field inline">
+            <span>Cursor on the map</span>
+            <select value={value.cursor} onChange={(e) => set({ cursor: e.target.value as CursorKind })} id="cursor-select">
+              <option value="precise">Precision crosshair</option>
+              <option value="crosshair">Standard crosshair</option>
+              <option value="default">Hand</option>
+            </select>
+          </label>
           <p className="hint">Contours are drawn from the same terrain data the predictions use, for the part of the map you see (zoom in to see them).</p>
         </div>
       ) : null}

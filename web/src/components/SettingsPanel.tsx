@@ -1,4 +1,5 @@
 import type { Settings, TerrainMode } from "../types";
+import { Card } from "./Card";
 
 interface Props {
   settings: Settings;
@@ -46,8 +47,7 @@ function Row(props: { label: string; value: number; step: number; min: number; m
 export function SettingsPanel({ settings: s, onChange }: Props) {
   const ground = GROUNDS.find((g) => g.eps === s.groundEpsilon && g.sigma === s.groundSigma)?.id ?? "custom";
   return (
-    <details className="card">
-      <summary>Project settings &amp; assumptions</summary>
+    <Card id="settings" title="Project settings & assumptions">
       <div className="grid2">
         <Row label="Frequency (MHz)" value={s.freqMhz} step={1} min={20} max={20000} onChange={(v) => onChange({ freqMhz: v })} />
         <Row label="k-factor (clearance)" value={Number(s.k.toFixed(3))} step={0.05} min={0.5} onChange={(v) => onChange({ k: v })} />
@@ -143,6 +143,6 @@ export function SettingsPanel({ settings: s, onChange }: Props) {
         <em>clear</em> ≥60&nbsp;% first-Fresnel clearance and margin ≥ threshold; <em>marginal</em> otherwise but margin ≥ 0;{" "}
         <em>obstructed</em> ray blocked or margin &lt; 0; <em>none</em> out of range even in free space or mismatched presets.
       </p>
-    </details>
+    </Card>
   );
 }

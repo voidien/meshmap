@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Card } from "./Card";
 import type { Health, FailureImpact } from "../meshHealth";
 import type { MeshNode } from "../types";
 
@@ -39,8 +40,7 @@ export function MeshHealthPanel({ nodes, health: h, failure, options: o, onOptio
   );
 
   return (
-    <section className="card" id="mesh-health">
-      <h3>Mesh health</h3>
+    <Card id="health" domId="mesh-health" title="Mesh health">
       {nodes.length < 2 ? (
         <p className="hint">Add at least two nodes to see how well they hold together.</p>
       ) : (
@@ -177,6 +177,6 @@ export function MeshHealthPanel({ nodes, health: h, failure, options: o, onOptio
           ) : null}
         </>
       )}
-    </section>
+    </Card>
   );
 }
