@@ -388,7 +388,8 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const dragOrigin = useRef<{ id: string; lat: number; lon: number } | null>(null);
   const undoTimer = useRef(0);
-  const [undoMove, setUndoMove] = useState<{ id: string; lat: number; lon: number } | null>(null);
+  const [undoMoves, setUndoMoves] = useState<{ id: string; lat: number; lon: number }[]>([]);
+  const undoMove = undoMoves[undoMoves.length - 1] ?? null;
 
   const onNodeMove = useCallback(
     (id: string, lat: number, lon: number, isDragging: boolean) => {
@@ -403,8 +404,8 @@ export function App({ auth }: { auth: AuthContext }) {
         dragOrigin.current = null;
         if (Math.abs(o.lat - lat) > 1e-7 || Math.abs(o.lon - lon) > 1e-7) {
           window.clearTimeout(undoTimer.current);
-          setUndoMove(o);
-          undoTimer.current = window.setTimeout(() => setUndoMove(null), 10000);
+          setUndoMoves((u) => [...u, o].slice(-4));
+          undoTimer.current = window.setTimeout(() => setUndoMoves([]), 10000);
         }
       }
     },
@@ -827,10 +828,11 @@ export function App({ auth }: { auth: AuthContext }) {
               onClick={() => {
                 patchNode(undoMove.id, { lat: undoMove.lat, lon: undoMove.lon });
                 window.clearTimeout(undoTimer.current);
-                setUndoMove(null);
+                if (undoMoves.length > 1) undoTimer.current = window.setTimeout(() => setUndoMoves([]), 10000);
+                setUndoMoves((u) => u.slice(0, -1));
               }}
             >
-              Undo
+              Undo{undoMoves.length > 1 ? ` (${undoMoves.length})` : ""}
             </button>
           </div>
         ) : null}
