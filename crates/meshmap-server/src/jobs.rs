@@ -446,7 +446,8 @@ fn hatch_without_clutter(rgba: &mut [u8], w: usize, h: usize, b: &meshmap_covera
         return;
     }
     let mut cache: HashMap<(u32, u32, u32), bool> = HashMap::new();
-    let corners: Vec<(u32, (f64, f64), (f64, f64))> = zooms.iter().map(|&z| (z, lonlat_to_pixel(b.west, b.north, z), lonlat_to_pixel(b.east, b.south, z))).collect();
+    type Corners = (u32, (f64, f64), (f64, f64));
+    let corners: Vec<Corners> = zooms.iter().map(|&z| (z, lonlat_to_pixel(b.west, b.north, z), lonlat_to_pixel(b.east, b.south, z))).collect();
     for y in 0..h {
         for x in 0..w {
             let i = (y * w + x) * 4;
