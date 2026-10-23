@@ -186,3 +186,17 @@ fieldset.plain:disabled { opacity: .6; }
 .field-mode .lrow { display: flex; align-items: center; gap: 6px; }
 @media (min-width: 900px) { .field-mode { display: grid; grid-template-columns: 1fr 420px; grid-template-rows: auto 1fr; } .field-mode .fbar { grid-column: 1 / -1; } .field-mode .fmap { min-height: 0; } .field-mode .fsheet { border-top: 0; border-left: 1px solid var(--line); max-height: none; } }
 .pdesc-full { white-space: pre-wrap; word-break: break-word; }
+
+.node-marker.h-gateway { border-radius: 3px; border-width: 4px; }
+.node-marker.h-spof { box-shadow: 0 0 0 4px rgba(215,48,39,.55), 0 1px 4px rgba(0,0,0,.5); }
+.node-marker.h-cut { background: #fecaca; border-color: #b91c1c; }
+.node-marker.h-far { border-style: dashed; border-color: #7c3aed; }
+.node-marker.h-isolated { background: #d1d5db; border-color: #6b7280; }
+.node-marker.h-failed { background: #111; border-color: #111; opacity: .6; }
+.health-sum { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 6px 0; }
+.health-sum > div { border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+.health-sum b { font-size: 18px; display: block; }
+.health-sum .bad b { color: #b91c1c; }
+.health-sum .ok b { color: #166534; }
+ul.hlist { list-style: none; padding: 0; margin: 4px 0 8px; display: flex; flex-direction: column; gap: 4px; }
+ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; cursor: pointer; }

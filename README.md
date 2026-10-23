@@ -117,6 +117,7 @@ like heatmaps.
 - **Comments**: on a project (everyone it is shared with, viewers included) or on a published copy (everyone). Comment on the project, a selected node or a selected link; the owner (or the author) can resolve or delete.
 - **Antenna patterns** (node panel): omnidirectional, directional (beamwidth, front-to-back, pointing direction, "aim at node") or an imported MSI Planet / CSV pattern file. Links and heatmaps use the gain in the direction of each link. Horizontal plane only.
 - **Field mode** (button in the toolbar; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
+- **Mesh health** (left panel): from the usable links (margin at or above a threshold in both directions) it shows how many nodes are connected, the separate groups, **single points of failure** (nodes whose loss cuts others off), **links that are the only way**, hop counts from your **gateways** (mark a node as Gateway in its panel; hop limit defaults to Meshtastic's 3), nodes that cannot reach a gateway, and a **what-if** that removes any node and shows who loses contact. Problems are marked on the map. Without a gateway, "connected" means part of the largest group; a lone gateway counts as a single point of failure.
 - **Site report** (node panel): a printable page with the location, a map picture, equipment, antenna pattern, expected links with terrain profiles, coverage numbers if computed, field readings, comments and the assumptions. Use *Print or save as PDF*.
 
 ## What to verify
@@ -149,7 +150,8 @@ like heatmaps.
     *Suggest sites*; numbered markers appear with the km² each adds and its links; "Add as node" adds one. Turning the backhaul
     requirement off, or raising its margin, changes the result.
 13. **v6 features**: select a node and set a directional antenna aimed away from a neighbour (its margin drops); post a comment; click *Site report*; click *Publish*, then sign in as another user and open *Published*; in *Field mode* (allow location) record a reading and see it listed with the prediction.
-14. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
+14. **Mesh health**: in *Mesh health* mark a node as gateway, read the tiles and lists, then pick a node under *What if a node fails?*; its links vanish from the map and the nodes that lose contact turn pink.
+15. **Sanity checks**: raise antenna heights on a long flat path and watch clearance and margin improve;
    raise k (e.g. 4/3 to 2) and watch clearance increase; use presets with different SF/BW and the link becomes "none".
 
 ## Docker

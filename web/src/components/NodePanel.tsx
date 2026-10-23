@@ -74,6 +74,10 @@ export function NodePanel({ node, connections, others, onChange, onDelete, onDup
           ))}
         </select>
       </label>
+      <label className="check">
+        <input type="checkbox" checked={node.gateway === true} onChange={(e) => onChange({ gateway: e.target.checked ? true : undefined })} />
+        Gateway (connects the mesh to the internet/MQTT)
+      </label>
       <label className="field">
         <span>Status</span>
         <select value={node.status} onChange={(e) => onChange({ status: e.target.value as MeshNode["status"] })}>

@@ -37,6 +37,7 @@ export function parseProject(raw: unknown): Project | null {
       gainDbi: num(n.gainDbi, 3),
       cableLossDb: num(n.cableLossDb, 0.5),
       antenna: cleanAntenna(n.antenna),
+      gateway: n.gateway === true ? true : undefined,
       presetId: typeof n.presetId === "string" ? n.presetId : "long_fast",
       status: n.status === "installed" ? "installed" : "planned",
       notes: typeof n.notes === "string" ? n.notes : "",

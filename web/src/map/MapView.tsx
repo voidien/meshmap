@@ -33,6 +33,8 @@ interface Props {
   selectedLinkKey: string | null;
   /** The area being planned for and the sites suggested for it. */
   placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
+  /** Mesh health marks per node id (CSS classes such as `h-spof`). */
+  health?: Record<string, string>;
   /** Field mode: where the phone is, and the readings taken so far. */
   field?: { me: { lat: number; lon: number; accuracyM: number } | null; readings: { id: string; lat: number; lon: number; color: string }[] };
   addMode: boolean;
@@ -272,7 +274,7 @@ export function MapView(p: Props) {
       const ll = m.getLngLat();
       if (Math.abs(ll.lat - n.lat) > 1e-9 || Math.abs(ll.lng - n.lon) > 1e-9) m.setLngLat([n.lon, n.lat]);
       const el = m.getElement();
-      el.className = `maplibregl-marker node-marker ${n.status}${c.selectedNodeId === n.id ? " selected" : ""}${c.checkedIds.has(n.id) ? " checked" : ""}`;
+      el.className = `maplibregl-marker node-marker ${n.status}${c.selectedNodeId === n.id ? " selected" : ""}${c.checkedIds.has(n.id) ? " checked" : ""}${c.health?.[n.id] ? ` ${c.health[n.id]}` : ""}`;
       el.title = `${n.name} (${n.status})`;
       let label = el.querySelector<HTMLSpanElement>(".node-label");
       if (!label) {
@@ -285,7 +287,7 @@ export function MapView(p: Props) {
     }
   }
 
-  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly]);
+  useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly, p.health]);
 
   // the planning area and suggested sites
   function syncPlacement() {

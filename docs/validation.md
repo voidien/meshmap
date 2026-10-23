@@ -119,6 +119,16 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   **Not validated:** GPS accuracy handling on real phones, battery use, behaviour with a very weak data connection, or
   printing the report on every browser. The map picture in a report depends on the map tiles allowing it to be read back.
 
+## Mesh health (v7): `web/src/meshHealth.ts`
+
+- Unit tests on small graphs with known answers (chain, ring, star, disconnected groups, one versus two gateways, hop limits,
+  gateway loss) and a randomised comparison on 40 random graphs: every reported single point of failure cuts off exactly the
+  nodes the failure simulation says, and no other node does. In a browser run on real terrain the lone gateway showed as a
+  single point of failure, losing it cut off the other two nodes, and losing a node with an alternative route did not.
+- The answers are only as good as the link predictions behind them and the margin threshold chosen; a link that
+  is predicted marginal counts as working or not working depending on that threshold. Real meshes also route by flooding and
+  signal-quality heuristics, not along ideal shortest paths, and nodes share airtime; none of that is modelled.
+
 ## Not yet done
 
 - **Spot checks against SPLAT! and Radio Mobile are not done.** Neither tool could be run in the environment this was built in.

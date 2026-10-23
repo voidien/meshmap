@@ -52,3 +52,19 @@ The ETL needs unrestricted internet access to `prd-tnm.s3.amazonaws.com`, `usgs-
 - Clutter is treated as solid geometry by the radio model; there is no foliage attenuation, no seasons, and no penetration of buildings.
 - The canopy/buildings fallback underestimates lidar clutter somewhat (see `docs/validation.md`).
 - Both antennas are placed on the ground at their position, so a mast beside a tree or on a roof is described by its height above ground, not above the clutter.
+
+## Example: Cookeville and Crossville, Tennessee
+
+USGS has 2015 lidar (project family `USGS_LPC_TN_27County_blk1..4`) that covers both towns; blocks 2 and 3 cover the whole area
+between them, blocks 1 and 4 fill the edges. List them with `meshmap-etl lidar-projects USGS_LPC_TN_27County`. Build each town
+with a margin (about 80 tiles, 40 x 28 km, each):
+
+```bash
+docker compose --profile etl run --rm etl build --id cookeville --bbox=-85.70,36.05,-85.30,36.30 --lidar-prefix USGS_LPC_TN_27County
+docker compose --profile etl run --rm etl build --id crossville --bbox=-85.25,35.85,-84.85,36.10 --lidar-prefix USGS_LPC_TN_27County
+```
+
+(or one pack for both: `--id upper-cumberland --bbox=-85.75,35.80,-84.85,36.30`, about 330 tiles). Rough size is 8 MB per town pack. Expect
+roughly 30-40 minutes per town on a 4-core machine and longer on a small server; interrupted builds resume. Try
+`--limit 4` first. This area is mostly forest on the Cumberland Plateau: the lidar clutter there is dominated by tree canopy, which is
+the point of using it.

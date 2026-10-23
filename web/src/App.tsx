@@ -6,6 +6,9 @@ import { PlacementPanel } from "./components/PlacementPanel";
 import { buildSiteReport } from "./siteReport";
 import { captureMap } from "./map/capture";
 import type { Comment, FieldReading } from "./collab";
+import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPanel";
+import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
+import { linkKey } from "./engine/analysis";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { PublishDialog } from "./components/PublishDialog";
@@ -75,6 +78,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const [dragging, setDragging] = useState(false);
   const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
+  const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
   const [viewPub, setViewPub] = useState<Publication | null>(null);
@@ -130,6 +134,30 @@ export function App({ auth }: { auth: AuthContext }) {
   const { links: otherAllLinks, status: otherStatus } = useLinks(other?.nodes ?? NO_NODES, other?.settings ?? project.settings, false, ready && !!other, other?.id ?? "none");
   const links = useMemo(() => (project.settings.showNone ? allLinks : allLinks.filter((l) => l.class !== "none")), [allLinks, project.settings.showNone]);
   const ghostLinks = useMemo(() => (other ? otherAllLinks.filter((l) => l.class !== "none") : []), [other, otherAllLinks]);
+
+  const healthInput = useMemo(
+    () => ({ nodeIds: project.nodes.map((n) => n.id), edges: edgesFromLinks(allLinks, healthOpts.minMarginDb), gateways: project.nodes.filter((n) => n.gateway).map((n) => n.id), hopLimit: healthOpts.hopLimit }),
+    [project.nodes, allLinks, healthOpts.minMarginDb, healthOpts.hopLimit],
+  );
+  const health = useMemo(() => analyzeHealth(healthInput), [healthInput]);
+  const failure = useMemo(() => (healthOpts.failedId && healthInput.nodeIds.includes(healthOpts.failedId) ? simulateFailure(healthInput, healthOpts.failedId) : null), [healthInput, healthOpts.failedId]);
+  const healthMarks = useMemo(() => {
+    if (!healthOpts.highlight && !failure) return undefined;
+    const m: Record<string, string> = {};
+    const add = (id: string, c: string) => (m[id] = m[id] ? `${m[id]} ${c}` : c);
+    for (const n of project.nodes) if (n.gateway) add(n.id, "h-gateway");
+    if (healthOpts.highlight) {
+      for (const id of health.isolated) add(id, "h-isolated");
+      for (const s of health.spofs) add(s.id, "h-spof");
+      for (const id of health.beyondHopLimit) add(id, "h-far");
+      if (health.fromGateways) for (const id of health.noGateway) if (!health.isolated.includes(id)) add(id, "h-cut");
+    }
+    if (failure) {
+      add(failure.failedId, "h-failed");
+      for (const id of failure.cutOff) add(id, "h-cut");
+    }
+    return m;
+  }, [healthOpts.highlight, failure, health, project.nodes]);
 
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
 
@@ -602,6 +630,17 @@ export function App({ auth }: { auth: AuthContext }) {
             title={pubProject ? "Comments on this published project" : "Comments"}
           />
         ) : null}
+        <MeshHealthPanel
+          nodes={project.nodes}
+          health={health}
+          failure={failure}
+          options={healthOpts}
+          onOptions={setHealthOpts}
+          readOnly={readOnly}
+          onFocus={focusNode}
+          onLink={(a, b) => { setSelectedLink(linkKey(a, b)); setSelectedNode(null); }}
+          onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
+        />
         {pubProject ? null : <ComparePanel
           current={project}
           currentLinks={allLinks}
@@ -699,7 +738,8 @@ export function App({ auth }: { auth: AuthContext }) {
       <main className="mapwrap">
         <MapView
           nodes={project.nodes}
-          links={links}
+          links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}
+          health={healthMarks}
           ghostNodes={other?.nodes ?? NO_NODES}
           ghostLinks={ghostLinks}
           fitKey={`${project.id}|${other?.id ?? ""}`}

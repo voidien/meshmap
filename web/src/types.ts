@@ -23,6 +23,8 @@ export interface MeshNode {
   cableLossDb: number;
   /** Absent = omni. */
   antenna?: AntennaPattern;
+  /** Connects the mesh to the outside (an internet or MQTT uplink); used by mesh health. */
+  gateway?: boolean;
   presetId: string;
   status: NodeStatus;
   notes: string;
