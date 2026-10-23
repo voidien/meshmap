@@ -66,8 +66,8 @@ pub fn fragility(n: usize, edges: &[(usize, usize)]) -> Fragility {
         (0..n).filter(|&v| reach[v] && Some(v) != skip_node && !after[v]).count()
     };
     let mut out = Fragility::default();
-    for v in 0..n {
-        if reach[v] {
+    for (v, &in_reach) in reach.iter().enumerate() {
+        if in_reach {
             let c = cut_off(Some(v), None);
             if c > 0 {
                 out.spofs.push(v);
