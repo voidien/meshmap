@@ -258,6 +258,16 @@ fn find_candidates(req: &PlacementRequest, grid: &Grid, sampler: &Sampler) -> Ve
 
 // ---- links to the network -----------------------------------------------------------------------------------------
 
+/// What a redundancy pick repairs: weakness before and after, the weak nodes, which of them are fixed, and nodes beyond the hop limit.
+struct Fix {
+    before: usize,
+    after: usize,
+    weak: Vec<String>,
+    fixed: Vec<String>,
+    beyond_before: usize,
+    beyond_after: usize,
+}
+
 #[derive(Clone)]
 struct Anchor {
     lat: f64,
@@ -515,7 +525,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
         let mut chosen: Option<(usize, usize, Vec<LinkInfo>)> = None;
         let mut rejected_for_backhaul = false;
         // (weakness before, after, weak nodes before, fixed nodes) for the redundancy goal
-        let mut fix: Option<(usize, usize, Vec<String>, Vec<String>, usize, usize)> = None;
+        let mut fix: Option<Fix> = None;
         if redundancy {
             let bh = req.backhaul.as_ref().expect("validated");
             let health = Context { gateways: req.gateways.clone(), hop_limit: req.hop_limit };
@@ -550,7 +560,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                     let weak_before: Vec<String> = base.spofs.iter().map(|&i| name(i)).collect();
                     let weak_after: HashSet<usize> = after.spofs.iter().copied().collect();
                     let fixed: Vec<String> = base.spofs.iter().filter(|i| !weak_after.contains(i)).map(|&i| name(i)).chain(base.stranded.iter().filter(|i| !after.stranded.contains(i)).map(|&i| name(i))).chain(base.beyond.iter().filter(|i| !after.beyond.contains(i)).map(|&i| name(i))).collect();
-                    fix = Some((base.score, after.score, weak_before, fixed, base.beyond.len(), after.beyond.len()));
+                    fix = Some(Fix { before: base.score, after: after.score, weak: weak_before, fixed, beyond_before: base.beyond.len(), beyond_after: after.beyond.len() });
                     graph_edges.extend(links.iter().map(|l| (l.anchor, anchors.len())));
                     chosen = Some((c, gain, links));
                 }
@@ -610,8 +620,8 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
             "soloKm2": solo as f64 * cell_km2, "cumulativePct": 100.0 * covered_now as f64 / cells.len().max(1) as f64,
             "backhaul": back, "backhaulChecked": req.backhaul.is_some() && !anchors.is_empty(),
         });
-        if let Some((before, after, weak, fixed, beyond_before, beyond_after)) = fix {
-            pick["redundancy"] = json!({ "weaknessBefore": before, "weaknessAfter": after, "weakNodes": weak, "fixed": fixed, "beyondHopLimitBefore": beyond_before, "beyondHopLimitAfter": beyond_after });
+        if let Some(f) = fix {
+            pick["redundancy"] = json!({ "weaknessBefore": f.before, "weaknessAfter": f.after, "weakNodes": f.weak, "fixed": f.fixed, "beyondHopLimitBefore": f.beyond_before, "beyondHopLimitAfter": f.beyond_after });
         }
         picks.push(pick);
         anchors.push(Anchor { lat: cand.lat, lon: cand.lon, node: cand_nodes[c].clone(), name: format!("Suggested site {}", round + 1), kind: "suggestion", index: round });
