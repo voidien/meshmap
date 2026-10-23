@@ -240,5 +240,23 @@ export function useProjectSync(enabled: boolean) {
     [adopt],
   );
 
-  return { projects, ready, saveState, error, conflicts, update, create, remove, leave, setMembers, resolve, reload: load };
+  /** Put an earlier version back. Edits not yet saved are sent first, so the restore applies to what is on screen. */
+  const restoreVersion = useCallback(
+    async (id: string, number: number) => {
+      await flush();
+      const p = ref.current.find((x) => x.id === id);
+      if (!p) return;
+      if (saved.current.get(id) !== content(p) || conflictsRef.current[id]) throw new Error("Your latest edits have not finished saving. Try again in a moment.");
+      const list = await api.get<ServerProject[]>("/api/projects");
+      const server = list.find((x) => x.id === id);
+      if (!server) throw new Error("This project is no longer available.");
+      const r = await api.post<{ revision: number; data: Record<string, unknown> }>(`/api/projects/${id}/versions/${number}/restore`, { baseRevision: server.revision });
+      const next = fromServer({ ...server, revision: r.revision, data: r.data });
+      saved.current.set(id, content(next));
+      setProjects((ps) => ps.map((x) => (x.id === id ? { ...next, role: x.role } : x)));
+    },
+    [flush],
+  );
+
+  return { projects, ready, saveState, error, conflicts, update, create, remove, leave, setMembers, resolve, restoreVersion, reload: load };
 }

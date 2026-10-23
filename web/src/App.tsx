@@ -15,6 +15,7 @@ import { Card, openPanel, setAllPanels } from "./components/Card";
 import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { PublishDialog } from "./components/PublishDialog";
 import { PublishedGallery } from "./components/PublishedGallery";
 import { api } from "./api";
@@ -719,6 +720,9 @@ export function App({ auth }: { auth: AuthContext }) {
             selectedLink={selLink ? { key: selLink.key, label: `${nodeById.get(selLink.a)?.name.trim() || "?"} – ${nodeById.get(selLink.b)?.name.trim() || "?"}` } : null}
             title={pubProject ? "Comments on this published project" : "Comments"}
           />
+        ) : null}
+        {project.id && !pubProject && section === "mine" ? (
+          <HistoryPanel key={project.id} project={project} readOnly={readOnly} onRestore={(n) => sync.restoreVersion(project.id, n)} />
         ) : null}
         {pubProject ? null : <CoveragePanel
           layers={cov.layers}

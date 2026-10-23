@@ -156,6 +156,14 @@ nodes cut off by each single node or link failure, plus five for each node not c
 counts as progress; the next pick can close the ring. It needs at least two nodes and skips the heatmaps, so it runs faster. It stops when
 nothing is weak any more ("Nothing to fix") or no site in the area helps. Gateways, hop limits and traffic are not part of the score.
 
+## History
+
+The **History** card keeps earlier states of a project. The app saves the state *before* your edits automatically (at most once every
+10 minutes, the last 40 are kept), and **Save version** keeps a named one (up to 100) such as "Before moving Hinch". **Restore** lists what
+would change (nodes coming back or disappearing, moves, settings) and asks first; what you have now is kept as a new version, so a restore
+can itself be undone. Viewers can see the list; editors and the owner can save, restore and delete named versions. Heatmaps, readings and
+comments are not part of a version, only the nodes, settings and overlays.
+
 ## Publishing, comments, antenna patterns, field mode, site reports
 
 - **Publish** (project switcher): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).

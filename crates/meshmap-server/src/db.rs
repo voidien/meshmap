@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS projects_owner ON projects(owner_id);
+CREATE TABLE IF NOT EXISTS project_versions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    number     INTEGER NOT NULL,
+    label      TEXT NOT NULL DEFAULT '',
+    auto       INTEGER NOT NULL DEFAULT 0,
+    snapshot   TEXT NOT NULL,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (project_id, number)
+);
 CREATE TABLE IF NOT EXISTS project_members (
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

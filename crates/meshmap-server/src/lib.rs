@@ -16,6 +16,7 @@ pub mod passkeys;
 pub mod placement;
 pub mod projects;
 pub mod state;
+pub mod versions;
 pub mod terrain;
 
 use axum::extract::DefaultBodyLimit;
@@ -35,6 +36,7 @@ pub fn build_app(state: Shared) -> Router {
         .merge(passkeys::routes())
         .merge(admin::routes())
         .merge(projects::routes())
+        .merge(versions::routes())
         .merge(collab::routes())
         .merge(jobs_api::routes())
         .merge(packs_api::routes())

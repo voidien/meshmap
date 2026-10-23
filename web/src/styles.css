@@ -290,3 +290,5 @@ ul.hlist li { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8p
 .offline-panel { border: 1px solid var(--border, #555); border-radius: 8px; padding: 8px 10px; margin: 12px 0; }
 .offline-panel h4 { margin: 0 0 6px; }
 .offline-panel progress { width: 100%; }
+ul.versions { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; max-height: 320px; overflow: auto; }
+ul.versions li { border-bottom: 1px solid var(--border, #444); padding-bottom: 6px; }

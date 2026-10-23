@@ -396,3 +396,63 @@ async fn healthz_and_security_headers() {
     let res = app.oneshot(Request::builder().uri("/api/session").body(Body::empty()).unwrap()).await.unwrap();
     assert_eq!(res.headers()["cache-control"], "no-store");
 }
+
+#[tokio::test]
+async fn versions_keep_history_and_restore_it() {
+    let app = app();
+    let mut admin = setup_admin(&app).await;
+    let (_, p) = admin.post("/api/projects", json!({ "name": "History", "data": { "nodes": [{ "id": "a", "name": "A", "lat": 36.0, "lon": -85.0 }] } })).await;
+    let id = p["id"].as_str().unwrap().to_string();
+    let nodes2 = json!({ "nodes": [{ "id": "a", "name": "A", "lat": 36.1, "lon": -85.0 }, { "id": "b", "name": "B", "lat": 36.2, "lon": -85.0 }] });
+
+    // a named version of the first state
+    let (s, v) = admin.post(&format!("/api/projects/{id}/versions"), json!({ "label": "  First plan " })).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["number"], 1);
+    assert_eq!(admin.post(&format!("/api/projects/{id}/versions"), json!({ "label": "  " })).await.0, StatusCode::BAD_REQUEST);
+
+    // the first edit keeps the old data as an automatic version; the next edits within minutes do not add more
+    let (s, v) = admin.put(&format!("/api/projects/{id}"), json!({ "baseRevision": 1, "data": nodes2 })).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (s, v) = admin.put(&format!("/api/projects/{id}"), json!({ "baseRevision": 2, "data": { "nodes": [] } })).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let (_, list) = admin.get(&format!("/api/projects/{id}/versions")).await;
+    let list = list.as_array().unwrap();
+    assert_eq!(list.len(), 2, "{list:?}");
+    assert_eq!(list[0]["auto"], true);
+    assert_eq!(list[0]["nodes"], 1);
+    assert_eq!(list[1]["label"], "First plan");
+    assert_eq!(list[1]["auto"], false);
+
+    // reading a version gives its data
+    let (_, v1) = admin.get(&format!("/api/projects/{id}/versions/1")).await;
+    assert_eq!(v1["data"]["nodes"][0]["lat"], 36.0);
+
+    // restoring needs the current revision, keeps what it replaces, and bumps the revision
+    let (s, v) = admin.post(&format!("/api/projects/{id}/versions/1/restore"), json!({ "baseRevision": 1 })).await;
+    assert_eq!(s, StatusCode::CONFLICT, "{v}");
+    let (s, v) = admin.post(&format!("/api/projects/{id}/versions/1/restore"), json!({ "baseRevision": 3 })).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert_eq!(v["revision"], 4);
+    assert_eq!(v["data"]["nodes"].as_array().unwrap().len(), 1);
+    let (_, projects) = admin.get("/api/projects").await;
+    assert_eq!(projects[0]["data"]["nodes"][0]["lat"], 36.0);
+    let (_, list) = admin.get(&format!("/api/projects/{id}/versions")).await;
+    assert_eq!(list[0]["label"], "Before restoring #1");
+    assert_eq!(list[0]["nodes"], 0, "the state that was replaced can itself be restored");
+
+    // delete a version
+    assert_eq!(admin.delete(&format!("/api/projects/{id}/versions/1")).await.0, StatusCode::OK);
+    assert_eq!(admin.get(&format!("/api/projects/{id}/versions/1")).await.0, StatusCode::NOT_FOUND);
+
+    // viewers can read the history but not change it; strangers see nothing
+    let mut viewer = add_user(&app, &mut admin, "vera", "member").await;
+    let mut stranger = add_user(&app, &mut admin, "sam", "member").await;
+    let vid = viewer.get("/api/session").await.1["user"]["id"].as_str().unwrap().to_string();
+    let (s, v) = admin.post(&format!("/api/projects/{id}/members"), json!({ "username": "vera", "role": "viewer" })).await;
+    assert_eq!(s, StatusCode::OK, "{v} {vid}");
+    assert_eq!(viewer.get(&format!("/api/projects/{id}/versions")).await.0, StatusCode::OK);
+    assert_eq!(viewer.post(&format!("/api/projects/{id}/versions"), json!({ "label": "x" })).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(viewer.post(&format!("/api/projects/{id}/versions/2/restore"), json!({ "baseRevision": 4 })).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(stranger.get(&format!("/api/projects/{id}/versions")).await.0, StatusCode::NOT_FOUND);
+}

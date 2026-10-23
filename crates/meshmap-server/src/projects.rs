@@ -195,6 +195,10 @@ async fn save(State(state): State<Shared>, u: AuthUser, Path(id): Path<String>, 
                 return Err(ApiError::conflict("Someone else saved this project since you opened it.").with_extra(json!({ "revision": rev, "updatedBy": by })));
             }
             let t = now();
+            if let Some(d) = &text {
+                // keep what was there before an edit, at most every few minutes, so a mistake can be taken back
+                crate::versions::auto_snapshot(&tx, &id, &uid, d, t)?;
+            }
             if let Some(n) = &name {
                 tx.execute("UPDATE projects SET name = ?2 WHERE id = ?1", params![id, n])?;
             }
