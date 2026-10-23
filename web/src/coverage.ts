@@ -49,6 +49,7 @@ export function coverageRequest(kind: "coverage_node" | "coverage_network", node
     settings: {
       freqMhz: s.freqMhz,
       noiseFigureDb: s.noiseFigureDb,
+      foliage: { scale: s.foliageScale, leafOn: s.foliageLeafOn },
       itm: {
         climate: s.itmClimate,
         n0: s.itmN0,

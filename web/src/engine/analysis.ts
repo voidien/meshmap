@@ -47,7 +47,7 @@ const nodeSig = (n: MeshNode) =>
   [n.lat.toFixed(6), n.lon.toFixed(6), n.heightM, n.txDbm, n.gainDbi, n.cableLossDb, n.presetId, n.antenna ? JSON.stringify(n.antenna) : ""].join(",");
 
 const settingsSig = (s: Settings) =>
-  [s.freqMhz, s.k, s.marginalMarginDb, s.noiseFigureDb, s.itmClimate, s.itmN0, s.groundEpsilon, s.groundSigma, s.verticalPolarization, s.confidencePct, s.reliabilityPct].join(",");
+  [s.freqMhz, s.k, s.marginalMarginDb, s.noiseFigureDb, s.itmClimate, s.itmN0, s.groundEpsilon, s.groundSigma, s.verticalPolarization, s.confidencePct, s.reliabilityPct, s.foliageScale, s.foliageLeafOn].join(",");
 
 /** Parameters object for the WASM `analyze_link`. */
 export function linkParams(s: Settings) {
@@ -55,6 +55,7 @@ export function linkParams(s: Settings) {
     freq_mhz: s.freqMhz,
     k: s.k,
     marginal_margin_db: s.marginalMarginDb,
+    foliage: { scale: s.foliageScale, leafOn: s.foliageLeafOn },
     itm: {
       climate: s.itmClimate,
       n0: s.itmN0,
@@ -91,6 +92,8 @@ export interface ProfileData {
   clutter: Float64Array | null;
   bare: LinkResult;
   withClutter: LinkResult | null;
+  /** bare earth plus foliage loss */
+  withFoliage: LinkResult | null;
   /** result for the selected terrain mode */
   result: LinkResult;
 }
@@ -98,10 +101,18 @@ export interface ProfileData {
 interface Both {
   bare: LinkResult;
   clutter: LinkResult | null;
+  foliage: LinkResult | null;
+}
+
+/** The result for the selected terrain model (bare earth when there is no clutter data for the path). */
+export function pickResult(b: { bare: LinkResult; clutter?: LinkResult | null; foliage?: LinkResult | null }, mode: Settings["terrainMode"]): LinkResult {
+  if (mode === "foliage" && b.foliage) return b.foliage;
+  if (mode === "clutter" && b.clutter) return b.clutter;
+  return b.bare;
 }
 
 function pick(b: Both, s: Settings): LinkResult {
-  return s.terrainMode === "clutter" && b.clutter ? b.clutter : b.bare;
+  return pickResult(b, s.terrainMode);
 }
 
 /** Fetch the terrain profile and run the WASM link analysis. */
@@ -123,7 +134,7 @@ export async function analyzeWithProfile(
     clutter ?? new Float64Array(0),
     includeSeries,
   ) as Both;
-  return { dist, elev, clutter, bare: both.bare, withClutter: both.clutter ?? null, result: pick(both, s) };
+  return { dist, elev, clutter, bare: both.bare, withClutter: both.clutter ?? null, withFoliage: both.foliage ?? null, result: pick(both, s) };
 }
 
 const linkCache = new Map<string, Link>();
@@ -150,6 +161,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
       const p = await analyzeWithProfile(x, y, s, spacingM, false);
       link = { key, a: x.id, b: y.id, class: p.result.class, distanceM, result: p.result, bare: p.bare, hasClutter: p.withClutter !== null };
       if (p.withClutter) link.clutter = p.withClutter;
+      if (p.withFoliage) link.foliage = p.withFoliage;
     }
   }
   if (linkCache.size >= MAX_CACHE) linkCache.clear();
@@ -160,7 +172,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
 /** Cached links hold both results; the terrain mode only picks which one is the headline. */
 function withMode(link: Link, s: Settings): Link {
   if (!link.bare) return link;
-  const result = s.terrainMode === "clutter" && link.clutter ? link.clutter : link.bare;
+  const result = pickResult(link as { bare: LinkResult; clutter?: LinkResult | null; foliage?: LinkResult | null }, s.terrainMode);
   return result === link.result ? link : { ...link, result, class: result.class };
 }
 

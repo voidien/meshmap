@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { download } from "../export";
 import type { FieldReading } from "../collab";
-import { analyzeWithProfile, SPACING_FAST_M } from "../engine/analysis";
+import { predictAt } from "../engine/fieldPredict";
 import { compass, DELTA_COLORS, deltaClass, fmtDistance, nearestNodes, readingsCsv, type ReadingRow } from "../fieldMath";
 import { flushQueue, loadQueue, newReadingId, saveQueue, type NewReading } from "../fieldQueue";
+import { parseReadingsCsv } from "../readingsImport";
 import { MapView } from "../map/MapView";
 import type { Link, MeshNode, Project } from "../types";
 import { useGeolocation } from "../useGeolocation";
@@ -20,17 +21,6 @@ interface Props {
 
 const NO_NODES: MeshNode[] = [];
 const NO_LINKS: Link[] = [];
-
-/** A stand-in node for the phone: where the person stands, with a client radio like the project's heatmaps assume. */
-function phoneAt(lat: number, lon: number, like: MeshNode, s: Project["settings"]): MeshNode {
-  return { id: "phone", name: "You", lat, lon, heightM: like.clientHeightM || 1.5, clientHeightM: like.clientHeightM, txDbm: like.txDbm, gainDbi: s.clientGainDbi, cableLossDb: s.clientCableLossDb, presetId: like.presetId, status: "planned", notes: "" };
-}
-
-/** Predicted signal at a spot from a node (what a phone-sized client would receive): the node transmits, the phone receives. */
-async function predict(node: MeshNode, lat: number, lon: number, s: Project["settings"]) {
-  const r = (await analyzeWithProfile(node, phoneAt(lat, lon, node, s), s, SPACING_FAST_M, false)).result;
-  return { rssi: r.rx_ab_dbm, margin: r.margin_ab_db, cls: r.class };
-}
 
 /** Phone-friendly mode for standing at a site: where am I, what should the signal be, and record what it really is. */
 export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPatchNode }: Props) {
@@ -50,6 +40,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
   const [readingPred, setReadingPred] = useState<Map<string, number>>(new Map());
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
   const canWrite = !readOnly;
+  const importInput = useRef<HTMLInputElement>(null);
 
   // keep the screen on while working outside (not supported everywhere; fine if it fails)
   useEffect(() => {
@@ -104,7 +95,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
       const next = new Map<string, { rssi: number; margin: number; cls: string }>();
       for (const n of near) {
         try {
-          const p = await predict(n.node, pos.lat, pos.lon, project.settings);
+          const p = await predictAt(n.node, pos.lat, pos.lon, project.settings);
           next.set(n.node.id, p);
         } catch {
           /* terrain not available */
@@ -132,7 +123,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
         const n = r.nodeRef ? nodeById.get(r.nodeRef) : null;
         if (!n || r.rssiDbm === null || readingPred.has(r.id)) continue;
         try {
-          const p = await predict(n, r.lat, r.lon, project.settings);
+          const p = await predictAt(n, r.lat, r.lon, project.settings);
           if (!live) return;
           setReadingPred((m) => new Map(m).set(r.id, p.rssi));
         } catch {
@@ -353,6 +344,28 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
                 Export CSV
               </button>
               <button onClick={() => void sync()}>Sync now</button>
+              <button disabled={!canWrite} onClick={() => importInput.current?.click()} title="Add readings from a CSV file: lat, lon, rssi, snr, node, note, time">
+                Import CSV
+              </button>
+              <input
+                ref={importInput}
+                type="file"
+                accept=".csv,text/csv,text/plain"
+                hidden
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  const r = parseReadingsCsv(await f.text(), project.nodes);
+                  if (r.readings.length) {
+                    const q = [...queue, ...r.readings];
+                    setQueue(q);
+                    saveQueue(project.id, q);
+                    void sync();
+                  }
+                  setMsg(`Imported ${r.readings.length} reading${r.readings.length === 1 ? "" : "s"}${r.errors.length ? `; ${r.errors.length} row${r.errors.length === 1 ? "" : "s"} skipped (${r.errors[0]})` : ""}${r.unmatchedNodes ? `; ${r.unmatchedNodes} with a node name that matches no node` : ""}.`);
+                }}
+              />
             </div>
             <p className="hint">Dots on the map: green = within 3 dB of the prediction (or better), amber = 3 to 10 dB weaker, red = more than 10 dB weaker, grey = no signal value or no prediction.</p>
             <ul className="freadings">

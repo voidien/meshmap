@@ -3,6 +3,7 @@
 use crate::grid::{inverse_mercator, mercator, Bounds};
 use crate::{encode_margin, Elevation, NO_DATA};
 use meshmap_core::antenna::AntennaPattern;
+use meshmap_core::foliage::{depth_in_clutter_m, foliage_loss_db, FoliageParams};
 use meshmap_core::geo::{bearing_deg, destination, haversine_m};
 use meshmap_core::link::ItmSettings;
 use meshmap_core::rf::fspl_db;
@@ -36,6 +37,8 @@ pub struct NodeParams {
     pub resolution_m: f64,
     /// Predict over terrain plus clutter (trees, buildings) instead of bare earth.
     pub use_clutter: bool,
+    /// Bare-earth prediction plus foliage loss for the stretch of path inside trees (the clutter itself does not block).
+    pub foliage: Option<FoliageParams>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,11 +139,18 @@ pub(crate) fn radial_margins(
     pfl[1] = step;
     let mut bare = vec![0.0; n_samples];
     let mut surface = vec![0.0; n_samples];
+    // height of trees and buildings along the radial, only gathered when something uses it
+    let mut clutter = vec![0.0; if p.foliage.is_some() { n_samples } else { 0 }];
+    let dist: Vec<f64> = (0..n_samples).map(|j| j as f64 * step).collect();
     for j in 0..n_samples {
         let (la, lo) = if j == 0 { (p.lat, p.lon) } else { destination(p.lat, p.lon, az_deg, j as f64 * step) };
         bare[j] = terrain.elevation_m(la, lo);
         // the node's own position stays on the ground: its antenna height is already measured from there
-        surface[j] = if p.use_clutter && j > 0 { bare[j] + terrain.clutter_m(la, lo).max(0.0) } else { bare[j] };
+        let c = if (p.use_clutter || p.foliage.is_some()) && j > 0 { terrain.clutter_m(la, lo).max(0.0) } else { 0.0 };
+        surface[j] = if p.use_clutter { bare[j] + c } else { bare[j] };
+        if p.foliage.is_some() {
+            clutter[j] = c;
+        }
         pfl[j + 2] = surface[j];
     }
     let mut out = vec![f32::NAN; n_samples];
@@ -172,7 +182,12 @@ pub(crate) fn radial_margins(
             }
         };
         if let Some(l) = loss {
-            *slot = margin(p, l, az_deg) as f32;
+            // foliage: the part of the straight path from the node to this spot that runs inside the trees
+            let extra = match &p.foliage {
+                Some(f) => foliage_loss_db(f, p.freq_mhz, depth_in_clutter_m(&dist[..=j], &bare[..=j], &clutter[..=j], p.h_agl_m, p.client_h_agl_m, 4.0 / 3.0)),
+                None => 0.0,
+            };
+            *slot = margin(p, l + extra, az_deg) as f32;
         }
     }
     out
@@ -289,6 +304,7 @@ mod tests {
             radius_m: 10_000.0,
             resolution_m: 100.0,
             use_clutter: false,
+            foliage: None,
         }
     }
 
@@ -407,6 +423,38 @@ mod tests {
         let near_b = at(&bare, 36.0, -85.0 + 0.3 / (111.2 * 36.0f64.to_radians().cos())).unwrap();
         let near_c = at(&clutter, 36.0, -85.0 + 0.3 / (111.2 * 36.0f64.to_radians().cos())).unwrap();
         assert!((near_b - near_c).abs() < 0.5);
+    }
+
+    #[test]
+    fn foliage_mode_takes_loss_for_the_trees_on_the_path_and_leaves_the_open_side_alone() {
+        use meshmap_core::foliage::{weissberger_db, FoliageParams, LEAF_OFF_FACTOR};
+        let dlon = 6.0 / (111.2 * 36.0f64.to_radians().cos());
+        let bare = run(&params(), &Forest).unwrap();
+        let fol = run(&NodeParams { foliage: Some(FoliageParams::default()), ..params() }, &Forest).unwrap();
+        let (b_east, f_east) = (at(&bare, 36.0, -85.0 + dlon).unwrap(), at(&fol, 36.0, -85.0 + dlon).unwrap());
+        let (b_west, f_west) = (at(&bare, 36.0, -85.0 - dlon).unwrap(), at(&fol, 36.0, -85.0 - dlon).unwrap());
+        // the whole 1 km belt is crossed: the model's limit of 400 m of foliage applies
+        let expected = weissberger_db(915.0, 400.0);
+        assert!((b_east - f_east - expected).abs() < 1.0, "bare {b_east} foliage {f_east}, expected about {expected} dB less");
+        assert!((b_west - f_west).abs() < 0.5, "the open side is unchanged: {b_west} vs {f_west}");
+        // the trees do not block geometry: the ground right behind them is not shadowed beyond the foliage loss
+        let solid = run(&NodeParams { use_clutter: true, ..params() }, &Forest).unwrap();
+        let s_east = at(&solid, 36.0, -85.0 + dlon).unwrap();
+        assert!((s_east - f_east).abs() > 1.0, "the solid-wall and foliage models differ: solid {s_east}, foliage {f_east}");
+        // scale 0 is the bare prediction; bare trees (leaf off) lose a fraction
+        let zero = run(&NodeParams { foliage: Some(FoliageParams { scale: 0.0, leaf_on: true }), ..params() }, &Forest).unwrap();
+        assert_eq!(zero.data, bare.data);
+        let off = run(&NodeParams { foliage: Some(FoliageParams { scale: 1.0, leaf_on: false }), ..params() }, &Forest).unwrap();
+        let o_east = at(&off, 36.0, -85.0 + dlon).unwrap();
+        assert!((b_east - o_east - LEAF_OFF_FACTOR * expected).abs() < 1.0, "{b_east} {o_east}");
+    }
+
+    #[test]
+    fn foliage_mode_without_clutter_data_changes_nothing() {
+        let flat = |_: f64, _: f64| 100.0;
+        let a = run(&params(), &flat).unwrap();
+        let b = run(&NodeParams { foliage: Some(meshmap_core::foliage::FoliageParams::default()), ..params() }, &flat).unwrap();
+        assert_eq!(a.data, b.data);
     }
 
     #[test]

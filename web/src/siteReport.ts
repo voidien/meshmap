@@ -149,7 +149,7 @@ ${nodeComments.length ? nodeComments.map((c) => `<p><b>${esc(c.author?.displayNa
 <h2>8. Assumptions</h2>
 <ul>
 <li>Model: Longley-Rice / ITM point-to-point, climate ${esc(s.itmClimate)}, surface refractivity ${esc(s.itmN0)} N-units, ground ε ${esc(s.groundEpsilon)} / σ ${esc(s.groundSigma)} S/m, ${s.verticalPolarization ? "vertical" : "horizontal"} polarization, ${esc(s.reliabilityPct)} % reliability, ${esc(s.confidencePct)} % confidence.</li>
-<li>Terrain: ${s.terrainMode === "clutter" ? "bare earth plus trees and buildings where a terrain data pack covers the path (no foliage loss), otherwise bare earth" : "bare earth only (no trees or buildings)"}; public ~30 m elevation data unless a higher-resolution pack is installed.</li>
+<li>Terrain: ${s.terrainMode === "foliage" ? `bare earth plus foliage loss for the stretch of each path inside trees and buildings (where a terrain data pack covers the path; Weissberger model, scale ${esc(s.foliageScale)}, ${s.foliageLeafOn ? "in leaf" : "leaves off"}: an average with a large spread, not a measurement of your trees)` : s.terrainMode === "clutter" ? "bare earth plus trees and buildings as solid obstacles where a terrain data pack covers the path (no foliage loss)" : "bare earth only (no trees or buildings)"}; public ~30 m elevation data unless a higher-resolution pack is installed.</li>
 <li>Earth radius factor k = ${esc(Number(s.k.toFixed(2)))} for clearance; “marginal” means less than ${esc(s.marginalMarginDb)} dB of margin or less than 60 % of the first Fresnel zone clear.</li>
 <li>Antenna gain in each direction follows the pattern shown; the horizontal plane only. Mast flex, ice, cable aging, interference and local obstacles are not modelled.</li>
 </ul>

@@ -62,7 +62,9 @@ export function parseProject(raw: unknown): Project | null {
     reliabilityPct: num(s.reliabilityPct, DEFAULT_SETTINGS.reliabilityPct),
     coverageRadiusKm: num(s.coverageRadiusKm, DEFAULT_SETTINGS.coverageRadiusKm),
     coverageResolutionM: num(s.coverageResolutionM, DEFAULT_SETTINGS.coverageResolutionM),
-    terrainMode: s.terrainMode === "bare" ? "bare" : "clutter",
+    terrainMode: s.terrainMode === "bare" || s.terrainMode === "clutter" || s.terrainMode === "foliage" ? s.terrainMode : DEFAULT_SETTINGS.terrainMode,
+    foliageScale: num(s.foliageScale, DEFAULT_SETTINGS.foliageScale),
+    foliageLeafOn: typeof s.foliageLeafOn === "boolean" ? s.foliageLeafOn : DEFAULT_SETTINGS.foliageLeafOn,
     clientGainDbi: num(s.clientGainDbi, DEFAULT_SETTINGS.clientGainDbi),
     clientCableLossDb: num(s.clientCableLossDb, DEFAULT_SETTINGS.clientCableLossDb),
   };

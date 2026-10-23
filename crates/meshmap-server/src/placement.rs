@@ -279,16 +279,22 @@ fn link_between(req: &PlacementRequest, sampler: &Sampler, a: (&NodeIn, f64, f64
         bare.push(sampler.elevation_m(la, lo));
         clutter.push(sampler.clutter_m(la, lo));
     }
-    let use_clutter = req.terrain == "clutter" && clutter.iter().any(|&c| c > 0.0);
+    let has_clutter = clutter.iter().any(|&c| c > 0.0);
+    let use_clutter = req.terrain != "bare" && has_clutter;
     let it = &req.settings.itm;
     let params = LinkParams {
         freq_mhz: req.settings.freq_mhz,
         k: 4.0 / 3.0,
         marginal_margin_db: 10.0,
+        foliage: req.settings.foliage,
         itm: meshmap_core::link::ItmSettings { climate: it.climate, n0: it.n0, epsilon: it.epsilon, sigma: it.sigma, vertical_polarization: it.vertical_polarization, confidence_pct: it.confidence_pct, reliability_pct: it.reliability_pct },
     };
     let pair = analyze_link_both(&params, &ea, &eb, &dist, &bare, use_clutter.then_some(&clutter[..]), false).ok()?;
-    let r = if use_clutter { pair.clutter.unwrap_or(pair.bare) } else { pair.bare };
+    let r = if use_clutter {
+        if req.terrain == "foliage" { pair.foliage.unwrap_or(pair.bare) } else { pair.clutter.unwrap_or(pair.bare) }
+    } else {
+        pair.bare
+    };
     let class = serde_json::to_value(r.class).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
     Some((r.margin_db, r.clearance_pct, class))
 }
@@ -491,7 +497,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
         stop = "count";
     }
 
-    let share = if req.terrain == "clutter" { json!(crate::terrain::clutter_share(&packs, a.lat, a.lon, r_m)) } else { Value::Null };
+    let share = if req.terrain != "bare" { json!(crate::terrain::clutter_share(&packs, a.lat, a.lon, r_m)) } else { Value::Null };
     let result = json!({
         "kind": "placement", "hash": hash, "images": {},
         "area": { "lat": a.lat, "lon": a.lon, "radiusKm": a.radius_km }, "targetKm2": target_km2, "baselinePct": baseline_pct,

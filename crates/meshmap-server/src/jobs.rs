@@ -7,6 +7,7 @@ use crate::db::now;
 use crate::error::ApiError;
 use crate::state::Shared;
 use crate::terrain::{Sampler, TileSource};
+use meshmap_core::foliage::FoliageParams;
 use meshmap_core::link::ItmSettings;
 use meshmap_core::presets::{radio, sensitivity_dbm};
 use meshmap_coverage::{compute_node, node_extent, CoverageError, NetworkBuilder, NodeParams, Progress, Raster, COVERED_MIN, NO_DATA};
@@ -91,11 +92,13 @@ pub struct SettingsIn {
     pub freq_mhz: f64,
     pub noise_figure_db: f64,
     pub itm: ItmIn,
+    /// Used when `terrain` is "foliage".
+    pub foliage: FoliageParams,
 }
 
 impl Default for SettingsIn {
     fn default() -> Self {
-        Self { freq_mhz: 915.0, noise_figure_db: 6.0, itm: ItmIn::default() }
+        Self { freq_mhz: 915.0, noise_figure_db: 6.0, itm: ItmIn::default(), foliage: FoliageParams::default() }
     }
 }
 
@@ -111,7 +114,8 @@ pub struct CoverageRequest {
     pub settings: SettingsIn,
     pub radius_km: f64,
     pub resolution_m: f64,
-    /// "bare" (bare earth, the default) or "clutter" (terrain plus trees and buildings, where a terrain pack has them)
+    /// "bare" (bare earth, the default), "clutter" (terrain plus trees and buildings as solid obstacles) or "foliage" (bare earth
+    /// plus loss for the path through trees); the last two need a terrain pack with clutter data
     #[serde(default = "default_terrain")]
     pub terrain: String,
 }
@@ -129,8 +133,11 @@ pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
         "coverage_network" => return bad(format!("A network job needs 1 to {MAX_NODES} nodes.")),
         other => return bad(format!("Unknown job kind \"{other}\".")),
     }
-    if !matches!(r.terrain.as_str(), "bare" | "clutter") {
-        return bad("Terrain must be \"bare\" or \"clutter\".".into());
+    if !matches!(r.terrain.as_str(), "bare" | "clutter" | "foliage") {
+        return bad("Terrain must be \"bare\", \"clutter\" or \"foliage\".".into());
+    }
+    if let Err(e) = r.settings.foliage.validate() {
+        return bad(e);
     }
     if !(1.0..=100.0).contains(&r.radius_km) {
         return bad("Coverage radius must be between 1 and 100 km.".into());
@@ -189,6 +196,7 @@ fn node_params(r: &CoverageRequest, n: &NodeIn) -> NodeParams {
         radius_m: r.radius_km * 1000.0,
         resolution_m: r.resolution_m,
         use_clutter: r.terrain == "clutter",
+        foliage: (r.terrain == "foliage").then_some(r.settings.foliage),
     }
 }
 
@@ -202,6 +210,18 @@ pub(crate) fn sha(v: &Value) -> String {
     hex::encode(Sha256::digest(v.to_string().as_bytes()))
 }
 
+/// The settings that influence a prediction: the foliage settings only count when foliage is modelled, so results that do
+/// not use them keep their cache entries.
+fn settings_for_hash(r: &CoverageRequest) -> Value {
+    let mut v = serde_json::to_value(&r.settings).unwrap_or(Value::Null);
+    if r.terrain != "foliage" {
+        if let Some(o) = v.as_object_mut() {
+            o.remove("foliage");
+        }
+    }
+    v
+}
+
 /// Cache key of one node's coverage: everything that influences the prediction, and nothing else (names, notes...).
 pub fn node_hash(r: &CoverageRequest, n: &NodeIn, terrain_id: &str) -> String {
     let round = |v: f64| (v * 1e6).round() / 1e6;
@@ -211,7 +231,7 @@ pub fn node_hash(r: &CoverageRequest, n: &NodeIn, terrain_id: &str) -> String {
         "mode": r.terrain,
         "node": { "lat": round(n.lat), "lon": round(n.lon), "h": n.height_m, "tx": n.tx_dbm, "g": n.gain_dbi, "c": n.cable_loss_db, "preset": n.preset_id, "pattern": n.pattern.as_ref().filter(|p| !p.is_omni()) },
         "client": { "h": n.client_height_m.unwrap_or(r.client.height_m), "gain": r.client.gain_dbi, "cable": r.client.cable_loss_db },
-        "settings": r.settings,
+        "settings": settings_for_hash(r),
         "radiusKm": r.radius_km,
         "resolutionM": r.resolution_m,
     }))
@@ -498,7 +518,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
     let packs = ctx.state.packs();
     let sampler = Sampler::new(ctx.state.jobs.terrain.clone(), packs.clone());
     let share = |p: &NodeParams| -> Value {
-        if req.terrain == "clutter" {
+        if req.terrain != "bare" {
             json!(crate::terrain::clutter_share(&packs, p.lat, p.lon, p.radius_m))
         } else {
             Value::Null
@@ -533,7 +553,7 @@ fn execute(ctx: &Ctx, req: &CoverageRequest, hash: &str) -> Result<Value, Fail> 
         }
         let mut builder = NetworkBuilder::new(min_x, max_x, min_y, max_y, cell).map_err(Fail::Failed)?;
         let total = req.nodes.len() as f64;
-        let shares: Vec<f64> = if req.terrain == "clutter" { params.iter().filter_map(|p| share(p).as_f64()).collect() } else { vec![] };
+        let shares: Vec<f64> = if req.terrain != "bare" { params.iter().filter_map(|p| share(p).as_f64()).collect() } else { vec![] };
         // identical nodes (same hash) are only computed once
         let mut done: HashSet<String> = HashSet::new();
         for (i, n) in req.nodes.iter().enumerate() {

@@ -111,6 +111,7 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
     settings: {
       freqMhz: s.freqMhz,
       noiseFigureDb: s.noiseFigureDb,
+      foliage: { scale: s.foliageScale, leafOn: s.foliageLeafOn },
       itm: {
         climate: s.itmClimate,
         n0: s.itmN0,

@@ -59,9 +59,14 @@ export interface Settings {
   clientCableLossDb: number;
   /** Which ground model drives link colours and numbers: bare earth only, or terrain plus trees/buildings where a data pack has them. */
   terrainMode: TerrainMode;
+  /** Foliage loss multiplier (1 = the published model); calibrate it with field readings. */
+  foliageScale: number;
+  /** Trees in leaf (true) or bare (false). */
+  foliageLeafOn: boolean;
 }
 
-export type TerrainMode = "bare" | "clutter";
+/** bare earth only; trees and buildings as solid obstacles; or bare earth plus foliage loss for the path through trees */
+export type TerrainMode = "bare" | "clutter" | "foliage";
 
 export type ProjectRole = "owner" | "editor" | "viewer";
 
@@ -119,6 +124,10 @@ export interface LinkResult {
   margin_db: number;
   fspl_margin_db: number;
   class: LinkClass;
+  /** Foliage loss included in the path loss (foliage result only), dB. */
+  foliage_db?: number;
+  /** Length of the ray inside trees/buildings that the foliage loss was computed for, metres. */
+  foliage_depth_m?: number;
   series: { terrain_eff_m: number[]; ray_m: number[]; fresnel_m: number[] };
 }
 
@@ -133,8 +142,10 @@ export interface Link {
   result?: LinkResult;
   /** Bare-earth result. */
   bare?: LinkResult;
-  /** Terrain + clutter result; absent when no clutter data covers the path. */
+  /** Terrain + clutter (solid) result; absent when no clutter data covers the path. */
   clutter?: LinkResult;
+  /** Bare earth + foliage loss; absent when no clutter data covers the path. */
+  foliage?: LinkResult;
   /** The path has clutter data (so `clutter` is meaningful). */
   hasClutter?: boolean;
   warning?: string;
@@ -159,5 +170,7 @@ export const DEFAULT_SETTINGS: Settings = {
   coverageResolutionM: 100,
   clientGainDbi: 0,
   clientCableLossDb: 0,
-  terrainMode: "clutter",
+  terrainMode: "foliage",
+  foliageScale: 1,
+  foliageLeafOn: true,
 };

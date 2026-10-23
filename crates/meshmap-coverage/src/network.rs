@@ -132,6 +132,7 @@ mod tests {
             tx_dbm: 22.0,
             gain_dbi: 3.0,
             pattern: meshmap_core::antenna::AntennaPattern::Omni,
+            foliage: None,
             cable_loss_db: 0.5,
             sensitivity_dbm: -131.5,
             client_h_agl_m: 2.0,

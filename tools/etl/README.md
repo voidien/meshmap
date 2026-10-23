@@ -49,7 +49,7 @@ The ETL needs unrestricted internet access to `prd-tnm.s3.amazonaws.com`, `usgs-
 
 ## Caveats
 
-- Clutter is treated as solid geometry by the radio model; there is no foliage attenuation, no seasons, and no penetration of buildings.
+- Clutter is treated as solid geometry by the radio model; foliage attenuation is a separate optional model (see `docs/validation.md`), and buildings are not penetrated.
 - The canopy/buildings fallback underestimates lidar clutter somewhat (see `docs/validation.md`).
 - Both antennas are placed on the ground at their position, so a mast beside a tree or on a roof is described by its height above ground, not above the clutter.
 

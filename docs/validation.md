@@ -110,12 +110,19 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
 
 ## Foliage and clutter: what this does and does not model
 
-- Trees and buildings (where a terrain pack has them) are treated as **solid terrain** between the two ends: a path whose ray runs below the top
-  of the canopy gets diffraction loss as if the canopy were a ridge. **There is no foliage attenuation**, and no seasons. Real foliage is lossy but
-  porous, so this is neither reliably pessimistic nor optimistic: through deep forest it can be wrong by 10 dB or more in either direction.
-  Published models for in-leaf trees at 915 MHz (for example Weissberger) give roughly 6 dB for the first 14 m of foliage and roughly 20 dB through
-  100 m, with large spread, and less when the leaves are off. These are not used here. The 2015-16 lidar was flown leaf-off.
-- The honest way to tune this is with your own field readings (calibration), which is not built yet.
+- *Project settings -> Terrain model* offers three ways to treat trees and buildings (where a terrain pack has them):
+  **Bare earth** (ignore them), **Trees as solid** (the canopy is a ridge: diffraction loss when the ray runs below its top), and
+  **Bare earth + foliage loss** (default for new packs' projects when chosen; ITM over bare ground, plus attenuation for the length of the ray
+  that lies inside the canopy layer). The third is the usual choice for MeshCore/Reticulum at 915 MHz because leaves are lossy but porous.
+- Foliage loss uses the Weissberger modified exponential decay model (f in GHz): `0.45 f^0.284 d` dB for d up to 14 m and
+  `1.33 f^0.284 d^0.588` dB for 14-400 m, i.e. about 6 dB at 14 m, 19 dB at 100 m, 29 dB at 200 m, 44 dB at 400 m at 915 MHz (capped at 400 m).
+  Depth is the length of the straight ray (with earth bulge) inside the clutter layer; a ray below bare ground counts as terrain blocking, not foliage.
+- Caveats: Weissberger is an *average* with large spread (several dB to 10+ dB per path); buildings and trees are merged in one clutter layer, so a
+  building is treated as dense foliage; *leaf off* multiplies the loss by 0.5, which is an assumption, not a measurement; the 2015-16 lidar was flown
+  leaf-off, so its canopy heights understate summer foliage; the *scale* multiplier is the knob for your own area.
+- Calibration (Calibrate foliage card, own projects) fits that scale to your field readings (least squares of excess loss against the model's loss).
+  It warns when open-path readings are already weaker than predicted (antenna, cable, power or radio settings, not foliage). It has been tested
+  on synthetic data only, not yet against real measurements.
 
 ## Finer packs and newer buildings (v8)
 
@@ -180,6 +187,6 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   is a different model), and rounding of the reliability settings.
 - **No field calibration.** Predictions have not been compared with measured RSSI/SNR (a later phase).
 - **Terrain data.** Without a terrain pack the app uses public ~30 m Terrarium tiles with no clutter; real paths through trees and
-  buildings will be worse than predicted. With a pack, clutter is modelled as solid obstacles, but foliage loss is not.
+  buildings will be worse than predicted. With a pack, clutter is modelled as solid obstacles or as Weissberger foliage loss (your choice), and either is an average, not a measurement.
 - ITM is defined for 20 MHz-20 GHz and path distances above roughly 1 km; shorter paths return a result with a warning, and
   inputs ITM rejects fall back to free space + knife-edge, labelled as such in the UI.

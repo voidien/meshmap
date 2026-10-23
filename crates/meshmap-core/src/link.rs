@@ -4,6 +4,7 @@
 //! loss and the simpler "free space + single knife-edge diffraction" model are always computed too, as
 //! cross-checks and as the fallback when ITM rejects its inputs (for example a very short path).
 
+use crate::foliage::{depth_in_clutter_m, foliage_loss_db, FoliageParams};
 use crate::rf::{earth_bulge_m, fresnel_radius_m, fspl_db, knife_edge_loss_db, wavelength_m};
 use meshmap_itm::{ItmInput, Polarization, PropMode};
 use serde::{Deserialize, Serialize};
@@ -54,11 +55,14 @@ pub struct LinkParams {
     pub marginal_margin_db: f64,
     #[serde(default)]
     pub itm: ItmSettings,
+    /// How foliage loss is applied for the foliage result of [`analyze_link_both`].
+    #[serde(default)]
+    pub foliage: FoliageParams,
 }
 
 impl Default for LinkParams {
     fn default() -> Self {
-        Self { freq_mhz: 915.0, k: 4.0 / 3.0, marginal_margin_db: 10.0, itm: ItmSettings::default() }
+        Self { freq_mhz: 915.0, k: 4.0 / 3.0, marginal_margin_db: 10.0, itm: ItmSettings::default(), foliage: FoliageParams::default() }
     }
 }
 
@@ -121,6 +125,12 @@ pub struct LinkResult {
     /// Worst-direction margin ignoring terrain (free space only).
     pub fspl_margin_db: f64,
     pub class: LinkClass,
+    /// Foliage loss included in `path_loss_db` (0 unless this is the foliage result), dB.
+    #[serde(default)]
+    pub foliage_db: f64,
+    /// Length of the direct ray inside trees and buildings that the foliage loss was computed for, metres.
+    #[serde(default)]
+    pub foliage_depth_m: f64,
     /// Optional per-sample series for charting (empty unless requested).
     pub series: Series,
 }
@@ -139,7 +149,10 @@ pub struct Series {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkPair {
     pub bare: LinkResult,
+    /// Over terrain plus clutter treated as solid.
     pub clutter: Option<LinkResult>,
+    /// Over bare earth plus foliage loss for the stretch of ray inside the clutter layer.
+    pub foliage: Option<LinkResult>,
 }
 
 /// Ground plus clutter along a profile, for the model to treat as the surface radio waves have to clear.
@@ -162,7 +175,8 @@ pub fn surface_profile(bare: &[f64], clutter: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-/// Analyse a link over bare earth and, when `clutter` is given, again over terrain plus clutter.
+/// Analyse a link over bare earth and, when `clutter` is given, again over terrain plus clutter treated as solid, and
+/// over bare earth with foliage loss for the part of the ray inside the clutter.
 /// In the clutter result `series.terrain_eff_m` is the surface (terrain plus clutter) with earth curvature.
 pub fn analyze_link_both(
     params: &LinkParams,
@@ -174,12 +188,19 @@ pub fn analyze_link_both(
     include_series: bool,
 ) -> Result<LinkPair, String> {
     let bare = analyze_link(params, a, b, dist_m, bare_m, include_series)?;
-    let clutter = match clutter_m {
-        Some(c) if c.len() == bare_m.len() => Some(analyze_link(params, a, b, dist_m, &surface_profile(bare_m, c), include_series)?),
+    let (clutter, foliage) = match clutter_m {
+        Some(c) if c.len() == bare_m.len() => {
+            let solid = analyze_link(params, a, b, dist_m, &surface_profile(bare_m, c), include_series)?;
+            // foliage: the bare-earth path plus loss for the length of ray that runs through the clutter layer
+            let depth = depth_in_clutter_m(dist_m, bare_m, c, a.h_agl_m, b.h_agl_m, params.k);
+            let loss = foliage_loss_db(&params.foliage, params.freq_mhz, depth);
+            let f = analyze_link_with_loss(params, a, b, dist_m, bare_m, include_series, loss, depth)?;
+            (Some(solid), Some(f))
+        }
         Some(_) => return Err("clutter profile must have as many samples as the terrain profile".into()),
-        None => None,
+        None => (None, None),
     };
-    Ok(LinkPair { bare, clutter })
+    Ok(LinkPair { bare, clutter, foliage })
 }
 
 /// Free-space-only margin for both directions; cheap screen that needs no profile.
@@ -242,6 +263,21 @@ pub fn analyze_link(
     dist_m: &[f64],
     elev_m: &[f64],
     include_series: bool,
+) -> Result<LinkResult, String> {
+    analyze_link_with_loss(params, a, b, dist_m, elev_m, include_series, 0.0, 0.0)
+}
+
+/// [`analyze_link`] with extra loss (dB) added to the path loss, for foliage; `depth_m` is only recorded in the result.
+#[allow(clippy::too_many_arguments)]
+fn analyze_link_with_loss(
+    params: &LinkParams,
+    a: &Endpoint,
+    b: &Endpoint,
+    dist_m: &[f64],
+    elev_m: &[f64],
+    include_series: bool,
+    extra_loss_db: f64,
+    depth_m: f64,
 ) -> Result<LinkResult, String> {
     let n = dist_m.len();
     if n < 2 || elev_m.len() != n {
@@ -308,6 +344,7 @@ pub fn analyze_link(
         Ok(d) => (d.loss_db, LossModel::Itm, Some(d), None),
         Err(e) => (fspl + diffraction_db, LossModel::KnifeEdge, None, Some(e)),
     };
+    let path_loss = path_loss + extra_loss_db;
     let eirp_ab = a.tx_dbm + a.gain_dbi - a.cable_loss_db;
     let eirp_ba = b.tx_dbm + b.gain_dbi - b.cable_loss_db;
     let rx_ab = eirp_ab + b.gain_dbi - b.cable_loss_db - path_loss;
@@ -347,6 +384,8 @@ pub fn analyze_link(
         margin_db: margin,
         fspl_margin_db: fspl_margin,
         class,
+        foliage_db: extra_loss_db,
+        foliage_depth_m: depth_m,
         series,
     })
 }
@@ -539,6 +578,40 @@ mod tests {
         assert!(c.path_loss_db > pair.bare.path_loss_db + 5.0);
         assert!(c.margin_db < pair.bare.margin_db);
         assert!(c.obstruction_m > 5.0);
+    }
+
+    #[test]
+    fn the_foliage_result_adds_loss_for_the_ray_inside_the_trees_without_blocking_the_path() {
+        // 400 m of 25 m trees in the middle of a flat 5 km path; masts at 10 m are inside the canopy
+        let (d, e) = profile(5_000.0, 251, |_| 100.0);
+        let canopy = trees(5_000.0, 251, 2_300.0, 2_700.0, 25.0);
+        let pair = analyze_link_both(&LinkParams::default(), &ep(10.0), &ep(10.0), &d, &e, Some(&canopy), false).unwrap();
+        let f = pair.foliage.unwrap();
+        assert!(f.foliage_depth_m > 380.0 && f.foliage_depth_m <= 440.0, "{}", f.foliage_depth_m);
+        let expected = crate::foliage::weissberger_db(915.0, f.foliage_depth_m);
+        assert!((f.foliage_db - expected).abs() < 1e-9);
+        assert!((f.path_loss_db - (pair.bare.path_loss_db + expected)).abs() < 1e-9);
+        assert!((pair.bare.margin_db - f.margin_db - expected).abs() < 1e-6);
+        // the geometry is the bare-earth one: the trees do not count as a wall
+        assert_eq!(f.clearance_pct, pair.bare.clearance_pct);
+        // and the solid-wall model differs from it
+        assert!((pair.clutter.unwrap().path_loss_db - f.path_loss_db).abs() > 0.5);
+    }
+
+    #[test]
+    fn foliage_scale_leaf_state_and_a_ray_above_the_canopy_change_the_loss_as_expected() {
+        let (d, e) = profile(5_000.0, 251, |_| 100.0);
+        let canopy = trees(5_000.0, 251, 2_300.0, 2_700.0, 25.0);
+        let run = |foliage: FoliageParams, h: f64| {
+            let p = LinkParams { foliage, ..LinkParams::default() };
+            analyze_link_both(&p, &ep(h), &ep(h), &d, &e, Some(&canopy), false).unwrap().foliage.unwrap().foliage_db
+        };
+        let base = run(FoliageParams::default(), 10.0);
+        assert!(base > 15.0);
+        assert!((run(FoliageParams { scale: 0.5, leaf_on: true }, 10.0) - base / 2.0).abs() < 1e-9);
+        assert!((run(FoliageParams { scale: 1.0, leaf_on: false }, 10.0) - base * crate::foliage::LEAF_OFF_FACTOR).abs() < 1e-9);
+        assert_eq!(run(FoliageParams::default(), 40.0), 0.0, "masts above the canopy lose nothing to foliage");
+        assert_eq!(run(FoliageParams { scale: 0.0, leaf_on: true }, 10.0), 0.0);
     }
 
     #[test]

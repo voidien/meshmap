@@ -114,8 +114,15 @@ docker compose --profile etl run --rm etl build --id nashville --bbox=-86.80,36.
 ```
 
 Packs can overlap: where a finer pack (a town at zoom 14) sits on a coarser regional one (zoom 13), the finest data wins. Where a pack covers a path, a link's profile shows **bare earth and terrain + clutter side by side**, and *Project settings →
-Terrain model* picks which one colors links and heatmaps. Heatmap cards say how much of the area had clutter data. Clutter is
-treated as solid obstacles: there is no foliage loss, and both antennas stay on the ground (heights are above ground).
+Terrain model* picks which one colors links and heatmaps. Heatmap cards say how much of the area had clutter data. Clutter can be
+treated as solid obstacles or as **foliage loss** (Weissberger, per metre of ray inside the canopy; with a *leaf on/off* switch and a *scale*
+you calibrate). Both antennas stay on the ground (heights are above ground).
+
+### Calibrating foliage from field readings
+Take readings (Field mode: tap a reading at your location with the node you can hear, or *Import CSV*: columns
+`lat,lon,rssi[,snr,node,note,time,accuracy]`), some in the open near a node (these check antenna/power settings) and some through trees at
+different depths and distances. Then open **Calibrate foliage** and *Use the best scale*. Readings can come from the app typed by hand, from a
+radio's app (note RSSI/SNR with location), or CSV. The app does not connect to a radio itself.
 
 ## Placement suggestions
 

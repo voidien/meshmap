@@ -5,6 +5,7 @@
 //! frequencies MHz.
 
 pub mod antenna;
+pub mod foliage;
 pub mod geo;
 pub mod link;
 pub mod pairs;

@@ -245,6 +245,39 @@ async fn clutter_jobs_predict_less_coverage_than_bare_earth_where_a_pack_has_tre
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn foliage_jobs_charge_for_the_path_through_trees_with_a_tunable_scale() {
+    let (app, _, _) = setup(fixture_dir());
+    let (mut a, pid) = admin_with_project(&app).await;
+    let with = |terrain: &str, scale: f64, leaf_on: bool| {
+        let mut j = node_job(terrain, 36.0, -85.0);
+        j["settings"] = json!({ "foliage": { "scale": scale, "leafOn": leaf_on } });
+        j
+    };
+    let area = |j: &Value| j["result"]["stats"]["coveredKm2"].as_f64().unwrap();
+    let bare = run_job(&mut a, &pid, with("bare", 1.0, true)).await;
+    let full = run_job(&mut a, &pid, with("foliage", 1.0, true)).await;
+    let strong = run_job(&mut a, &pid, with("foliage", 3.0, true)).await;
+    let leafless = run_job(&mut a, &pid, with("foliage", 1.0, false)).await;
+    let zero = run_job(&mut a, &pid, with("foliage", 0.0, true)).await;
+    assert_eq!(full["result"]["terrain"], "foliage");
+    assert!(full["result"]["clutterShare"].as_f64().unwrap() > 0.8, "foliage mode reports how much of the area has clutter data");
+    assert!(area(&full) < area(&bare) * 0.98, "trees 2-3 km east cost coverage: bare {} foliage {}", area(&bare), area(&full));
+    assert!(area(&strong) < area(&full), "a larger scale loses more: {} vs {}", area(&strong), area(&full));
+    assert!(area(&leafless) > area(&full) && area(&leafless) < area(&bare) + 1e-9, "bare trees lose less than leafy ones");
+    assert!((area(&zero) - area(&bare)).abs() < 1e-9, "scale 0 is the bare-earth prediction");
+    // the foliage settings are part of the question only in foliage mode
+    let bare_other = run_job(&mut a, &pid, with("bare", 5.0, false)).await;
+    assert_eq!(bare["result"]["hash"], bare_other["result"]["hash"]);
+    assert_ne!(full["result"]["hash"], strong["result"]["hash"]);
+    assert_ne!(full["result"]["hash"], leafless["result"]["hash"]);
+    // nonsense scale is refused
+    for bad in [-1.0, 11.0] {
+        let (s, v) = a.json(Method::POST, &format!("/api/projects/{pid}/jobs"), Some(with("foliage", bad, true))).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{bad}: {v}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn rebuilding_or_adding_a_pack_invalidates_results_computed_without_it() {
     let packs_dir = std::env::temp_dir().join(format!("meshmap-packs-dir-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&packs_dir).unwrap();

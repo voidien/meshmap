@@ -21,12 +21,12 @@ export function nodesCsv(nodes: MeshNode[]): string {
 export function linksCsv(nodes: MeshNode[], links: Link[]): string {
   const name = new Map(nodes.map((n) => [n.id, n.name]));
   return csv([
-    ["node_a", "node_b", "class", "distance_km", "fresnel_clearance_pct", "fspl_db", "knife_edge_db", "path_loss_db", "model", "itm_mode", "margin_ab_db", "margin_ba_db", "margin_db", "warning"],
+    ["node_a", "node_b", "class", "distance_km", "fresnel_clearance_pct", "fspl_db", "knife_edge_db", "path_loss_db", "model", "itm_mode", "margin_ab_db", "margin_ba_db", "margin_db", "foliage_db", "foliage_depth_m", "warning"],
     ...links.map((l) => [
       name.get(l.a) ?? l.a, name.get(l.b) ?? l.b, l.class, r(l.distanceM / 1000, 3),
       l.result ? r(l.result.clearance_pct, 1) : "", l.result ? r(l.result.fspl_db) : "", l.result ? r(l.result.diffraction_db) : "",
       l.result ? r(l.result.path_loss_db) : "", l.result?.model ?? "", l.result?.itm?.mode ?? "", l.result ? r(l.result.margin_ab_db) : "", l.result ? r(l.result.margin_ba_db) : "",
-      l.result ? r(l.result.margin_db) : "", l.warning ?? "",
+      l.result ? r(l.result.margin_db) : "", l.result?.foliage_db ? r(l.result.foliage_db) : "", l.result?.foliage_depth_m ? r(l.result.foliage_depth_m, 0) : "", l.warning ?? "",
     ]),
   ]);
 }

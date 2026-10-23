@@ -7,6 +7,7 @@ import { NETWORKS, fitsNetwork } from "./networks";
 import { buildSiteReport } from "./siteReport";
 import { captureMap } from "./map/capture";
 import type { Comment, FieldReading } from "./collab";
+import { CalibrationPanel } from "./components/CalibrationPanel";
 import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPanel";
 import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
 import { linkKey } from "./engine/analysis";
@@ -725,6 +726,15 @@ export function App({ auth }: { auth: AuthContext }) {
           onLink={(a, b) => { setSelectedLink(linkKey(a, b)); setSelectedNode(null); }}
           onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
         />
+        {pubProject || !project.id ? null : (
+          <CalibrationPanel
+            projectId={project.id}
+            nodes={project.nodes}
+            settings={project.settings}
+            readOnly={readOnly}
+            onApply={(scale, leafOn) => setProject((p) => ({ ...p, settings: { ...p.settings, foliageScale: scale, foliageLeafOn: leafOn, terrainMode: "foliage" } }))}
+          />
+        )}
         {pubProject ? null : <PlacementPanel
           nodes={project.nodes}
           area={placementArea}

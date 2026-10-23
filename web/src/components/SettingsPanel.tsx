@@ -135,14 +135,31 @@ export function SettingsPanel({ settings: s, onChange, nodes, onApplyRadio, read
       <h4 className="subhead">Terrain model</h4>
       <label className="field">
         <span>Ground used for links and heatmaps</span>
-        <select value={s.terrainMode} onChange={(e) => onChange({ terrainMode: e.target.value as TerrainMode })}>
-          <option value="clutter">Terrain + trees and buildings (where data exists)</option>
+        <select id="terrain-select" value={s.terrainMode} onChange={(e) => onChange({ terrainMode: e.target.value as TerrainMode })}>
+          <option value="foliage">Bare earth + foliage loss through trees (recommended)</option>
+          <option value="clutter">Trees and buildings as solid obstacles</option>
           <option value="bare">Bare earth only</option>
         </select>
       </label>
+      {s.terrainMode === "foliage" ? (
+        <div className="grid2">
+          <label className="field">
+            <span>Trees</span>
+            <select value={s.foliageLeafOn ? "on" : "off"} onChange={(e) => onChange({ foliageLeafOn: e.target.value === "on" })}>
+              <option value="on">In leaf</option>
+              <option value="off">Bare (leaves off)</option>
+            </select>
+          </label>
+          <Row label="Foliage loss scale (1 = published model)" value={s.foliageScale} step={0.1} min={0} max={10} onChange={(v) => onChange({ foliageScale: v })} />
+        </div>
+      ) : null}
       <p className="hint">
-        Clutter comes from terrain data packs installed on the server (see README). Where none covers a path, bare earth is used and the profile says so.
-        Open a link's profile to see both models side by side.
+        {s.terrainMode === "foliage"
+          ? "Trees do not block the path; instead the part of the straight path that runs inside trees loses signal (Weissberger's model: about 6 dB for the first 14 m, about 20 dB through 100 m in leaf, at 915 MHz). It is an average with a large spread: measure your own and set the scale (Calibrate foliage, below)."
+          : s.terrainMode === "clutter"
+            ? "Trees and buildings act like a solid ridge: a path whose ray runs below the treetops is treated as blocked. There is no foliage attenuation."
+            : "Trees and buildings are ignored."}{" "}
+        Clutter comes from terrain data packs installed on the server (see Help). Where none covers a path, bare earth is used and the profile says so. Open a link's profile to see the models side by side.
       </p>
       <h4 className="subhead">Coverage heatmaps</h4>
       <div className="grid2">

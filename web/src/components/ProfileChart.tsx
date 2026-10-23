@@ -124,16 +124,19 @@ export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, r
 export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover?: number | null; setHover?: (i: number | null) => void; picked?: number | null; onPick?: (i: number) => void; high?: number | null }) {
   const { data, a, b, settings, hover = null, setHover = () => undefined, picked = null, onPick, high = null } = props;
   const { dist, elev, result: r, bare, withClutter } = data;
-  const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
+  // trees and buildings are drawn in the solid-obstacle and foliage models (as a wall, or as lossy foliage); not for bare earth
+  const showClutter = settings.terrainMode !== "bare" && withClutter !== null;
+  const solid = settings.terrainMode === "clutter";
   const n = dist.length;
   const total = dist[n - 1];
   const s = r.series;
+  const surface = withClutter ? withClutter.series.terrain_eff_m : s.terrain_eff_m;
 
   const upper = s.ray_m.map((y, i) => y + s.fresnel_m[i]);
   const lower = s.ray_m.map((y, i) => y - s.fresnel_m[i]);
   const bareLine = bare.series.terrain_eff_m;
-  const ymin0 = Math.min(...bareLine, ...s.terrain_eff_m, ...lower);
-  const ymax0 = Math.max(...bareLine, ...s.terrain_eff_m, ...upper);
+  const ymin0 = Math.min(...bareLine, ...surface, ...lower);
+  const ymax0 = Math.max(...bareLine, ...surface, ...upper);
   const pad = Math.max(5, (ymax0 - ymin0) * 0.06);
   const ymin = ymin0 - pad;
   const ymax = ymax0 + pad;
@@ -144,7 +147,7 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
     path(top) + [...bottom].reverse().map((v, k) => `L${X(dist[n - 1 - k]).toFixed(1)},${Y(v).toFixed(1)}`).join("") + "Z";
   const inner = (sign: number) => s.ray_m.map((y, i) => y + sign * 0.6 * s.fresnel_m[i]);
   const terrainFill = path(bareLine) + `L${X(total)},${H - M.b}L${X(0)},${H - M.b}Z`;
-  const clutterFill = showClutter ? poly(s.terrain_eff_m, bareLine) : "";
+  const clutterFill = showClutter ? poly(surface, bareLine) : "";
 
   const yTicks = niceTicks(ymin, ymax, 5);
   const xTicks = niceTicks(0, total / 1000, 8);
@@ -166,9 +169,9 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
   return (
         <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onClick={onClick} style={onPick ? { cursor: "crosshair" } : undefined}>
           <path d={terrainFill} fill="#b59a73" opacity={0.85} />
-          {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={0.75} /> : null}
+          {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={solid ? 0.75 : 0.4} /> : null}
           <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />
-          {showClutter ? <path d={path(s.terrain_eff_m)} fill="none" stroke="#1f5f2f" strokeWidth={1.2} /> : null}
+          {showClutter ? <path d={path(surface)} fill="none" stroke="#1f5f2f" strokeWidth={1.2} strokeDasharray={solid ? undefined : "4 2"} /> : null}
           <path d={poly(upper, lower)} fill="#4f8ff7" opacity={0.15} />
           <path d={poly(inner(1), inner(-1))} fill="#4f8ff7" opacity={0.22} />
           <path d={path(s.ray_m)} fill="none" stroke="#1d4ed8" strokeWidth={1.6} />
@@ -227,7 +230,7 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
 function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Settings; hover: number | null; setHover: (i: number | null) => void; picked: number | null; onPick: (i: number) => void; high: number | null; extra: ReactNode }) {
   const { data, a, b, settings, hover, setHover, picked, onPick, high, extra } = props;
   const { dist, elev, result: r, bare, withClutter } = data;
-  const showClutter = settings.terrainMode === "clutter" && withClutter !== null;
+  const showClutter = settings.terrainMode !== "bare" && withClutter !== null;
   const s = r.series;
   const sensA = r.rx_ab_dbm - r.margin_ab_db;
   const sensB = r.rx_ba_dbm - r.margin_ba_db;
@@ -242,7 +245,7 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
         <span><i className="sw" style={{ background: "#1d4ed8" }} />direct ray</span>
         <span><i className="sw" style={{ background: "#4f8ff7", opacity: 0.5 }} />1st Fresnel zone (inner = 60 %)</span>
         {showClutter ? (
-          <span><i className="sw" style={{ background: "#3f8f4f" }} />trees and buildings (clutter)</span>
+          <span><i className="sw" style={{ background: "#3f8f4f" }} />trees and buildings (clutter){settings.terrainMode === "foliage" ? ": lossy, not a wall" : ""}</span>
         ) : data.clutter === null ? (
           <span>no clutter data on this path: bare earth only</span>
         ) : (
@@ -278,19 +281,19 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
               <th>{b.name} → {a.name}</th><td>Rx {f(r.rx_ba_dbm)} dBm · sens {f(sensA)} → margin <b>{f(r.margin_ba_db)} dB</b></td></tr>
         </tbody>
       </table>
-      {withClutter ? <CompareTable bare={bare} clutter={withClutter} mode={settings.terrainMode} /> : null}
+      {withClutter ? <CompareTable bare={bare} clutter={withClutter} foliage={data.withFoliage} mode={settings.terrainMode} /> : null}
       {r.itm && r.itm.warnings.length ? (
         <p className="hint">ITM warnings: {r.itm.warnings.join("; ")}.</p>
       ) : null}
       <p className="hint">
-        Estimate only: Longley-Rice over {showClutter ? "terrain plus trees and buildings treated as solid obstacles (no foliage loss; both antennas stay on the ground)" : "bare-earth terrain (no trees or buildings)"}, at {settings.reliabilityPct} % reliability / {settings.confidencePct} % confidence.
+        Estimate only: Longley-Rice over {settings.terrainMode === "foliage" && showClutter ? `bare-earth terrain plus foliage loss for the stretch of path inside trees (${Math.round(data.withFoliage?.foliage_depth_m ?? 0)} m, +${(data.withFoliage?.foliage_db ?? 0).toFixed(1)} dB, scale ${settings.foliageScale}, ${settings.foliageLeafOn ? "in leaf" : "leaves off"}; an average model with a large spread)` : showClutter ? "terrain plus trees and buildings treated as solid obstacles (no foliage loss; both antennas stay on the ground)" : "bare-earth terrain (no trees or buildings)"}, at {settings.reliabilityPct} % reliability / {settings.confidencePct} % confidence.
         The "regime" is ITM's own classification by distance and horizons; clearance above shows whether the direct ray is actually blocked.
       </p>
     </div>
   );
 }
 
-function CompareTable({ bare, clutter, mode }: { bare: LinkResult; clutter: LinkResult; mode: TerrainMode }) {
+function CompareTable({ bare, clutter, foliage, mode }: { bare: LinkResult; clutter: LinkResult; foliage: LinkResult | null; mode: TerrainMode }) {
   const f = (v: number, d = 1) => v.toFixed(d);
   const rows: [string, (r: LinkResult) => string][] = [
     ["Class", (r) => r.class],
@@ -299,18 +302,34 @@ function CompareTable({ bare, clutter, mode }: { bare: LinkResult; clutter: Link
     ["Fresnel clearance", (r) => `${r.clearance_pct < -100 ? "< -100" : f(r.clearance_pct, 0)} %`],
     ["Obstruction above ray", (r) => (r.obstruction_m > 0 ? `${f(r.obstruction_m, 0)} m` : "none")],
   ];
+  const cols: [string, TerrainMode, LinkResult][] = [["Bare earth", "bare", bare]];
+  if (foliage) cols.push(["Bare + foliage loss", "foliage", foliage]);
+  cols.push(["Trees as solid", "clutter", clutter]);
   return (
     <table className="budget compare-terrain">
       <thead>
-        <tr><th /><th className={mode === "bare" ? "sel" : ""}>Bare earth</th><th className={mode === "clutter" ? "sel" : ""}>Terrain + clutter</th><th>Difference</th></tr>
+        <tr>
+          <th />
+          {cols.map(([label, m]) => (
+            <th key={m} className={mode === m ? "sel" : ""}>{label}</th>
+          ))}
+        </tr>
       </thead>
       <tbody>
+        {foliage ? (
+          <tr>
+            <th>Ray inside trees</th>
+            {cols.map(([, m, r]) => (
+              <td key={m}>{m === "foliage" ? `${Math.round(r.foliage_depth_m ?? 0)} m → +${f(r.foliage_db ?? 0)} dB` : ""}</td>
+            ))}
+          </tr>
+        ) : null}
         {rows.map(([label, fn]) => (
           <tr key={label}>
             <th>{label}</th>
-            <td>{fn(bare)}</td>
-            <td>{fn(clutter)}</td>
-            <td>{label === "Path loss" ? `${f(clutter.path_loss_db - bare.path_loss_db)} dB` : label === "Worst margin" ? `${f(clutter.margin_db - bare.margin_db)} dB` : ""}</td>
+            {cols.map(([, m, r]) => (
+              <td key={m}>{fn(r)}</td>
+            ))}
           </tr>
         ))}
       </tbody>
