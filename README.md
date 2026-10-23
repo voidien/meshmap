@@ -1,6 +1,6 @@
 # meshmap
 
-Planner for large LoRa mesh networks (Meshtastic / MeshCore style) in the US, 915 MHz.
+Planner for large LoRa mesh networks (MeshCore, Reticulum or Meshtastic) in the US 902-928 MHz band.
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-v5 delivery ladder.
 
 **Current release: v3** - accounts, shared projects, and **coverage heatmaps** computed on the server as background jobs. Estimates only: bare-earth terrain from
@@ -91,6 +91,17 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
 - The terrain is the same ~30 m bare-earth data as the links use, and the same Longley-Rice model, but a heatmap samples the
   ground every 100 m by default (a link profile every 40 m), so a cell can differ a little from the same spot analysed as a link.
   As everywhere: estimates, no trees or buildings yet.
+
+## Which network (MeshCore, Reticulum, Meshtastic)
+
+*Project settings → Network* says what you are planning for; new projects start as **MeshCore**. It sets the radio new nodes start with, the
+frequency, and the hop count used by Mesh health. MeshCore starts at the US/Canada recommended setting (910.525 MHz, 62.5 kHz, SF7). Reticulum
+(RNode) has no fixed standard, so it starts from a common example (125 kHz, SF8) and you choose your own; Meshtastic keeps its modem presets.
+Each node's *Radio settings* list the presets of all three (the project's own first) and a **Custom LoRa** choice for any spreading factor
+(SF5-SF12) and bandwidth. Only spreading factor and bandwidth change what a node can hear; coding rate and the exact frequency do not matter to
+the link maths. Nodes on different spreading factor or bandwidth cannot hear each other (shown as no link). Projects saved before this keep the
+network they were planned with (Meshtastic if their nodes use Meshtastic presets), and a banner offers to move nodes that do not fit the
+project's network.
 
 ## Terrain packs (trees and buildings)
 

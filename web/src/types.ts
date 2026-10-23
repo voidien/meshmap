@@ -4,6 +4,8 @@ export type AntennaPattern =
   | { kind: "directional"; azimuthDeg: number; beamwidthDeg: number; frontToBackDb: number }
   | { kind: "table"; azimuthDeg: number; gainsDb: number[] };
 
+import type { Network } from "./networks";
+
 export type NodeStatus = "planned" | "installed";
 export type LinkClass = "clear" | "marginal" | "obstructed" | "none";
 
@@ -31,6 +33,8 @@ export interface MeshNode {
 }
 
 export interface Settings {
+  /** The mesh software the project is planned for: sets the radio settings new nodes start with. */
+  network: Network;
   freqMhz: number;
   k: number;
   maxRangeKm: number;
@@ -91,6 +95,8 @@ export interface Preset {
   name: string;
   sf: number;
   bw_khz: number;
+  /** "meshcore", "reticulum", "meshtastic", or "custom" for a setting written as lora:<sf>:<bw> */
+  family: string;
 }
 
 /** Result of `analyze_link` in the WASM core (snake_case as emitted by serde). */
@@ -135,7 +141,8 @@ export interface Link {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  freqMhz: 915,
+  network: "meshcore",
+  freqMhz: 910.525,
   k: 4 / 3,
   maxRangeKm: 50,
   marginalMarginDb: 10,

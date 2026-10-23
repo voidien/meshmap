@@ -3,6 +3,7 @@ import { useProjectSync } from "./useProjectSync";
 import { useCoverage } from "./useCoverage";
 import { CoveragePanel } from "./components/CoveragePanel";
 import { PlacementPanel } from "./components/PlacementPanel";
+import { NETWORKS, fitsNetwork } from "./networks";
 import { buildSiteReport } from "./siteReport";
 import { captureMap } from "./map/capture";
 import type { Comment, FieldReading } from "./collab";
@@ -96,8 +97,9 @@ export function App({ auth }: { auth: AuthContext }) {
   }, [menuOpen]);
   const sideRef = useRef<HTMLElement>(null);
   const [profilePoint, setProfilePoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [radioBannerOff, setRadioBannerOff] = useState<string | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
-  const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: 3, highlight: true, failedId: "" });
+  const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
   const [viewPub, setViewPub] = useState<Publication | null>(null);
@@ -154,6 +156,10 @@ export function App({ auth }: { auth: AuthContext }) {
   const links = useMemo(() => (project.settings.showNone ? allLinks : allLinks.filter((l) => l.class !== "none")), [allLinks, project.settings.showNone]);
   const ghostLinks = useMemo(() => (other ? otherAllLinks.filter((l) => l.class !== "none") : []), [other, otherAllLinks]);
 
+  // the hop count worth planning for depends on the software
+  useEffect(() => {
+    setHealthOpts((o) => ({ ...o, hopLimit: NETWORKS[project.settings.network].hopLimit }));
+  }, [project.settings.network, project.id]);
   const healthInput = useMemo(
     () => ({ nodeIds: project.nodes.map((n) => n.id), edges: edgesFromLinks(allLinks, healthOpts.minMarginDb), gateways: project.nodes.filter((n) => n.gateway).map((n) => n.id), hopLimit: healthOpts.hopLimit }),
     [project.nodes, allLinks, healthOpts.minMarginDb, healthOpts.hopLimit],
@@ -369,7 +375,7 @@ export function App({ auth }: { auth: AuthContext }) {
         ...p,
         nodes: [
           ...p.nodes,
-          { id, name: `Node ${p.nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: "long_fast", status: "planned", notes: "" },
+          { id, name: `Node ${p.nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: NETWORKS[p.settings.network].presetId, status: "planned", notes: "" },
         ],
       }));
       setSelectedNode(id);
@@ -400,7 +406,7 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const newNode = (nodes: MeshNode[], lat: number, lon: number, name: string): MeshNode => ({
     id: uid(), name: name || `Node ${nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3,
-    cableLossDb: 0.5, presetId: "long_fast", status: "planned", notes: "",
+    cableLossDb: 0.5, presetId: NETWORKS[project.settings.network].presetId, status: "planned", notes: "",
   });
 
   const focusNode = (id: string) => {
@@ -608,7 +614,7 @@ export function App({ auth }: { auth: AuthContext }) {
         ) : null}
         {sel ? (
           <fieldset className="plain" disabled={readOnly} id="selected-node">
-            <NodePanel node={sel} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
+            <NodePanel node={sel} network={project.settings.network} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
           </fieldset>
         ) : null}
         {section === "mine" ? (
@@ -626,6 +632,21 @@ export function App({ auth }: { auth: AuthContext }) {
         />
         ) : null}
         {section === "mine" ? <input className="pname" value={project.name} readOnly={readOnly || project.role !== "owner"} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" title={project.role === "owner" ? "" : "Only the owner can rename"} /> : null}
+        {(() => {
+          const net = project.settings.network;
+          const odd = project.nodes.filter((n) => !fitsNetwork(n.presetId, net));
+          const key = `${project.id}|${net}`;
+          if (section !== "mine" || readOnly || odd.length === 0 || radioBannerOff === key) return null;
+          return (
+            <div className="banner" id="radio-mismatch">
+              {odd.length} node{odd.length === 1 ? " uses" : "s use"} radio settings from another network, but this project is planned for {NETWORKS[net].label}.
+              <div className="row-actions">
+                <button className="on" onClick={() => patchMany(odd.map((n) => n.id), { presetId: NETWORKS[net].presetId })}>Set {odd.length === 1 ? "it" : "them"} to {NETWORKS[net].label}</button>
+                <button onClick={() => setRadioBannerOff(key)}>Keep as is</button>
+              </div>
+            </div>
+          );
+        })()}
         <div className="toolbar">
           <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
             {addMode ? "Click the map…" : "+ Node"}
@@ -654,6 +675,7 @@ export function App({ auth }: { auth: AuthContext }) {
         {ready ? (
         <fieldset className="plain" disabled={readOnly}>
         <NodeList
+            network={project.settings.network}
             nodes={project.nodes}
             links={allLinks}
             focusId={selectedNode}
@@ -693,6 +715,7 @@ export function App({ auth }: { auth: AuthContext }) {
         />}
         <MeshHealthPanel
           nodes={project.nodes}
+          network={project.settings.network}
           health={health}
           failure={failure}
           options={healthOpts}
@@ -740,7 +763,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onChange={setCompareId}
         />}
         <fieldset className="plain" disabled={readOnly}>
-        <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} />
+        <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} />
         </fieldset>
         <Card id="export" title="Import / export">
           <div className="btnrow">

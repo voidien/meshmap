@@ -1,4 +1,5 @@
 import { cleanAntenna } from "./antenna";
+import { inferNetwork, isNetwork, NETWORKS } from "./networks";
 import { uid } from "./id";
 import { DEFAULT_SETTINGS, type MeshNode, type Project, type Settings } from "./types";
 
@@ -38,13 +39,14 @@ export function parseProject(raw: unknown): Project | null {
       cableLossDb: num(n.cableLossDb, 0.5),
       antenna: cleanAntenna(n.antenna),
       gateway: n.gateway === true ? true : undefined,
-      presetId: typeof n.presetId === "string" ? n.presetId : "long_fast",
+      presetId: typeof n.presetId === "string" && n.presetId !== "" ? n.presetId : NETWORKS.meshcore.presetId,
       status: n.status === "installed" ? "installed" : "planned",
       notes: typeof n.notes === "string" ? n.notes : "",
     });
   }
   const s = (o.settings ?? {}) as Record<string, unknown>;
   const settings: Settings = {
+    network: isNetwork(s.network) ? s.network : inferNetwork(nodes.map((n) => n.presetId)),
     freqMhz: num(s.freqMhz, DEFAULT_SETTINGS.freqMhz),
     k: num(s.k, DEFAULT_SETTINGS.k),
     maxRangeKm: num(s.maxRangeKm, DEFAULT_SETTINGS.maxRangeKm),

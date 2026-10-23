@@ -1,7 +1,8 @@
-import { getPresets } from "../engine/wasm";
 import { Card } from "./Card";
 import { LINK_COLORS } from "../map/MapView";
 import { AntennaEditor } from "./AntennaEditor";
+import { RadioPicker } from "./RadioPicker";
+import type { Network } from "../networks";
 import type { Link, MeshNode } from "../types";
 
 export interface Connection {
@@ -14,6 +15,7 @@ interface Props {
   connections: Connection[];
   /** The project's other nodes (to aim a directional antenna at). */
   others: MeshNode[];
+  network: Network;
   onChange: (patch: Partial<MeshNode>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -46,8 +48,7 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
   );
 }
 
-export function NodePanel({ node, connections, others, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
-  const presets = getPresets();
+export function NodePanel({ node, connections, others, network, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
   return (
     <Card id="node" title={`Node: ${node.name.trim() || "(unnamed)"}`} openWhen={node.id}>
       <label className="field">
@@ -64,16 +65,7 @@ export function NodePanel({ node, connections, others, onChange, onDelete, onDup
         <Num label="Cable loss" unit="dB" value={node.cableLossDb} min={0} step={0.1} onChange={(v) => onChange({ cableLossDb: v })} />
       </div>
       <AntennaEditor node={node} others={others} onChange={onChange} />
-      <label className="field">
-        <span>Radio preset</span>
-        <select value={node.presetId} onChange={(e) => onChange({ presetId: e.target.value })}>
-          {presets.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <RadioPicker value={node.presetId} onChange={(presetId) => onChange({ presetId })} network={network} />
       <label className="check">
         <input type="checkbox" checked={node.gateway === true} onChange={(e) => onChange({ gateway: e.target.checked ? true : undefined })} />
         Gateway (connects the mesh to the internet/MQTT)

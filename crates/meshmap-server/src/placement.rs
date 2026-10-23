@@ -14,7 +14,7 @@ use crate::jobs::{self, node_hash, node_raster, terrain_id, ClientIn, CoverageRe
 use crate::terrain::Sampler;
 use meshmap_core::geo::haversine_m;
 use meshmap_core::link::{analyze_link_both, fspl_margins_db, Endpoint, LinkParams};
-use meshmap_core::presets::{sensitivity_dbm, PRESETS};
+use meshmap_core::presets::{radio, sensitivity_dbm};
 use meshmap_coverage::{mercator, Elevation, Raster, COVERED_MIN};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -255,8 +255,8 @@ struct LinkInfo {
 }
 
 fn endpoint(n: &NodeIn, toward_deg: f64, noise_figure_db: f64) -> (Endpoint, u8, f64) {
-    let p = PRESETS.iter().find(|p| p.id == n.preset_id).expect("validated");
-    (Endpoint { h_agl_m: n.height_m, tx_dbm: n.tx_dbm, gain_dbi: n.gain_dbi + n.pattern.as_ref().map_or(0.0, |p| p.rel_gain_db(toward_deg)), cable_loss_db: n.cable_loss_db, sensitivity_dbm: sensitivity_dbm(p.sf, p.bw_khz, noise_figure_db) }, p.sf, p.bw_khz)
+    let (sf, bw_khz) = radio(&n.preset_id).expect("validated");
+    (Endpoint { h_agl_m: n.height_m, tx_dbm: n.tx_dbm, gain_dbi: n.gain_dbi + n.pattern.as_ref().map_or(0.0, |p| p.rel_gain_db(toward_deg)), cable_loss_db: n.cable_loss_db, sensitivity_dbm: sensitivity_dbm(sf, bw_khz, noise_figure_db) }, sf, bw_khz)
 }
 
 fn link_between(req: &PlacementRequest, sampler: &Sampler, a: (&NodeIn, f64, f64), b: (&NodeIn, f64, f64)) -> Option<(f64, f64, String)> {

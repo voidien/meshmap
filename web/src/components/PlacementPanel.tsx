@@ -68,7 +68,7 @@ export function PlacementPanel(p: Props) {
           <label className="field wide">
             <span>New nodes are like</span>
             <select value={p.templateId} onChange={(e) => p.onTemplate(e.target.value)}>
-              <option value="">Defaults (10 m mast, 22 dBm, 3 dBi, Long Fast)</option>
+              <option value="">Defaults (10 m mast, 22 dBm, 3 dBi, the project's default radio)</option>
               {p.nodes.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.name.trim() || "Node"} ({n.heightM} m, {n.txDbm} dBm)

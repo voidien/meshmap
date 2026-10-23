@@ -1,4 +1,4 @@
-import { wasm, getPresets } from "./wasm";
+import { wasm, getPresets, radioFor } from "./wasm";
 import { terrain } from "./terrain";
 import { relGainDb } from "../antenna";
 import type { Link, LinkResult, MeshNode, Preset, Settings } from "../types";
@@ -19,7 +19,11 @@ const MAX_SAMPLES = 2000;
 let presetMap: Map<string, Preset> | null = null;
 export function presetById(id: string): Preset {
   presetMap ??= new Map(getPresets().map((p) => [p.id, p]));
-  return presetMap.get(id) ?? presetMap.get("long_fast")!;
+  const hit = presetMap.get(id);
+  if (hit) return hit;
+  const r = radioFor(id);
+  if (r) return { id, name: `Custom LoRa (SF${r.sf}, ${r.bw_khz} kHz)`, sf: r.sf, bw_khz: r.bw_khz, family: "custom" };
+  return presetMap.get("meshcore_us")!;
 }
 
 /** One end of a link; with `toward`, the antenna gain is the one in the direction of the other end (directional antennas). */
@@ -137,7 +141,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
   const py = presetById(y.presetId);
   let link: Link;
   if (px.sf !== py.sf || px.bw_khz !== py.bw_khz) {
-    link = { key, a: x.id, b: y.id, class: "none", distanceM, warning: "Radio presets differ (SF/BW): LoRa cannot demodulate across presets." };
+    link = { key, a: x.id, b: y.id, class: "none", distanceM, warning: "Radio settings differ (spreading factor or bandwidth): the two cannot hear each other." };
   } else {
     const [mAb, mBa] = wasm.fspl_margins(endpointOf(x, s, y), endpointOf(y, s, x), distanceM, s.freqMhz);
     if (Math.min(mAb, mBa) < 0) {

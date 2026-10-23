@@ -97,6 +97,26 @@ the margin arithmetic, the headline-model selection and its fallbacks (see `carg
   possible site). Candidates are high points only, so a valley town that needs a low site is not found. Tall masts, towers and
   existing buildings are not considered. No comparison with a human planner's choices or with measurements.
 
+## Radio settings for MeshCore and Reticulum (v8)
+
+- Tested: radio setting ids (presets and custom `lora:<sf>:<bw>`) parse and validate the same in the server and the browser; the MeshCore
+  US/Canada default (SF7, 62.5 kHz) has the sensitivity expected from the noise floor (about -127.5 dBm at a 6 dB noise figure); in coverage jobs
+  every radio setting is its own cached question, a custom setting equal to a preset predicts identically, a higher spreading factor reaches
+  further, and invalid settings are rejected; in a browser run, moving two nodes from Meshtastic Long Fast to MeshCore SF7/62.5 kHz lowered
+  their link margin by about 4 dB, as the sensitivity difference says it should.
+- **Not validated:** the starting settings are common published values, not something checked against your network (MeshCore's own documentation
+  and community guides differ on coding rate, and Reticulum leaves the radio to the user); coding rate and the small frequency differences are
+  ignored; the hop figures used for mesh health are planning numbers, not limits of the software.
+
+## Foliage and clutter: what this does and does not model
+
+- Trees and buildings (where a terrain pack has them) are treated as **solid terrain** between the two ends: a path whose ray runs below the top
+  of the canopy gets diffraction loss as if the canopy were a ridge. **There is no foliage attenuation**, and no seasons. Real foliage is lossy but
+  porous, so this is neither reliably pessimistic nor optimistic: through deep forest it can be wrong by 10 dB or more in either direction.
+  Published models for in-leaf trees at 915 MHz (for example Weissberger) give roughly 6 dB for the first 14 m of foliage and roughly 20 dB through
+  100 m, with large spread, and less when the leaves are off. These are not used here. The 2015-16 lidar was flown leaf-off.
+- The honest way to tune this is with your own field readings (calibration), which is not built yet.
+
 ## Finer packs and newer buildings (v8)
 
 - Overlapping packs: the server and the browser sample the finest pack first and fall back to coarser ones; tested on the server

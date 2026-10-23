@@ -1,5 +1,6 @@
 /** Placement suggestions: where would new nodes add the most coverage? (server job `placement`) */
 import type { JobState } from "./coverage";
+import { NETWORKS } from "./networks";
 import type { MeshNode, Settings } from "./types";
 
 export interface Area {
@@ -88,7 +89,7 @@ export interface PlacementJob {
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
 export function placementRequest(area: Area, template: MeshNode | null, existing: MeshNode[], s: Settings, o: PlacementOptions) {
-  const t = template ?? { heightM: 10, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: "long_fast", clientHeightM: 1 };
+  const t = template ?? { heightM: 10, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: NETWORKS[s.network].presetId, clientHeightM: 1 };
   const nodeIn = (n: Pick<MeshNode, "heightM" | "txDbm" | "gainDbi" | "cableLossDb" | "presetId" | "clientHeightM"> & { antenna?: MeshNode["antenna"] }, lat: number, lon: number, name?: string) => ({
     lat: round6(lat),
     lon: round6(lon),

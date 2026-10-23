@@ -478,3 +478,35 @@ async fn antenna_patterns_change_the_prediction_and_are_validated() {
     let (s, v) = c.post(&format!("/api/projects/{pid}/jobs"), with(json!({ "kind": "directional", "azimuthDeg": 0.0, "beamwidthDeg": 0.0, "frontToBackDb": 10.0 }))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
 }
+
+#[tokio::test]
+async fn radio_settings_for_meshcore_and_reticulum_change_the_prediction_and_are_validated() {
+    let (app, _) = setup(Arc::new(Hills { calls: AtomicUsize::new(0) }));
+    let mut c = admin(&app).await;
+    let pid = project(&mut c, "p").await;
+    let with = |preset: &str| {
+        let mut n = node(36.0, -85.0);
+        n["presetId"] = json!(preset);
+        n["txDbm"] = json!(-8.0); // a weak transmitter, so the radio setting decides how far it reaches
+        json!({ "kind": "coverage_node", "nodes": [n], "radiusKm": 12.0, "resolutionM": 250.0 })
+    };
+    let mut areas = Vec::new();
+    for preset in ["long_fast", "meshcore_us", "meshcore_sf10", "reticulum_sf8_125", "lora:8:125"] {
+        let (s, j) = c.post(&format!("/api/projects/{pid}/jobs"), with(preset)).await;
+        assert!(s == StatusCode::ACCEPTED || s == StatusCode::OK, "{preset}: {s} {j}");
+        let done = wait_for(&mut c, j["id"].as_str().unwrap(), &["done", "failed"]).await;
+        assert_eq!(done["state"], "done", "{preset}: {done}");
+        areas.push((preset, done["result"]["hash"].as_str().unwrap().to_string(), done["result"]["stats"]["coveredKm2"].as_f64().unwrap()));
+    }
+    let hashes: std::collections::HashSet<_> = areas.iter().map(|a| a.1.clone()).collect();
+    assert_eq!(hashes.len(), areas.len(), "every radio setting is its own question");
+    let area = |p: &str| areas.iter().find(|a| a.0 == p).unwrap().2;
+    // the same spreading factor and bandwidth by another name is the same radio: custom 8/125 equals the Reticulum example
+    assert!((area("lora:8:125") - area("reticulum_sf8_125")).abs() < 1e-9);
+    // a higher spreading factor at the same bandwidth reaches further than a lower one
+    assert!(area("meshcore_sf10") > area("meshcore_us"), "{} vs {}", area("meshcore_sf10"), area("meshcore_us"));
+    for bad in ["meshcore", "lora:4:125", "lora:8:5000", "lora:x:y", ""] {
+        let (s, v) = c.post(&format!("/api/projects/{pid}/jobs"), with(bad)).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{bad}: {v}");
+    }
+}

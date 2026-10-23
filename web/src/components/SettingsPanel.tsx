@@ -1,9 +1,14 @@
-import type { Settings, TerrainMode } from "../types";
+import { fitsNetwork, NETWORK_LIST, NETWORKS, type Network } from "../networks";
+import type { MeshNode, Settings, TerrainMode } from "../types";
 import { Card } from "./Card";
 
 interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
+  nodes: MeshNode[];
+  /** Give every node that does not fit the network its default radio settings. */
+  onApplyRadio: () => void;
+  readOnly: boolean;
 }
 
 const CLIMATES: [number, string][] = [
@@ -44,10 +49,37 @@ function Row(props: { label: string; value: number; step: number; min: number; m
   );
 }
 
-export function SettingsPanel({ settings: s, onChange }: Props) {
+export function SettingsPanel({ settings: s, onChange, nodes, onApplyRadio, readOnly }: Props) {
   const ground = GROUNDS.find((g) => g.eps === s.groundEpsilon && g.sigma === s.groundSigma)?.id ?? "custom";
   return (
     <Card id="settings" title="Project settings & assumptions">
+      <h4 className="subhead">Network</h4>
+      <label className="field">
+        <span>Planning for</span>
+        <select
+          id="network-select"
+          value={s.network}
+          onChange={(e) => {
+            const network = e.target.value as Network;
+            onChange({ network, freqMhz: NETWORKS[network].freqMhz });
+          }}
+        >
+          {NETWORK_LIST.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">{NETWORKS[s.network].note}</p>
+      {(() => {
+        const other = nodes.filter((n) => !fitsNetwork(n.presetId, s.network));
+        return other.length > 0 ? (
+          <button className="on" id="apply-radio" disabled={readOnly} onClick={onApplyRadio}>
+            Set {other.length} node{other.length === 1 ? "" : "s"} to the {NETWORKS[s.network].label} default radio
+          </button>
+        ) : null;
+      })()}
       <div className="grid2">
         <Row label="Frequency (MHz)" value={s.freqMhz} step={1} min={20} max={20000} onChange={(v) => onChange({ freqMhz: v })} />
         <Row label="k-factor (clearance)" value={Number(s.k.toFixed(3))} step={0.05} min={0.5} onChange={(v) => onChange({ k: v })} />

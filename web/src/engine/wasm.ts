@@ -15,3 +15,9 @@ export const wasm = core;
 export function getPresets(): Preset[] {
   return core.presets() as Preset[];
 }
+
+/** Spreading factor and bandwidth of a radio setting id (a preset or `lora:<sf>:<bw_khz>`), or null if it means nothing. */
+export function radioFor(id: string): { sf: number; bw_khz: number } | null {
+  const r = core.radio_for(id) as [number, number] | null;
+  return r ? { sf: r[0], bw_khz: r[1] } : null;
+}

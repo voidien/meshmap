@@ -123,7 +123,7 @@ ${node.notes.trim() ? `<h3>Notes</h3><p>${esc(node.notes).replace(/\n/g, "<br>")
 
 <h2>2. Equipment and radio</h2>
 <div class="two"><div><table>
-<tr><th>Radio preset</th><td>${esc(preset.name)}</td></tr>
+<tr><th>Radio settings</th><td>${esc(preset.name)} (SF${preset.sf}, ${preset.bw_khz} kHz)</td></tr>
 <tr><th>Frequency</th><td>${esc(s.freqMhz)} MHz</td></tr>
 <tr><th>TX power</th><td>${f(node.txDbm)} dBm (${f(10 ** (node.txDbm / 10) / 1000, 2)} W)</td></tr>
 <tr><th>Antenna</th><td>${esc(describeAntenna(node.antenna, node.gainDbi))}</td></tr>

@@ -94,3 +94,12 @@ pub fn sensitivity_dbm(sf: u8, bw_khz: f64, noise_figure_db: f64) -> f64 {
 pub fn presets() -> Result<JsValue, JsError> {
     to_js(&presets::PRESETS)
 }
+
+/// Spreading factor and bandwidth of a radio setting id (a preset or `lora:<sf>:<bw_khz>`), as `[sf, bw_khz]`, or null.
+#[wasm_bindgen]
+pub fn radio_for(id: &str) -> Result<JsValue, JsError> {
+    match presets::radio(id) {
+        Some(r) => to_js(&r),
+        None => Ok(JsValue::NULL),
+    }
+}

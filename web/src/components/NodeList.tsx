@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { Card } from "./Card";
-import { getPresets } from "../engine/wasm";
+import { RadioPicker } from "./RadioPicker";
+import type { Network } from "../networks";
 import type { Link, MeshNode, NodeStatus } from "../types";
 
 interface Props {
   nodes: MeshNode[];
   links: Link[];
   focusId: string | null;
+  network: Network;
   checked: ReadonlySet<string>;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
@@ -33,7 +35,6 @@ export function NodeList(p: Props) {
   const [coords, setCoords] = useState("");
   const [newName, setNewName] = useState("");
   const [bulk, setBulk] = useState({ heightM: "", clientHeightM: "", txDbm: "", gainDbi: "", cableLossDb: "", presetId: "", status: "" });
-  const presets = getPresets();
 
   const stats = useMemo(() => {
     const m = new Map<string, { links: number; best: number | null }>();
@@ -136,17 +137,7 @@ export function NodeList(p: Props) {
             {field("cableLossDb", "Cable (dB)")}
           </div>
           <div className="grid2">
-            <label className="field">
-              <span>Preset</span>
-              <select value={bulk.presetId} onChange={(e) => setBulk({ ...bulk, presetId: e.target.value })}>
-                <option value="">(unchanged)</option>
-                {presets.map((pr) => (
-                  <option key={pr.id} value={pr.id}>
-                    {pr.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div><RadioPicker value={bulk.presetId} onChange={(presetId) => setBulk({ ...bulk, presetId })} network={p.network} label="Radio settings" blank="(unchanged)" /></div>
             <label className="field">
               <span>Status</span>
               <select value={bulk.status} onChange={(e) => setBulk({ ...bulk, status: e.target.value })}>

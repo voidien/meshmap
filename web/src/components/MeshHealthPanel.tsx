@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Card } from "./Card";
 import type { Health, FailureImpact } from "../meshHealth";
+import { NETWORKS, type Network } from "../networks";
 import type { MeshNode } from "../types";
 
 export interface HealthOptions {
@@ -12,6 +13,7 @@ export interface HealthOptions {
 
 interface Props {
   nodes: MeshNode[];
+  network: Network;
   health: Health;
   failure: FailureImpact | null;
   options: HealthOptions;
@@ -25,7 +27,7 @@ interface Props {
 const num = (v: string, d: number) => (v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** Which nodes and links hold the network together, and what happens when one fails. */
-export function MeshHealthPanel({ nodes, health: h, failure, options: o, onOptions, readOnly, onFocus, onLink, onGateway }: Props) {
+export function MeshHealthPanel({ nodes, network, health: h, failure, options: o, onOptions, readOnly, onFocus, onLink, onGateway }: Props) {
   const name = useMemo(() => new Map(nodes.map((n) => [n.id, n.name.trim() || "(unnamed)"])), [nodes]);
   const nm = (id: string) => name.get(id) ?? "?";
   const set = (patch: Partial<HealthOptions>) => onOptions({ ...o, ...patch });
@@ -54,10 +56,11 @@ export function MeshHealthPanel({ nodes, health: h, failure, options: o, onOptio
               <input type="number" step={1} value={o.minMarginDb} onChange={(e) => set({ minMarginDb: num(e.target.value, 6) })} />
             </label>
             <label className="field">
-              <span>Hop limit (Meshtastic default 3)</span>
-              <input type="number" min={1} max={7} step={1} value={o.hopLimit} onChange={(e) => set({ hopLimit: Math.min(7, Math.max(1, Math.round(num(e.target.value, 3)))) })} />
+              <span title={NETWORKS[network].hopNote}>Hops to plan for</span>
+              <input type="number" min={1} max={64} step={1} value={o.hopLimit} onChange={(e) => set({ hopLimit: Math.min(64, Math.max(1, Math.round(num(e.target.value, NETWORKS[network].hopLimit)))) })} />
             </label>
           </div>
+          <p className="hint tight">{NETWORKS[network].hopNote}.</p>
           <label className="check">
             <input type="checkbox" checked={o.highlight} onChange={(e) => set({ highlight: e.target.checked })} />
             Mark problems on the map (red halo = single point of failure, dashed purple = beyond hop limit, pink = cut off, square = gateway)

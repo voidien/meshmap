@@ -8,7 +8,7 @@ use crate::error::ApiError;
 use crate::state::Shared;
 use crate::terrain::{Sampler, TileSource};
 use meshmap_core::link::ItmSettings;
-use meshmap_core::presets::{sensitivity_dbm, PRESETS};
+use meshmap_core::presets::{radio, sensitivity_dbm};
 use meshmap_coverage::{compute_node, node_extent, CoverageError, NetworkBuilder, NodeParams, Progress, Raster, COVERED_MIN, NO_DATA};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -156,8 +156,8 @@ pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
         if !(0.5..=3000.0).contains(&n.height_m) {
             return bad(format!("{who}: antenna height must be between 0.5 and 3000 m."));
         }
-        if PRESETS.iter().all(|p| p.id != n.preset_id) {
-            return bad(format!("{who}: unknown radio preset \"{}\".", n.preset_id));
+        if radio(&n.preset_id).is_none() {
+            return bad(format!("{who}: unknown radio setting \"{}\".", n.preset_id));
         }
         if ![n.tx_dbm, n.gain_dbi, n.cable_loss_db].iter().all(|v| v.is_finite()) {
             return bad(format!("{who}: invalid power settings."));
@@ -170,7 +170,7 @@ pub fn validate(r: &CoverageRequest) -> Result<(), ApiError> {
 }
 
 fn node_params(r: &CoverageRequest, n: &NodeIn) -> NodeParams {
-    let preset = PRESETS.iter().find(|p| p.id == n.preset_id).expect("validated");
+    let (sf, bw_khz) = radio(&n.preset_id).expect("validated");
     let s = &r.settings.itm;
     NodeParams {
         lat: n.lat,
@@ -180,7 +180,7 @@ fn node_params(r: &CoverageRequest, n: &NodeIn) -> NodeParams {
         gain_dbi: n.gain_dbi,
         cable_loss_db: n.cable_loss_db,
         pattern: n.pattern.clone().unwrap_or_default(),
-        sensitivity_dbm: sensitivity_dbm(preset.sf, preset.bw_khz, r.settings.noise_figure_db),
+        sensitivity_dbm: sensitivity_dbm(sf, bw_khz, r.settings.noise_figure_db),
         client_h_agl_m: n.client_height_m.unwrap_or(r.client.height_m),
         client_gain_dbi: r.client.gain_dbi,
         client_cable_loss_db: r.client.cable_loss_db,

@@ -45,7 +45,7 @@ export function importMeshcore(raw: unknown, makeId: () => string = uid): Meshco
       txDbm: 22,
       gainDbi: 3,
       cableLossDb: 0.5,
-      presetId: "long_fast",
+      presetId: "meshcore_us",
       status: "planned",
       notes: "",
     });
