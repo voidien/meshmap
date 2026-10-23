@@ -96,6 +96,18 @@ describe("mesh health", () => {
     }
   });
 
+  it("ignores links to nodes that are no longer in the graph (a node was just deleted)", () => {
+    // the link list can still mention a deleted node for a moment; nothing may throw and the stale links must not count
+    const edges = [e("a", "b"), e("b", "gone"), e("gone", "c"), e("c", "d")];
+    const inp = input("abcd", edges, ["a"]);
+    const h = analyzeHealth(inp);
+    expect(h.groups.map((g) => g.length)).toEqual([2, 2]);
+    expect(h.noGateway.sort()).toEqual(["c", "d"]);
+    expect(h.bridges.map((x) => `${x.a}${x.b}`)).toEqual(["ab"]);
+    expect(() => simulateFailure(inp, "b")).not.toThrow();
+    expect(() => simulateFailure(inp, "a")).not.toThrow();
+  });
+
   it("builds edges from links by margin, skipping 'none'", () => {
     const links = [
       { a: "a", b: "b", class: "clear", result: { margin_db: 20 } },

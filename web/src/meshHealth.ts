@@ -60,8 +60,12 @@ function adjacency(nodeIds: string[], edges: Edge[], skipNode?: string, skipEdge
   const adj: Adj = new Map(nodeIds.filter((id) => id !== skipNode).map((id) => [id, new Set<string>()]));
   for (const e of edges) {
     if (e.a === skipNode || e.b === skipNode || e === skipEdge) continue;
-    adj.get(e.a)?.add(e.b);
-    adj.get(e.b)?.add(e.a);
+    // links to nodes that are not in the graph (for example just deleted, while the link list has not caught up) do not count
+    const a = adj.get(e.a);
+    const b = adj.get(e.b);
+    if (!a || !b) continue;
+    a.add(e.b);
+    b.add(e.a);
   }
   return adj;
 }
