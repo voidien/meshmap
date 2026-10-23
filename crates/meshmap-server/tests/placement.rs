@@ -303,3 +303,42 @@ async fn the_redundancy_goal_closes_a_bridge_and_stops_when_nothing_is_weak() {
     let (s, _) = c.post(&format!("/api/projects/{pid}/jobs"), request(json!({ "goal": "speed" }))).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn the_redundancy_goal_counts_gateways_and_hops() {
+    let (app, _) = setup(Arc::new(Hills { calls: AtomicUsize::new(0) }));
+    let mut c = admin(&app).await;
+    let pid = project(&mut c, "p").await;
+    // a chain of three nodes about 7 km apart (the longest link is 8 km, so the ends do not hear each other), the gateway at one end
+    let rules = json!({ "minMarginDb": 0.0, "maxKm": 8.0, "avoidObstructed": false, "connectSuggestions": false });
+    let area = json!({ "lat": 36.0, "lon": -84.92, "radiusKm": 14.0 });
+    let chain = json!([node(36.0, -85.0), node(36.0, -84.92), node(36.0, -84.84)]);
+    let ask = |extra: Value| {
+        let mut r = request(json!({ "goal": "redundancy", "count": 1, "area": area, "existing": chain, "backhaul": rules }));
+        for (k, v) in extra.as_object().unwrap() {
+            r[k] = v.clone();
+        }
+        r
+    };
+
+    let base = run(&mut c, &pid, ask(json!({ "gateways": [0], "hopLimit": 1 }))).await;
+    assert_eq!(base["state"], "done", "{base}");
+    assert_eq!(base["result"]["gateways"], 1);
+    assert_eq!(base["result"]["hopLimit"], 1);
+    let sug = base["result"]["suggestions"].as_array().unwrap();
+    assert_eq!(sug.len(), 1, "{}", base["result"]);
+    let red = &sug[0]["redundancy"];
+    assert!(red["weaknessBefore"].as_u64().unwrap() > red["weaknessAfter"].as_u64().unwrap(), "{red}");
+    // the far end is two hops from the gateway, one more than the limit; the site brings it within reach or gives it another route
+    assert!(red["beyondHopLimitBefore"].as_u64().unwrap() >= 1, "{red}");
+
+    // the gateway changes the question: the same nodes without one are asked about differently
+    let plain = run(&mut c, &pid, ask(json!({}))).await;
+    assert_ne!(plain["result"]["hash"], base["result"]["hash"]);
+
+    // bad input is refused
+    let (s, _) = c.post(&format!("/api/projects/{pid}/jobs"), ask(json!({ "gateways": [9] }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = c.post(&format!("/api/projects/{pid}/jobs"), ask(json!({ "gateways": [0], "hopLimit": 0 }))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+}

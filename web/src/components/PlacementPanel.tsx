@@ -11,6 +11,8 @@ interface Props {
   onPick: (on: boolean) => void;
   options: PlacementOptions;
   onOptions: (o: PlacementOptions) => void;
+  /** hops the network usually needs at most (used when the person has not set one) */
+  defaultHopLimit: number;
   templateId: string;
   onTemplate: (id: string) => void;
   job: PlacementJob | null;
@@ -34,6 +36,7 @@ export function PlacementPanel(p: Props) {
   const o = p.options;
   const set = (patch: Partial<PlacementOptions>) => p.onOptions({ ...o, ...patch });
   const r = p.job?.state === "done" ? p.job.result : null;
+  const gateways = p.nodes.filter((n) => n.gateway).length;
   return (
     <Card id="placement" domId="placement-panel" title="Suggest new sites">
       <label className="field wide">
@@ -99,6 +102,21 @@ export function PlacementPanel(p: Props) {
         <p className="hint">Pick the area you want covered: click the map, or use the middle of your nodes.</p>
       )}
 
+      {o.goal === "redundancy" ? (
+        gateways > 0 ? (
+          <div className="grid2">
+            <p className="hint wide">
+              {gateways} gateway{gateways === 1 ? "" : "s"} marked (Mesh health card). The network is what reaches a gateway, losing a lone gateway counts as a weak spot, and nodes beyond the hop limit count as weak.
+            </p>
+            <label className="field">
+              <span>Hop limit</span>
+              <input id="placement-hops" type="number" min={1} max={30} step={1} value={o.hopLimit > 0 ? o.hopLimit : p.defaultHopLimit} onChange={(e) => set({ hopLimit: Math.min(30, Math.max(1, Math.round(num(e.target.value, p.defaultHopLimit)))) })} />
+            </label>
+          </div>
+        ) : (
+          <p className="hint">No gateway is marked, so the network is the largest connected group. Mark nodes that connect to the outside as gateways (Mesh health card) to also count gateway loss and hops.</p>
+        )
+      ) : null}
       <label className="check">
         <input type="checkbox" checked={o.backhaul !== null} disabled={o.goal === "redundancy"} onChange={(e) => set({ backhaul: e.target.checked ? { ...DEFAULT_BACKHAUL } : null })} />
         {o.goal === "redundancy" ? "Link rules (what counts as a link)" : "Each new site must link back to the network"}
@@ -184,7 +202,8 @@ export function PlacementPanel(p: Props) {
                   <b className="rank">{s.rank}</b>
                   {s.redundancy ? (
                     <span>
-                      {s.redundancy.fixed.length ? `Takes the strain off ${s.redundancy.fixed.join(", ")}` : "Adds a second route"} (weakness score {s.redundancy.weaknessBefore} → {s.redundancy.weaknessAfter}, lower is stronger)
+                      {s.redundancy.fixed.length ? `Takes the strain off ${s.redundancy.fixed.join(", ")}` : "Adds a second route"} (weakness score {s.redundancy.weaknessBefore} → {s.redundancy.weaknessAfter}, lower is stronger
+                      {s.redundancy.beyondHopLimitBefore ? `; nodes beyond the hop limit ${s.redundancy.beyondHopLimitBefore} → ${s.redundancy.beyondHopLimitAfter ?? 0}` : ""})
                     </span>
                   ) : (
                     <span>

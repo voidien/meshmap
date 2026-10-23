@@ -154,7 +154,13 @@ builds the graph of your nodes (a link counts when it meets the link rules), fin
 the Mesh health card does, and picks the site whose links to two or more existing nodes lowers a *weakness score* the most: the number of
 nodes cut off by each single node or link failure, plus five for each node not connected to the main group. A stray node joined by a chain
 counts as progress; the next pick can close the ring. It needs at least two nodes and skips the heatmaps, so it runs faster. It stops when
-nothing is weak any more ("Nothing to fix") or no site in the area helps. Gateways, hop limits and traffic are not part of the score.
+nothing is weak any more ("Nothing to fix") or no site in the area helps.
+
+**Gateways and hops.** If you have marked nodes as gateways (Mesh health card), the network becomes *what can reach a gateway*: a node
+that cannot is stranded, losing a lone gateway counts as a weak spot (a second gateway, or a site that reaches one, fixes it), and every
+node more than the **hop limit** from all gateways adds two points. The hop limit defaults to the network's planning figure (MeshCore and
+Reticulum 8, Meshtastic 3) and can be changed in the card. The new sites themselves are relays, not gateways. Traffic is not part of the
+score.
 
 ## History
 

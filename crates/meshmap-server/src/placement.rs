@@ -18,7 +18,7 @@ use meshmap_core::presets::{radio, sensitivity_dbm};
 use meshmap_coverage::{mercator, Elevation, Raster, COVERED_MIN};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use crate::mesh_health::fragility;
+use crate::mesh_health::{fragility_with, Context};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 
@@ -84,6 +84,12 @@ pub struct PlacementRequest {
     /// of the existing network; needs the backhaul rules to decide what counts as a link)
     #[serde(default = "d_goal")]
     pub goal: String,
+    /// Positions in `existing` of the nodes that connect the mesh to the outside (redundancy goal): the network is then what reaches one of them.
+    #[serde(default)]
+    pub gateways: Vec<usize>,
+    /// With gateways: nodes farther than this many hops from every gateway count as weak (redundancy goal).
+    #[serde(default)]
+    pub hop_limit: Option<usize>,
 }
 
 fn d_goal() -> String {
@@ -143,6 +149,9 @@ impl PlacementRequest {
         }
         if self.goal == "redundancy" && (self.backhaul.is_none() || self.existing.len() < 2) {
             return bad("Strengthening the network needs at least two existing nodes and the link rules (margin and distance).");
+        }
+        if self.gateways.iter().any(|&g| g >= self.existing.len()) || self.hop_limit.is_some_and(|h| !(1..=30).contains(&h)) {
+            return bad("A gateway must be one of the existing nodes, and the hop limit between 1 and 30.");
         }
         if let Some(b) = &self.backhaul {
             if !(-20.0..=60.0).contains(&b.min_margin_db) || !(1.0..=100.0).contains(&b.max_km) {
@@ -506,10 +515,11 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
         let mut chosen: Option<(usize, usize, Vec<LinkInfo>)> = None;
         let mut rejected_for_backhaul = false;
         // (weakness before, after, weak nodes before, fixed nodes) for the redundancy goal
-        let mut fix: Option<(usize, usize, Vec<String>, Vec<String>)> = None;
+        let mut fix: Option<(usize, usize, Vec<String>, Vec<String>, usize, usize)> = None;
         if redundancy {
             let bh = req.backhaul.as_ref().expect("validated");
-            let base = fragility(anchors.len(), &graph_edges);
+            let health = Context { gateways: req.gateways.clone(), hop_limit: req.hop_limit };
+            let base = fragility_with(anchors.len(), &graph_edges, &health);
             if base.score == 0 {
                 stop = "strong";
                 break;
@@ -522,7 +532,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                 }
                 let mut e = graph_edges.clone();
                 e.extend(links.iter().map(|l| (l.anchor, anchors.len())));
-                let after = fragility(anchors.len() + 1, &e).score;
+                let after = fragility_with(anchors.len() + 1, &e, &health).score;
                 if after >= base.score {
                     continue;
                 }
@@ -535,12 +545,12 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
                 Some((_, gain, c, links)) => {
                     let mut e = graph_edges.clone();
                     e.extend(links.iter().map(|l| (l.anchor, anchors.len())));
-                    let after = fragility(anchors.len() + 1, &e);
+                    let after = fragility_with(anchors.len() + 1, &e, &health);
                     let name = |i: usize| anchors.get(i).map_or_else(|| format!("Suggested site {}", round + 1), |a| a.name.clone());
                     let weak_before: Vec<String> = base.spofs.iter().map(|&i| name(i)).collect();
                     let weak_after: HashSet<usize> = after.spofs.iter().copied().collect();
-                    let fixed: Vec<String> = base.spofs.iter().filter(|i| !weak_after.contains(i)).map(|&i| name(i)).chain(base.stranded.iter().filter(|i| !after.stranded.contains(i)).map(|&i| name(i))).collect();
-                    fix = Some((base.score, after.score, weak_before, fixed));
+                    let fixed: Vec<String> = base.spofs.iter().filter(|i| !weak_after.contains(i)).map(|&i| name(i)).chain(base.stranded.iter().filter(|i| !after.stranded.contains(i)).map(|&i| name(i))).chain(base.beyond.iter().filter(|i| !after.beyond.contains(i)).map(|&i| name(i))).collect();
+                    fix = Some((base.score, after.score, weak_before, fixed, base.beyond.len(), after.beyond.len()));
                     graph_edges.extend(links.iter().map(|l| (l.anchor, anchors.len())));
                     chosen = Some((c, gain, links));
                 }
@@ -600,8 +610,8 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
             "soloKm2": solo as f64 * cell_km2, "cumulativePct": 100.0 * covered_now as f64 / cells.len().max(1) as f64,
             "backhaul": back, "backhaulChecked": req.backhaul.is_some() && !anchors.is_empty(),
         });
-        if let Some((before, after, weak, fixed)) = fix {
-            pick["redundancy"] = json!({ "weaknessBefore": before, "weaknessAfter": after, "weakNodes": weak, "fixed": fixed });
+        if let Some((before, after, weak, fixed, beyond_before, beyond_after)) = fix {
+            pick["redundancy"] = json!({ "weaknessBefore": before, "weaknessAfter": after, "weakNodes": weak, "fixed": fixed, "beyondHopLimitBefore": beyond_before, "beyondHopLimitAfter": beyond_after });
         }
         picks.push(pick);
         anchors.push(Anchor { lat: cand.lat, lon: cand.lon, node: cand_nodes[c].clone(), name: format!("Suggested site {}", round + 1), kind: "suggestion", index: round });
@@ -615,7 +625,7 @@ pub(crate) fn execute(ctx: &Ctx, req: &PlacementRequest, hash: &str) -> Result<V
     let result = json!({
         "kind": "placement", "hash": hash, "images": {},
         "area": { "lat": a.lat, "lon": a.lon, "radiusKm": a.radius_km }, "targetKm2": target_km2, "baselinePct": baseline_pct,
-        "goal": req.goal, "candidates": cands.len(), "requested": req.count, "stoppedBecause": stop, "suggestions": picks,
+        "goal": req.goal, "gateways": req.gateways.len(), "hopLimit": req.hop_limit, "candidates": cands.len(), "requested": req.count, "stoppedBecause": stop, "suggestions": picks,
         "terrain": req.terrain, "clutterShare": share,
     });
     jobs::atomic_write(&jobs::cache_path(&ctx.state.cfg.cache_dir, hash, "json"), result.to_string().as_bytes()).map_err(|e| Fail::Failed(format!("cannot write the cache: {e}")))?;

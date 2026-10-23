@@ -25,6 +25,8 @@ export type PlacementGoal = "coverage" | "redundancy";
 export interface PlacementOptions {
   /** coverage: sites that newly cover the most area; redundancy: sites that remove single points of failure and bridges of the network */
   goal: PlacementGoal;
+  /** Redundancy goal with gateways: nodes farther than this many hops from every gateway count as weak. 0 = the network's usual figure. */
+  hopLimit: number;
   count: number;
   coverageRadiusKm: number;
   minSpacingKm: number;
@@ -36,6 +38,7 @@ export interface PlacementOptions {
 
 export const DEFAULT_PLACEMENT: PlacementOptions = {
   goal: "coverage",
+  hopLimit: 0,
   count: 3,
   coverageRadiusKm: 15,
   minSpacingKm: 3,
@@ -67,7 +70,7 @@ export interface Suggestion {
   backhaul: BackhaulLink[];
   backhaulChecked: boolean;
   /** only with the redundancy goal */
-  redundancy?: { weaknessBefore: number; weaknessAfter: number; weakNodes: string[]; fixed: string[] };
+  redundancy?: { weaknessBefore: number; weaknessAfter: number; weakNodes: string[]; fixed: string[]; beyondHopLimitBefore?: number; beyondHopLimitAfter?: number };
 }
 
 export interface PlacementResult {
@@ -79,6 +82,8 @@ export interface PlacementResult {
   candidates: number;
   requested: number;
   goal?: PlacementGoal;
+  gateways?: number;
+  hopLimit?: number | null;
   stoppedBecause: "count" | "gain" | "backhaul" | "redundancy" | "strong";
   suggestions: Suggestion[];
   terrain: "bare" | "clutter";
@@ -110,6 +115,7 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
     ...(n.antenna && n.antenna.kind !== "omni" ? { pattern: n.antenna } : {}),
     ...(name ? { name } : {}),
   });
+  const gateways = existing.flatMap((n, i) => (n.gateway ? [i] : []));
   return {
     kind: "placement" as const,
     area: { lat: round6(area.lat), lon: round6(area.lon), radiusKm: area.radiusKm },
@@ -132,6 +138,7 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
     },
     terrain: s.terrainMode,
     goal: o.goal,
+    ...(o.goal === "redundancy" && gateways.length > 0 ? { gateways, hopLimit: o.hopLimit > 0 ? o.hopLimit : NETWORKS[s.network].hopLimit } : {}),
     count: o.count,
     coverageRadiusKm: o.coverageRadiusKm,
     resolutionM: Math.max(100, Math.round((o.coverageRadiusKm * 1000) / 75 / 50) * 50),

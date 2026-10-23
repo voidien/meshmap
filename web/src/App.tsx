@@ -768,6 +768,7 @@ export function App({ auth }: { auth: AuthContext }) {
           }}
           options={placementOpts}
           onOptions={setPlacementOpts}
+          defaultHopLimit={NETWORKS[project.settings.network].hopLimit}
           templateId={templateId}
           onTemplate={setTemplateId}
           job={placement.job}
