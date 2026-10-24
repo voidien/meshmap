@@ -9,7 +9,7 @@ Source: the UI/UX redesign report (map-first workspace). Built in phases; each p
 - Offline editing: wanted (Phase 5 builds the local-first edit queue, not only read-only offline).
 - iOS Safari: not a priority (nothing is built for it at the expense of other browsers).
 - Units: a **per-user** metric / imperial choice (Phase 6).
-- Rollout: the new layout (Phases 2-4) ships behind a flag (`localStorage meshmap.ui = v2`) next to the old one.
+- Rollout: the new layout was first behind a switch; **it is now the only layout** (the switch and the classic layout are removed).
 
 ## Phases
 
@@ -47,7 +47,7 @@ Source: the UI/UX redesign report (map-first workspace). Built in phases; each p
 
 ## Phase 2 (done)
 
-The new layout is behind a switch: open the app with `?ui=v2` (remembered), or use *Try the new layout* in the command palette; *Use the classic layout* in the account menu (or `?ui=v1`) goes back. The classic layout is unchanged.
+This layout was first behind a switch (`?ui=v2`); the switch and the classic layout have since been removed, and this is the app.
 
 - **Top bar**: project menu (switch, rename, new, duplicate, settings, history, compare, import / export, share, publish, delete), search / command palette, status chip (saved, offline, analysing, jobs, conflict), Plan | Field switch, account menu, buttons to show or hide the lists and the details panel.
 - **Tool rail** (left of the map): Select `V`, Add nodes `N` (stays on), Inspect a link between two nodes `L` (click two nodes), Suggest sites `P`, 3D, node names.
@@ -76,3 +76,7 @@ Tried with generated networks (developer commands `?dev=1`, then the palette: 10
 Measured in the browser test (headless, software rendering): 300 nodes and 4,761 links analysed and shown in about 4.6 s from page load; during that time the page's longest blocked stretch was 0.2 s.
 
 Not done: pausing or prioritising the link analysis by what is on screen; clustering with a worst-link ring; the Issues tab as an actionable list; per-project label priority settings; map text for node names needs a font from a public server (self-hosted fonts come with Phase 5).
+
+## The switch is gone
+
+The new layout is the main app: `?ui=v1` / `?ui=v2`, *Try the new layout* / *Use the classic layout*, the classic sidebar (user bar, toolbar, project switcher, collapsible cards, Expand all / Collapse all, hide-menu button and `M` key) and the card-style Settings panel are removed. The radio-mismatch banner now sits in the Project tab with the other banners. `?dev=1` (developer commands for generating test networks) is kept.

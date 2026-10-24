@@ -1,5 +1,5 @@
-import { useContext, useMemo, useState } from "react";
-import { Card, PanelMode } from "./Card";
+import { useMemo, useState } from "react";
+import { Card } from "./Card";
 import { SelectionTray } from "./SelectionTray";
 import { VirtualList } from "../ui/VirtualList";
 import { allTags, filterNodes, NO_NODE_FILTER, nodeStats, type NodeFilter, type NodeSort } from "../listFilters";
@@ -36,7 +36,6 @@ export function parseCoords(text: string): [number, number] | null {
 }
 
 export function NodeList(p: Props) {
-  const flat = useContext(PanelMode) === "flat";
   const [filter, setFilter] = useState<NodeFilter>({ ...NO_NODE_FILTER, weakBelowDb: p.weakBelowDb });
   const [sort, setSort] = useState<NodeSort>("name");
   const [coords, setCoords] = useState("");
@@ -104,7 +103,7 @@ export function NodeList(p: Props) {
         items={visible}
         rowHeight={30}
         maxHeight={280}
-        fill={flat}
+        fill
         className="nodelist"
         ariaLabel="Nodes"
         keyOf={(n) => n.id}

@@ -19,7 +19,7 @@ const dist = (a: number, b: number, c: number, d: number) => wasm.haversine_m(a,
 export function ComparePanel({ current, currentLinks, projects, otherId, otherLinks, busy, onChange }: Props) {
   const other = otherId ? projects.find((p) => p.id === otherId) ?? null : null;
   return (
-    <Card id="compare" title="Compare setups" openWhen={other?.id}>
+    <Card id="compare" title="Compare setups">
       <label className="field">
         <span>Compare the open project with</span>
         <select value={otherId ?? ""} onChange={(e) => onChange(e.target.value || null)}>

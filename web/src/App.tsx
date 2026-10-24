@@ -14,7 +14,7 @@ import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPane
 import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
 import { linkKey } from "./engine/analysis";
 import { explainPair } from "./engine/pairInfo";
-import { Card, openPanel, setAllPanels } from "./components/Card";
+import { Card } from "./components/Card";
 import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
@@ -23,13 +23,12 @@ import { ImportNodesDialog } from "./components/ImportNodesDialog";
 import { SelectionTray } from "./components/SelectionTray";
 import { applyTagOps } from "./listFilters";
 import type { ImportPlan } from "./nodesImport";
-import { PanelMode } from "./components/Card";
 import { Modal } from "./ui/Modal";
 import { CommandPalette } from "./shell/CommandPalette";
 import type { Command } from "./shell/palette";
 import { TopBar } from "./shell/TopBar";
 import { ToolRail, type Tool } from "./shell/ToolRail";
-import { devMode, getUiMode, storeUiMode, useStoredFlag, type UiMode } from "./shell/uiMode";
+import { devMode, useStoredFlag } from "./shell/uiMode";
 import { generateNetwork } from "./engine/testNetwork";
 import { MapLegend } from "./components/MapLegend";
 import { StatusChip } from "./components/StatusChip";
@@ -50,10 +49,9 @@ import { useLinks } from "./useLinks";
 import { MapView } from "./map/MapView";
 import { NodePanel, type Connection } from "./components/NodePanel";
 import { NodeList } from "./components/NodeList";
-import { SettingsDialog, SettingsPanel } from "./components/SettingsPanel";
+import { SettingsDialog } from "./components/SettingsPanel";
 import { LinkList } from "./components/LinkList";
 import { ProfileChart } from "./components/ProfileChart";
-import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { ComparePanel } from "./components/ComparePanel";
 import { uid } from "./id";
 import { exportMeshcore, importMeshcore, isMeshcoreFile } from "./meshcore";
@@ -102,7 +100,6 @@ export function App({ auth }: { auth: AuthContext }) {
   const [linkFirst, setLinkFirst] = useState<string | null | undefined>(undefined);
   const linkFirstRef = useRef<string | null | undefined>(undefined);
   linkFirstRef.current = linkFirst;
-  const [uiMode, setUiMode] = useState<UiMode>(getUiMode);
   const [browserOpen, setBrowserOpen] = useStoredFlag("meshmap.browser", () => window.innerWidth > 900);
   const [inspectorOpen, setInspectorOpen] = useStoredFlag("meshmap.inspector", () => window.innerWidth > 900);
   const [browserTab, setBrowserTab] = useState<"nodes" | "links" | "issues" | "published">("nodes");
@@ -116,22 +113,6 @@ export function App({ auth }: { auth: AuthContext }) {
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | "settings" | "history" | "export" | "compare" | "palette" | "importNodes" | null>(null);
-  const [menuOpen, setMenuOpen] = useState(() => store.get("meshmap.menu") !== "0");
-  const toggleMenu = useCallback(() => {
-    setMenuOpen((v) => {
-      store.set("meshmap.menu", v ? "0" : "1");
-      return !v;
-    });
-  }, []);
-  // let the map take the new width
-  useEffect(() => {
-    const t = setTimeout(() => {
-      window.dispatchEvent(new Event("resize"));
-      (window as unknown as { __meshmap?: { resize: () => void } }).__meshmap?.resize();
-    }, 30);
-    return () => clearTimeout(t);
-  }, [menuOpen]);
-  const sideRef = useRef<HTMLElement>(null);
   const [profilePoint, setProfilePoint] = useState<{ lat: number; lon: number } | null>(null);
   const [radioBannerOff, setRadioBannerOff] = useState<string | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
@@ -240,7 +221,6 @@ export function App({ auth }: { auth: AuthContext }) {
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
   // the selected node's panel is at the top of the menu: show it
   useEffect(() => {
-    if (selectedNode) sideRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [selectedNode]);
   const placement = usePlacement(project.id);
   const placementTemplate = project.nodes.find((n) => n.id === templateId) ?? null;
@@ -302,8 +282,6 @@ export function App({ auth }: { auth: AuthContext }) {
   }, [previousId, switchTo]);
 
   const chooseToolRef = useRef<(t: Tool) => void>(() => undefined);
-  const uiModeRef = useRef<UiMode>("v1");
-  uiModeRef.current = uiMode;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -318,36 +296,34 @@ export function App({ auth }: { auth: AuthContext }) {
       if (e.key === "Escape" && typing) return void t!.blur();
       if (typing) return;
       if (document.querySelector(".modal-back")) return;
-      const v2 = uiModeRef.current === "v2";
       if (e.key === "]") step(1);
       else if (e.key === "[") step(-1);
       else if (e.key === "`") flip();
-      else if (e.key === "m" || e.key === "M") toggleMenu();
       else if (e.key === "/" ) setDialog("palette");
       else if (e.key === "Escape") {
         if (addModeRef.current || pickingRef.current || linkFirstRef.current !== undefined) chooseToolRef.current("select");
         else if (linkOpenRef.current) setSelectedLink(null);
         else return;
       } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) chooseToolRef.current("add");
-      else if (v2 && (e.key === "v" || e.key === "V")) chooseToolRef.current("select");
-      else if (v2 && (e.key === "l" || e.key === "L")) chooseToolRef.current("link");
-      else if (v2 && (e.key === "p" || e.key === "P")) chooseToolRef.current("plan");
-      else if (v2 && (e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
-      else if (v2 && (e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
+      else if ((e.key === "v" || e.key === "V")) chooseToolRef.current("select");
+      else if ((e.key === "l" || e.key === "L")) chooseToolRef.current("link");
+      else if ((e.key === "p" || e.key === "P")) chooseToolRef.current("plan");
+      else if ((e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
+      else if ((e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, flip, toggleMenu, setBrowserOpen, setInspectorOpen]);
+  }, [step, flip, setBrowserOpen, setInspectorOpen]);
 
   // a selected node brings up its details in the new layout
   useEffect(() => {
-    if ((selectedNode || checked.size > 0) && uiMode === "v2") {
+    if (selectedNode || checked.size > 0) {
       setInspectorTab("selection");
       setInspectorOpen(true);
     }
-  }, [selectedNode, checked, uiMode, setInspectorOpen]);
+  }, [selectedNode, checked, setInspectorOpen]);
 
   const fail = (e: unknown) => notifyError(e);
 
@@ -651,23 +627,6 @@ export function App({ auth }: { auth: AuthContext }) {
     );
   }
 
-  const userBarEl = (
-    <>
-        <div className="userbar">
-          <h1>meshmap</h1>
-          <span className="ver" title="estimates only">v8</span>
-          <span className="who" title={auth.user.username}>
-            {auth.user.displayName}
-          </span>
-          <span className="sync" aria-live="polite">
-            {sync.saveState === "saving" ? "Saving…" : sync.saveState === "error" ? "Not saved" : readOnly ? "View only" : "Saved"}
-          </span>
-          {auth.user.role === "admin" ? <button onClick={() => setDialog("admin")}>Admin</button> : null}
-          <button onClick={() => setDialog("help")} id="help-btn">Help</button>
-          <button onClick={() => setDialog("account")}>Account</button>
-        </div>
-    </>
-  );
   const bannersEl = (
     <>
         {sync.error ? <p className="banner warn">Can't save right now: {sync.error}. Your changes stay in this tab and are retried.</p> : null}
@@ -698,23 +657,25 @@ export function App({ auth }: { auth: AuthContext }) {
             </div>
           </div>
         ) : null}
+        {(() => {
+          const net = project.settings.network;
+          const odd = project.nodes.filter((n) => !fitsNetwork(n.presetId, net));
+          const key = `${project.id}|${net}`;
+          if (section !== "mine" || readOnly || odd.length === 0 || radioBannerOff === key) return null;
+          return (
+            <div className="banner" id="radio-mismatch">
+              {odd.length} node{odd.length === 1 ? " uses" : "s use"} radio settings from another network, but this project is planned for {NETWORKS[net].label}.
+              <div className="row-actions">
+                <button className="on" onClick={() => patchMany(odd.map((n) => n.id), { presetId: NETWORKS[net].presetId })}>Set {odd.length === 1 ? "it" : "them"} to {NETWORKS[net].label}</button>
+                <button onClick={() => setRadioBannerOff(key)}>Keep as is</button>
+              </div>
+            </div>
+          );
+        })()}
     </>
   );
-  const sectionEl = (
+  const publishedEl = (
     <>
-        <div className="tabs" role="tablist" aria-label="Section">
-          <button role="tab" aria-selected={section === "mine"} className={section === "mine" ? "on" : ""} onClick={() => { setSection("mine"); setSelectedNode(null); setSelectedLink(null); }}>
-            My projects
-          </button>
-          <button role="tab" id="tab-published" aria-selected={section === "published"} className={section === "published" ? "on" : ""} onClick={() => { setSection("published"); setSelectedNode(null); setSelectedLink(null); }}>
-            Published
-          </button>
-        </div>
-        <div className="panelbar">
-          <span className="lmeta">Panels</span>
-          <button className="linkbtn" onClick={() => setAllPanels(true)}>Expand all</button>
-          <button className="linkbtn" onClick={() => setAllPanels(false)}>Collapse all</button>
-        </div>
         {section === "published" ? (
           <>
             <PublishedGallery openId={viewPub?.id ?? null} onOpen={(p) => void openPublication(p)} reloadKey={pubReload} />
@@ -746,68 +707,6 @@ export function App({ auth }: { auth: AuthContext }) {
         ) : null}
     </>
   );
-  const projectEl = (
-    <>
-        {section === "mine" ? (
-        <ProjectSwitcher
-          projects={projects}
-          activeId={project.id}
-          canFlip={!!previousId}
-          onSelect={switchTo}
-          onFlip={flip}
-          onNew={newProject}
-          onDuplicate={duplicateProject}
-          onDelete={() => void deleteProject()}
-          onShare={() => setDialog("share")}
-          onPublish={() => setDialog("publish")}
-        />
-        ) : null}
-        {section === "mine" ? <input className="pname" value={project.name} readOnly={readOnly || project.role !== "owner"} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} aria-label="Project name" title={project.role === "owner" ? "" : "Only the owner can rename"} /> : null}
-        {(() => {
-          const net = project.settings.network;
-          const odd = project.nodes.filter((n) => !fitsNetwork(n.presetId, net));
-          const key = `${project.id}|${net}`;
-          if (section !== "mine" || readOnly || odd.length === 0 || radioBannerOff === key) return null;
-          return (
-            <div className="banner" id="radio-mismatch">
-              {odd.length} node{odd.length === 1 ? " uses" : "s use"} radio settings from another network, but this project is planned for {NETWORKS[net].label}.
-              <div className="row-actions">
-                <button className="on" onClick={() => patchMany(odd.map((n) => n.id), { presetId: NETWORKS[net].presetId })}>Set {odd.length === 1 ? "it" : "them"} to {NETWORKS[net].label}</button>
-                <button onClick={() => setRadioBannerOff(key)}>Keep as is</button>
-              </div>
-            </div>
-          );
-        })()}
-    </>
-  );
-  const toolbarEl = (
-    <>
-        <div className="toolbar">
-          <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
-            {addMode ? "Adding… (Esc to finish)" : "+ Node"}
-          </button>
-          <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)} title="Tilted 3D terrain">
-            3D
-          </button>
-          <button className={showLabels ? "on" : ""} onClick={() => setShowLabels((v) => !v)} title="Show node names on the map">
-            Names
-          </button>
-          <button id="field-mode-btn" onClick={() => setFieldMode(true)} disabled={!ready || !!pubProject || !project.id} title="Phone-friendly view for standing at a site: GPS, predicted signal here, record readings">
-            Field
-          </button>
-        </div>
-        <div className="status">
-          {!ready ? "Loading…" : status.error ? <span className="err">{status.error}</span> : status.busy ? `Analysing links ${status.done}/${status.total}…` : `${project.nodes.length} nodes · ${allLinks.length - counts.none} links`}
-          <span className="chips">
-            <b className="c clear">{counts.clear}</b>
-            <b className="c marginal">{counts.marginal}</b>
-            <b className="c obstructed">{counts.obstructed}</b>
-          </span>
-        </div>
-
-        {sel ? null : <p className="hint tight">{readOnly ? "View only." : "“+ Node”, then click the map. Click a link for its profile."}</p>}
-    </>
-  );
   const nodeListEl = (
     <>
         {ready ? (
@@ -819,7 +718,7 @@ export function App({ auth }: { auth: AuthContext }) {
             focusId={selectedNode}
             checked={checked}
             weakBelowDb={project.settings.marginalMarginDb}
-            showTray={uiMode !== "v2"}
+            showTray={false}
             readOnly={readOnly}
             onTags={tagMany}
             onFocus={focusNode}
@@ -954,13 +853,6 @@ export function App({ auth }: { auth: AuthContext }) {
         />}
     </>
   );
-  const settingsEl = (
-    <>
-        <fieldset className="plain" disabled={readOnly}>
-        <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} />
-        </fieldset>
-    </>
-  );
   const exportEl = (
     <>
         <Card id="export" title="Import / export">
@@ -984,9 +876,6 @@ export function App({ auth }: { auth: AuthContext }) {
   const mapEl = (
       <main className="mapwrap">
         <div className="mapstage">
-        <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
-          {menuOpen ? "◀ Hide menu" : "☰ Menu"}
-        </button>
         {undoMove && nodeById.get(undoMove.id) ? (
           <div className="undo-toast" role="status">
             Moved “{nodeById.get(undoMove.id)!.name}”
@@ -1009,7 +898,7 @@ export function App({ auth }: { auth: AuthContext }) {
             readOnly={readOnly || !!pubProject}
             online={online}
             conflict={!!conflict}
-            onConflict={() => (menuOpen ? document.querySelector(".banner")?.scrollIntoView({ behavior: "smooth" }) : toggleMenu())}
+            onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
             analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
             jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
           />
@@ -1055,8 +944,8 @@ export function App({ auth }: { auth: AuthContext }) {
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
           onPlanAround={pubProject ? undefined : (lat, lon) => {
             setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
-            openPanel("placement");
-            setTimeout(() => document.getElementById("placement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+            setInspectorTab("plan");
+            setInspectorOpen(true);
           }}
         />
         </div>
@@ -1138,7 +1027,6 @@ export function App({ auth }: { auth: AuthContext }) {
         }, { keywords: "benchmark many nodes generate" });
       }
     }
-    act("layout", uiMode === "v2" ? "Use the classic layout" : "Try the new layout", () => { const m: UiMode = uiMode === "v2" ? "v1" : "v2"; storeUiMode(m); setUiMode(m); });
     for (const n of project.nodes) cmds.push({ id: `node-${n.id}`, label: `Go to ${n.name.trim() || "(unnamed)"}`, group: "Go to", hint: `${n.lat.toFixed(4)}, ${n.lon.toFixed(4)} · ${n.heightM} m`, keywords: "node", run: () => focusNode(n.id) });
     for (const p of projects) if (p.id !== project.id) cmds.push({ id: `proj-${p.id}`, label: `Switch to project “${p.name}”`, group: "Projects", run: () => switchTo(p.id) });
     return cmds;
@@ -1162,14 +1050,12 @@ export function App({ auth }: { auth: AuthContext }) {
         />
       ) : null}
       {dialog === "importNodes" ? <ImportNodesDialog existing={project.nodes} settings={project.settings} onImport={importNodes} onClose={() => setDialog(null)} /> : null}
-      <PanelMode.Provider value="flat">
         {dialog === "settings" ? (
           <SettingsDialog settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} onClose={() => setDialog(null)} />
         ) : null}
         {dialog === "history" ? <Modal label="History" onClose={() => setDialog(null)}><div className="modal-head"><h2>History</h2><button onClick={() => setDialog(null)}>Close</button></div>{historyEl}</Modal> : null}
         {dialog === "export" ? <Modal label="Import and export" onClose={() => setDialog(null)}><div className="modal-head"><h2>Import / export</h2><button onClick={() => setDialog(null)}>Close</button></div>{exportEl}</Modal> : null}
         {dialog === "compare" ? <Modal label="Compare" onClose={() => setDialog(null)}><div className="modal-head"><h2>Compare with another project</h2><button onClick={() => setDialog(null)}>Close</button></div>{compareEl}</Modal> : null}
-      </PanelMode.Provider>
       {dialog === "palette" ? <CommandPalette commands={buildCommands()} onClose={() => setDialog(null)} onGoto={goTo} onAddAt={publicView || readOnly ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)} /> : null}
     </>
   );
@@ -1243,7 +1129,7 @@ export function App({ auth }: { auth: AuthContext }) {
         {browserTab === "nodes" ? nodeListEl : null}
         {browserTab === "links" ? linkListEl : null}
         {browserTab === "issues" ? healthEl : null}
-        {browserTab === "published" ? sectionEl : null}
+        {browserTab === "published" ? publishedEl : null}
       </div>
     </aside>
   );
@@ -1288,7 +1174,6 @@ export function App({ auth }: { auth: AuthContext }) {
       onHelp={() => setDialog("help")}
       onAccount={() => setDialog("account")}
       onAdmin={() => setDialog("admin")}
-      onClassic={() => (storeUiMode("v1"), setUiMode("v1"))}
       onSignOut={() => void auth.signOut()}
       browserOpen={browserOpen}
       inspectorOpen={inspectorOpen}
@@ -1297,31 +1182,8 @@ export function App({ auth }: { auth: AuthContext }) {
     />
   );
 
-  const sidebarEl = (
-      <aside className="side" aria-hidden={!menuOpen} ref={sideRef}>
-        {userBarEl}
-        {bannersEl}
-        {sectionEl}
-        {nodePanelEl}
-        {projectEl}
-        {toolbarEl}
-        {nodeListEl}
-        {linkListEl}
-        {commentsEl}
-        {historyEl}
-        {coverageEl}
-        {healthEl}
-        {calibrationEl}
-        {placementEl}
-        {compareEl}
-        {settingsEl}
-        {exportEl}
-      </aside>
-  );
 
-  if (uiMode === "v2") {
-    return (
-      <PanelMode.Provider value="flat">
+  return (
         <div className="app2">
           {v2Top}
           <div className={`body2${browserOpen ? " with-browser" : ""}${inspectorOpen ? " with-inspector" : ""}`}>
@@ -1332,15 +1194,5 @@ export function App({ auth }: { auth: AuthContext }) {
           </div>
           {dialogsEl}
         </div>
-      </PanelMode.Provider>
     );
-  }
-
-  return (
-    <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
-      {sidebarEl}
-      {mapEl}
-      {dialogsEl}
-    </div>
-  );
 }

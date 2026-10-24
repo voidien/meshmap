@@ -7,9 +7,9 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full plan and the v0-
 public ~30 m tiles and the Longley-Rice (ITM) propagation model (a Rust port validated against NTIA's reference code, see
 [`docs/validation.md`](docs/validation.md)). No clutter (trees, buildings) yet.
 
-The selected node's panel is always the first thing in the menu (the menu scrolls back to the top when you select a node), followed by Nodes, Links, Comments, Coverage heatmaps, Mesh health, Suggest new sites, Compare setups, Project settings and Import/export. The side panels (comments, mesh health, coverage, suggestions, settings, nodes, links, import/export) start **collapsed** to save scrolling: click a heading to open or close it, or use *Expand all* / *Collapse all* above them. Your choice is remembered, and selecting a node opens its panel. The whole menu can be hidden with **◀ Hide menu** (top left of the map, or press **M**) so the map fills the window; **☰ Menu** brings it back, and the choice is remembered. The map cursor is a thin **precision crosshair** by default (red while a click will place something); change it under *Layers* → *Cursor on the map* (precision crosshair, standard crosshair, or the hand).
+**The screen.** A top bar (project menu, search, status, Plan | Field, account), a tool rail at the left of the map (Select `V`, Add nodes `N`, Inspect a link between two nodes `L`, Suggest sites `P`, 3D, node names), **lists** on the left (Nodes, Links, Issues, Published; show or hide with `B`) and **details** on the right (Selection, Plan, Project; `I`). Picking a node opens its details; opening a link puts its terrain profile under the map without closing the node. `Ctrl/Cmd+K` (or `/`) opens the command palette: jump to a node, switch project, run an action, export, or type a position such as `36.15, -85.43`. The project menu (top left) holds Settings, History, Compare, Import / export, Share, Publish and Delete. See *The screen* below.
 
-Everything in this guide, the architecture and plan, the validation notes and the terrain-pack guide is also available inside the app under **Help** (top of the left panel).
+Everything in this guide, the architecture and plan, the validation notes and the terrain-pack guide is also available inside the app under **Help** (account menu, top right, or `Ctrl+K`).
 
 ## Layout
 
@@ -58,7 +58,7 @@ The OSM tile server is for light/dev use only; switch the basemap in `web/src/ma
   working as a fallback. Passkeys need a secure web address with a name: your Tailscale `https://` address or
   `http://localhost`, **not** `http://<ip-address>:9091`. They are tied to that host name, so changing the address means adding
   them again.
-- **Projects** are saved to your account a moment after each change ("Saved" at the top of the sidebar) and are there on every
+- **Projects** are saved to your account a moment after each change (the status chip in the top bar shows Saved, Saving, Offline or a conflict) and are there on every
   device. Projects that were saved in this browser before accounts existed are offered for import on first sign-in.
 - **Sharing:** the owner can share a project with other accounts as **editor** (can change it) or **viewer** (read-only) from
   the *Share* button. Changes from other people appear within about 15 seconds; if two people save at the same time you
@@ -140,9 +140,14 @@ fixed radio (the page matches adverts to project nodes by name, or pick the node
 form; *Save a reading automatically* records one per node every 10 s at your GPS position. Close the MeshCore phone app first: a radio talks
 to one app at a time. This follows the official meshcore.js protocol and is tested with simulated packets, **not yet with real hardware**.
 
-## The new layout (preview)
+## The screen
 
-Open the app with `?ui=v2` (for example `https://your-host/?ui=v2`) for the new layout, remembered until you switch back (*Use the classic layout* in the account menu). It has a top bar (project menu, search, status, Plan | Field, account), a tool rail (Select `V`, Add nodes `N`, Inspect a link `L`, Suggest sites `P`), lists on the left (Nodes, Links, Issues, Published; `B`) and details on the right (Selection, Plan, Project; `I`). `Ctrl/Cmd+K` (or `/`), in either layout, opens the command palette: jump to a node, switch project, run an action, export, or type a position like `36.15, -85.43`. See `docs/ui-redesign.md`.
+- **Top bar**: the project menu (switch, rename, new, duplicate, Settings, History, Compare, Import / export, Share, Publish, Delete), search / command palette, status chip, **Plan | Field** switch (on a phone, Field mode is in the account menu), and the account menu (Account, Admin, Help, Sign out).
+- **Tool rail** (left of the map): Select `V`; Add nodes `N` (stays on until `Esc`); Inspect a link `L` (click two nodes); Suggest sites `P`; 3D; node names.
+- **Lists** (left, `B`): Nodes, Links, Issues (mesh health), Published projects.
+- **Details** (right, `I`): *Selection* (the node's panel, its comments, and the edit panel when several nodes are ticked), *Plan* (heatmaps and suggested sites), *Project* (counts, shortcuts, banners, foliage calibration, comments).
+- **Command palette** (`Ctrl/Cmd+K` or `/`): nodes, projects, actions, exports, coordinates; it works offline.
+- On a narrow screen the lists and details open over the map.
 
 ## Working with many nodes
 
@@ -155,7 +160,7 @@ Open the app with `?ui=v2` (for example `https://your-host/?ui=v2`) for the new 
 
 ## Placement suggestions
 
-*Suggest new sites* (left panel) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),
+*Suggest sites* (tool rail ◎, or the Plan tab) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),
 choose how many sites, and optionally require each to link back to the network with a minimum margin (blocked paths do not count even if diffraction leaves some margin) and to link to the sites already chosen, so the new sites form one connected group. The server finds the
 high points in the area, predicts coverage from each, and picks sites one at a time, each the one that newly covers the most
 of the area, counting what your nodes and the earlier picks already cover. Each result lists the new area covered, the running
@@ -169,7 +174,7 @@ nodes cut off by each single node or link failure, plus five for each node not c
 counts as progress; the next pick can close the ring. It needs at least two nodes and skips the heatmaps, so it runs faster. It stops when
 nothing is weak any more ("Nothing to fix") or no site in the area helps.
 
-**Gateways and hops.** If you have marked nodes as gateways (Mesh health card), the network becomes *what can reach a gateway*: a node
+**Gateways and hops.** If you have marked nodes as gateways (Issues tab), the network becomes *what can reach a gateway*: a node
 that cannot is stranded, losing a lone gateway counts as a weak spot (a second gateway, or a site that reaches one, fixes it), and every
 node more than the **hop limit** from all gateways adds two points. The hop limit defaults to the network's planning figure (MeshCore and
 Reticulum 8, Meshtastic 3) and can be changed in the card. The new sites themselves are relays, not gateways. Traffic is not part of the
@@ -177,7 +182,7 @@ score.
 
 ## History
 
-The **History** card keeps earlier states of a project. The app saves the state *before* your edits automatically (at most once every
+**History** (project menu) keeps earlier states of a project. The app saves the state *before* your edits automatically (at most once every
 10 minutes, the last 40 are kept), and **Save version** keeps a named one (up to 100) such as "Before moving Hinch". **Restore** lists what
 would change (nodes coming back or disappearing, moves, settings) and asks first; what you have now is kept as a new version, so a restore
 can itself be undone. Viewers can see the list; editors and the owner can save, restore and delete named versions. Heatmaps, readings and
@@ -185,17 +190,17 @@ comments are not part of a version, only the nodes, settings and overlays.
 
 ## Publishing, comments, antenna patterns, field mode, site reports
 
-- **Publish** (project switcher): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).
+- **Publish** (project menu): puts a frozen, read-only copy in the **Published** section, which every signed-in user can browse, open, comment on and *Copy to my projects*. Node notes stay private unless you tick the box. Your own project stays private and editable; use *Update published copy* to share newer changes, or *Unpublish*. An administrator can remove any publication. Heatmaps and suggestions are not shared (they run on your own project).
 - **Comments**: on a project (everyone it is shared with, viewers included) or on a published copy (everyone). Comment on the project, a selected node or a selected link; the owner (or the author) can resolve or delete.
 - **Antenna patterns** (node panel): omnidirectional, directional (beamwidth, front-to-back, pointing direction, "aim at node") or an imported MSI Planet / CSV pattern file. Links and heatmaps use the gain in the direction of each link. Horizontal plane only.
-- **Field mode** (the *Field* button in the toolbar; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
+- **Field mode** (the *Field* switch in the top bar, or account menu on a phone; made for a phone): GPS position, nearest nodes with distance and bearing, the predicted signal where you stand, recording RSSI/SNR readings (kept on the phone until uploaded, so a reading without signal is not lost), moving a node to your position, marking it installed, and a comparison of measured against predicted signal, with CSV export. The app must be loaded already; map tiles are not cached for offline use.
 - **Elevation on the map**: the **Layers** button (top left of the map) switches shaded relief, **elevation colours** and **contour lines** (metres or feet; spacing follows the zoom, zoom in past about level 10 to see them). A readout at the bottom left shows the ground elevation under the pointer (and, where a terrain pack has clutter data, the height of trees/buildings and the surface height). **Right-click** anywhere for the same numbers, the data source, the nearest node with distance and direction, copy coordinates, add a node there, or start a site search around it. Elevations come from the same terrain data as the predictions (a pack where you have one, otherwise public ~30 m tiles), so they match the profiles; they are not survey-grade.
-- **Mesh health** (left panel): from the usable links (margin at or above a threshold in both directions) it shows how many nodes are connected, the separate groups, **single points of failure** (nodes whose loss cuts others off), **links that are the only way**, hop counts from your **gateways** (mark a node as Gateway in its panel; hop limit defaults to Meshtastic's 3), nodes that cannot reach a gateway, and a **what-if** that removes any node and shows who loses contact. Problems are marked on the map. Without a gateway, "connected" means part of the largest group; a lone gateway counts as a single point of failure.
+- **Mesh health** (the Issues tab): from the usable links (margin at or above a threshold in both directions) it shows how many nodes are connected, the separate groups, **single points of failure** (nodes whose loss cuts others off), **links that are the only way**, hop counts from your **gateways** (mark a node as Gateway in its panel; hop limit defaults to Meshtastic's 3), nodes that cannot reach a gateway, and a **what-if** that removes any node and shows who loses contact. Problems are marked on the map. Without a gateway, "connected" means part of the largest group; a lone gateway counts as a single point of failure.
 - **Site report** (node panel): a printable page with the location, a map picture, equipment, antenna pattern, expected links with terrain profiles, coverage numbers if computed, field readings, comments and the assumptions. Use *Print or save as PDF*.
 
 ## What to verify
 
-1. **Add nodes**: "+ Node", click the map (or right-click the map and choose "Add a node here"); edit height, TX power, gain, cable loss, preset, status, notes.
+1. **Add nodes**: the + tool (or `N`), click the map (or right-click the map and choose "Add a node here"); edit height, TX power, gain, cable loss, preset, status, notes.
 2. **Links**: nodes within *max range* (default 50 km) get colored links: green clear, yellow marginal, red obstructed.
    Out-of-range ("none") links are hidden unless enabled in settings.
 3. **Drag a node**: links update live (coarser terrain sampling while dragging, full resolution on release).
@@ -218,10 +223,10 @@ comments are not part of a version, only the nodes, settings and overlays.
    sorting; click a row to select and zoom to it, tick several for bulk edits (height, client height, TX power, gain,
    cable loss, preset, status; only filled-in fields change) or bulk delete, or add a node by typing coordinates.
    A selected node shows its connections (click one to open its terrain profile), plus Zoom to / Duplicate / Delete.
-   The "Names" button toggles name labels on the map.
+   The Aa button in the tool rail toggles name labels on the map.
 11. **Clutter** (needs a pack): open a link across wooded or built-up ground; the profile shows the tree/building layer and a table
    with bare earth vs terrain + clutter. Flip *Terrain model* in settings and watch link colors and heatmaps change.
-12. **Placement**: in *Suggest new sites* click "Around my nodes" (or pick an area on the map), set 2 sites and click
+12. **Placement**: in the Plan tab, under *Suggest new sites*, click "Around my nodes" (or pick an area on the map), set 2 sites and click
     *Suggest sites*; numbered markers appear with the km² each adds and its links; "Add as node" adds one. Turning the backhaul
     requirement off, or raising its margin, changes the result.
 13. **v6 features**: select a node and set a directional antenna aimed away from a neighbour (its margin drops); post a comment; click *Site report*; click *Publish*, then sign in as another user and open *Published*; in *Field mode* (allow location) record a reading and see it listed with the prediction.

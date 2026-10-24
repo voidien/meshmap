@@ -30,7 +30,6 @@ export interface TopBarProps {
   onHelp: () => void;
   onAccount: () => void;
   onAdmin: () => void;
-  onClassic: () => void;
   onSignOut: () => void;
   browserOpen: boolean;
   inspectorOpen: boolean;
@@ -113,7 +112,6 @@ export function TopBar(p: TopBarProps) {
             {item(close, "Account…", p.onAccount)}
             {p.user.isAdmin ? item(close, "Admin…", p.onAdmin) : null}
             {item(close, "Help", p.onHelp, { id: "help-btn-v2" })}
-            {item(close, "Use the classic layout", p.onClassic, { id: "use-classic" })}
             <hr />
             {item(close, "Sign out", p.onSignOut)}
           </>

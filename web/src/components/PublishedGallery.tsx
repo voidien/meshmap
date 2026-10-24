@@ -33,7 +33,7 @@ export function PublishedGallery({ openId, onOpen, reloadKey }: Props) {
   }, [items, q]);
 
   return (
-    <Card id="gallery" domId="published-gallery" title="Published projects" defaultOpen>
+    <Card id="gallery" domId="published-gallery" title="Published projects">
       <p className="hint">Shared by people on this site. Open one to look around, read and add comments, or copy it into your own projects.</p>
       <input type="search" placeholder="Search title, description or person…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search published projects" />
       {error ? <p className="err">{error}</p> : null}

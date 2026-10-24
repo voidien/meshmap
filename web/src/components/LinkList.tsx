@@ -1,6 +1,6 @@
-import { useContext, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { LINK_COLORS } from "../map/MapView";
-import { Card, PanelMode } from "./Card";
+import { Card } from "./Card";
 import { VirtualList } from "../ui/VirtualList";
 import { asymmetryDb, filterLinks, NO_LINK_FILTER, type LinkFilter, type LinkSort } from "../listFilters";
 import type { Link, LinkClass, MeshNode } from "../types";
@@ -15,7 +15,6 @@ interface Props {
 const CLASSES: LinkClass[] = ["obstructed", "marginal", "clear"];
 
 export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
-  const flat = useContext(PanelMode) === "flat";
   const [filter, setFilter] = useState<LinkFilter>(NO_LINK_FILTER);
   const [sort, setSort] = useState<LinkSort>("weakest");
   const name = useMemo(() => new Map(nodes.map((n) => [n.id, n.name])), [nodes]);
@@ -55,7 +54,7 @@ export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
         items={visible}
         rowHeight={30}
         maxHeight={260}
-        fill={flat}
+        fill
         className="links"
         ariaLabel="Links"
         keyOf={(l) => l.key}

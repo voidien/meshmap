@@ -2,7 +2,6 @@ import { fitsNetwork, NETWORK_LIST, NETWORKS, type Network } from "../networks";
 import type { MeshNode, NodeDefaults, Settings, TerrainMode } from "../types";
 import { FACTORY_NODE_DEFAULTS } from "../workspace";
 import { useState, type ReactNode } from "react";
-import { Card } from "./Card";
 import { Modal } from "../ui/Modal";
 import { NumberField } from "../ui/NumberField";
 
@@ -265,22 +264,7 @@ const ABOUT = (
   </>
 );
 
-/** The settings as a collapsible card in the sidebar (classic layout). */
-export function SettingsPanel(props: Props) {
-  return (
-    <Card id="settings" title="Project settings & assumptions">
-      {sectionsOf(props).map((sec) => (
-        <div key={sec.id}>
-          <h4 className="subhead">{sec.title}</h4>
-          {sec.node}
-        </div>
-      ))}
-      {ABOUT}
-    </Card>
-  );
-}
-
-/** The settings as a dialog with a section list on the left (new layout). */
+/** The project settings as a dialog with a section list on the left. */
 export function SettingsDialog(props: Props & { onClose: () => void; initial?: string }) {
   const secs = sectionsOf(props);
   const [current, setCurrent] = useState(secs.find((x) => x.id === props.initial)?.id ?? secs[0].id);

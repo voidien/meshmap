@@ -80,7 +80,7 @@ function TagEditor({ tags, known, onChange }: { tags: string[]; known: string[];
 
 export function NodePanel({ node, connections, others, network, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
   return (
-    <Card id="node" title={`Node: ${node.name.trim() || "(unnamed)"}`} openWhen={node.id}>
+    <Card id="node" title={`Node: ${node.name.trim() || "(unnamed)"}`}>
       <label className="field">
         <span>Name</span>
         <input value={node.name} onChange={(e) => onChange({ name: e.target.value })} />
