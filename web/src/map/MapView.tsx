@@ -44,6 +44,10 @@ interface Props {
   /** Field mode: where the phone is, and the readings taken so far. */
   field?: { me: { lat: number; lon: number; accuracyM: number } | null; readings: { id: string; lat: number; lon: number; color: string }[] };
   addMode: boolean;
+  /** Phone placement: nodes are placed at the cross in the middle of the map (a tap only pans), see `onCenter`. */
+  reticle?: boolean;
+  /** The middle of the map, whenever it settles (for the cross). */
+  onCenter?: (c: { lat: number; lon: number }) => void;
   /** Next click chooses the planning area instead. */
   pickMode: boolean;
   terrain3d: boolean;
@@ -202,14 +206,30 @@ export function MapView(p: Props) {
         }
       }, 120);
     });
+    const openMenuAt = (x: number, y: number, lat: number, lon: number) => {
+      setMenu({ x, y, lat, lon, info: null });
+      terrain.probe(lat, lon).then((info) => setMenu((m) => (m && m.lat === lat && m.lon === lon ? { ...m, info } : m)), () => undefined);
+    };
     map.on("contextmenu", (e) => {
       e.originalEvent.preventDefault();
-      const { lat, lng: lon } = e.lngLat;
-      setMenu({ x: e.point.x, y: e.point.y, lat, lon, info: null });
-      terrain.probe(lat, lon).then((info) => setMenu((m) => (m && m.lat === lat && m.lon === lon ? { ...m, info } : m)), () => undefined);
+      openMenuAt(e.point.x, e.point.y, e.lngLat.lat, e.lngLat.lng);
     });
+    // the middle of the map, for the placement cross on phones (live while moving, so its coordinates follow)
+    let centerRaf = 0;
+    const reportCenter = () => {
+      if (centerRaf) return;
+      centerRaf = requestAnimationFrame(() => {
+        centerRaf = 0;
+        const c = map.getCenter();
+        latest.current.onCenter?.({ lat: c.lat, lon: c.lng });
+      });
+    };
+    map.on("move", () => latest.current.onCenter && latest.current.reticle && reportCenter());
     map.on("movestart", () => setMenu(null));
-    map.on("moveend", () => refreshContours());
+    map.on("moveend", () => {
+      refreshContours();
+      reportCenter();
+    });
     (window as unknown as { __meshmap?: maplibregl.Map }).__meshmap = map; // handy for debugging and browser tests
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
@@ -368,10 +388,43 @@ export function MapView(p: Props) {
       e.preventDefault();
     });
 
+    // a long press on a touch screen is the right-click: the same menu
+    {
+      let timer = 0;
+      let at: { x: number; y: number } | null = null;
+      const cancel = () => {
+        window.clearTimeout(timer);
+        at = null;
+      };
+      cont.addEventListener("touchstart", (e: TouchEvent) => {
+        cancel();
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        at = { x: t.clientX, y: t.clientY };
+        timer = window.setTimeout(() => {
+          if (!at) return;
+          const r = cont.getBoundingClientRect();
+          const [x, y] = [at.x - r.left, at.y - r.top];
+          const ll = map.unproject([x, y]);
+          suppressClick = true;
+          setTimeout(() => (suppressClick = false), 600);
+          navigator.vibrate?.(15);
+          openMenuAt(x, y, ll.lat, ll.lng);
+        }, 550);
+      }, { passive: true });
+      cont.addEventListener("touchmove", (e: TouchEvent) => {
+        const t = e.touches[0];
+        if (at && t && Math.hypot(t.clientX - at.x, t.clientY - at.y) > 10) cancel();
+      }, { passive: true });
+      cont.addEventListener("touchend", cancel, { passive: true });
+      cont.addEventListener("touchcancel", cancel, { passive: true });
+    }
+
     map.on("click", (e) => {
       if (suppressClick) return;
       setMenu(null);
       const c = latest.current;
+      if (c.reticle && c.addMode && !c.pickMode) return; // on a phone nodes are placed with the button, not by tapping
       if (c.pickMode || (c.addMode && !c.readOnly)) {
         c.onMapClick(e.lngLat.lat, e.lngLat.lng);
         return;

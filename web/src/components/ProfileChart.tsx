@@ -221,13 +221,22 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
   const xTicks = niceTicks(0, total / 1000, 8);
   const worstX = X(r.worst_dist_m);
 
-  const indexAt = (e: React.MouseEvent<SVGSVGElement>): number | null => {
+  const indexAt = (e: { clientX: number; currentTarget: Element }): number | null => {
     const box = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - box.left) / box.width) * W;
     const d = ((x - M.l) / (W - M.l - M.r)) * total;
     return d < 0 || d > total ? null : Math.round((d / total) * (n - 1));
   };
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => setHover(indexAt(e));
+  // a finger scrubs along the profile (the readout follows it); a tap picks the spot. The mouse hovers and clicks.
+  const onMove = (e: React.PointerEvent<SVGSVGElement>) => setHover(indexAt(e));
+  const onKey = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    const step = e.shiftKey ? 10 : 1;
+    const at = hover ?? Math.floor(n / 2);
+    if (e.key === "ArrowRight") (e.preventDefault(), setHover(Math.min(n - 1, at + step)));
+    else if (e.key === "ArrowLeft") (e.preventDefault(), setHover(Math.max(0, at - step)));
+    else if ((e.key === "Enter" || e.key === " ") && onPick && hover !== null) (e.preventDefault(), onPick(Math.min(n - 2, Math.max(1, hover))));
+    else if (e.key === "Escape") setHover(null);
+  };
   const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const i = indexAt(e);
     if (i !== null && onPick) onPick(Math.min(n - 2, Math.max(1, i))); // the nodes' own spots are not places for a new node
@@ -235,7 +244,18 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
 
 
   return (
-        <svg viewBox={`0 0 ${W} ${H}`} className="profile" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onClick={onClick} style={onPick ? { cursor: "crosshair" } : undefined}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="profile"
+          role="img"
+          tabIndex={0}
+          aria-label={`Terrain profile between ${a.name.trim() || "A"} and ${b.name.trim() || "B"}, ${(total / 1000).toFixed(1)} km, ${r.class}. Arrow keys move along it${onPick ? "; Enter picks a spot" : ""}.`}
+          onPointerMove={onMove}
+          onPointerLeave={(e) => e.pointerType === "mouse" && setHover(null)}
+          onKeyDown={onKey}
+          onClick={onClick}
+          style={{ touchAction: "pan-y", ...(onPick ? { cursor: "crosshair" } : {}) }}
+        >
           <path d={terrainFill} fill="#b59a73" opacity={0.85} />
           {showClutter ? <path d={clutterFill} fill="#3f8f4f" opacity={solid ? 0.75 : 0.4} /> : null}
           <path d={path(bareLine)} fill="none" stroke="#6b5836" strokeWidth={1.2} />

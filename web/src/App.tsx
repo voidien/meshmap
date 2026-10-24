@@ -27,6 +27,11 @@ import { Modal } from "./ui/Modal";
 import { CommandPalette } from "./shell/CommandPalette";
 import type { Command } from "./shell/palette";
 import { TopBar } from "./shell/TopBar";
+import { BottomNav, type NavItem } from "./shell/BottomNav";
+import { BottomSheet } from "./shell/BottomSheet";
+import type { Snap } from "./shell/sheet";
+import { usePhone } from "./shell/usePhone";
+import { terrain } from "./engine/terrain";
 import { ToolRail, type Tool } from "./shell/ToolRail";
 import { devMode, useStoredFlag } from "./shell/uiMode";
 import { generateNetwork } from "./engine/testNetwork";
@@ -116,6 +121,13 @@ export function App({ auth }: { auth: AuthContext }) {
   const [profilePoint, setProfilePoint] = useState<{ lat: number; lon: number } | null>(null);
   const [radioBannerOff, setRadioBannerOff] = useState<string | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
+  const phone = usePhone();
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number } | null>(null);
+  const [centerElev, setCenterElev] = useState<number | null>(null);
+  const phoneRef = useRef(false);
+  phoneRef.current = phone;
+  /** the phone's bottom sheet: which panel it shows, and how tall */
+  const [sheet, setSheet] = useState<{ panel: "lists" | "details" | null; snap: Snap }>({ panel: null, snap: "half" });
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
@@ -321,7 +333,8 @@ export function App({ auth }: { auth: AuthContext }) {
   useEffect(() => {
     if (selectedNode || checked.size > 0) {
       setInspectorTab("selection");
-      setInspectorOpen(true);
+      if (phoneRef.current) setSheet((s) => (s.panel === "details" ? s : { panel: "details", snap: "peek" }));
+      else setInspectorOpen(true);
     }
   }, [selectedNode, checked, setInspectorOpen]);
 
@@ -614,19 +627,6 @@ export function App({ auth }: { auth: AuthContext }) {
 
   if (loadError) return <div className="boot err">Failed to load the link engine (WASM): {loadError}</div>;
 
-  if (fieldMode && ready && ownProject.id && !pubProject) {
-    return (
-      <FieldMode
-        project={ownProject}
-        links={allLinks}
-        readOnly={ownProject.role === "viewer"}
-        onClose={() => setFieldMode(false)}
-        onMoveNode={(id, lat, lon) => patchNode(id, { lat, lon })}
-        onPatchNode={patchNode}
-      />
-    );
-  }
-
   const bannersEl = (
     <>
         {sync.error ? <p className="banner warn">Can't save right now: {sync.error}. Your changes stay in this tab and are retried.</p> : null}
@@ -902,7 +902,7 @@ export function App({ auth }: { auth: AuthContext }) {
             analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
             jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
           />
-          {addMode || pickingArea || linkFirst !== undefined ? (
+          {(addMode && !phone) || pickingArea || linkFirst !== undefined ? (
             <div className="mode-chip" role="status">
               {addMode
                 ? "Adding nodes: click the map for each one"
@@ -916,6 +916,21 @@ export function App({ auth }: { auth: AuthContext }) {
           ) : null}
         </div>
         <MapLegend otherName={other?.name} />
+        {phone && addMode ? (
+          <>
+            <div className="reticle" aria-hidden="true" />
+            <div className="reticle-strip" id="reticle-strip" role="group" aria-label="Place a node at the cross">
+              <span className="where">
+                {mapCenter ? `${mapCenter.lat.toFixed(5)}, ${mapCenter.lon.toFixed(5)}` : "…"}
+                {centerElev !== null ? ` · ${Math.round(centerElev)} m` : ""}
+              </span>
+              <button className="on" id="place-here-reticle" disabled={!mapCenter} onClick={() => mapCenter && addNodeHere(mapCenter.lat, mapCenter.lon)}>
+                Place here
+              </button>
+              <button onClick={() => chooseToolRef.current("select")}>Done</button>
+            </div>
+          </>
+        ) : null}
         <MapView
           nodes={project.nodes}
           links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}
@@ -932,6 +947,8 @@ export function App({ auth }: { auth: AuthContext }) {
           focus={focus}
           selectedLinkKey={selectedLink}
           addMode={addMode}
+          reticle={phone && addMode}
+          onCenter={setMapCenter}
           pickMode={pickingArea}
           placement={placementOnMap}
           terrain3d={terrain3d}
@@ -983,6 +1000,23 @@ export function App({ auth }: { auth: AuthContext }) {
     }
   };
   chooseToolRef.current = chooseTool;
+
+  // the ground height under the cross, for the strip that places a node
+  useEffect(() => {
+    if (!phone || !addMode || !mapCenter) return;
+    let live = true;
+    const t = setTimeout(() => terrain.probe(mapCenter.lat, mapCenter.lon).then((i) => live && setCenterElev(i.groundM), () => live && setCenterElev(null)), 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [phone, addMode, mapCenter]);
+  const addNodeHere = (lat: number, lon: number) => {
+    const id = uid();
+    setProject((p) => ({ ...p, nodes: [...p.nodes, newNodeFor(p.settings, lat, lon, `Node ${p.nodes.length + 1}`, id)] }));
+    setSelectedNode(id);
+    notify("Node placed. Move the map to place the next one, or tap Done.", { ms: 2500 });
+  };
 
   const goTo = (lat: number, lon: number) => setFocus({ lat, lon, key: Date.now() });
   const publicView = !!pubProject;
@@ -1183,16 +1217,92 @@ export function App({ auth }: { auth: AuthContext }) {
   );
 
 
+  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
+  const fieldEl = fieldActive ? (
+    <div className="fieldhost">
+      <FieldMode
+        project={ownProject}
+        links={allLinks}
+        readOnly={ownProject.role === "viewer"}
+        onClose={() => setFieldMode(false)}
+        onMoveNode={(id, lat, lon) => patchNode(id, { lat, lon })}
+        onPatchNode={patchNode}
+      />
+    </div>
+  ) : null;
+
+  if (phone) {
+    const showSheet = !!sheet.panel && !pairNodes && !fieldActive;
+    const navActive: NavItem = fieldActive ? "field" : tool === "add" ? "add" : sheet.panel === "lists" ? "lists" : sheet.panel === "details" ? "details" : "map";
+    const openPanel = (panel: "lists" | "details") => {
+      setFieldMode(false);
+      chooseToolRef.current("select");
+      setSheet((c) => (c.panel === panel ? { panel: null, snap: c.snap } : { panel, snap: c.snap === "peek" ? "half" : c.snap }));
+    };
+    const onNav = (i: NavItem) => {
+      if (i === "map") {
+        setFieldMode(false);
+        setSheet((c) => ({ panel: null, snap: c.snap }));
+      } else if (i === "lists" || i === "details") openPanel(i);
+      else if (i === "add") {
+        setFieldMode(false);
+        setSheet((c) => ({ panel: null, snap: c.snap }));
+        chooseToolRef.current("add");
+      } else {
+        setSheet((c) => ({ panel: null, snap: c.snap }));
+        setFieldMode((v) => !v);
+      }
+    };
+    return (
+      <div className="app2 phone">
+        {v2Top}
+        <div className="body2 phone">
+          {fieldEl ?? (
+            <>
+              {toolRail}
+              {mapEl}
+              {showSheet ? (
+                <BottomSheet
+                  label={sheet.panel === "lists" ? "Lists" : "Details"}
+                  snap={sheet.snap}
+                  onSnap={(snap) => setSheet((c) => ({ ...c, snap }))}
+                  summary={
+                    sheet.panel === "details" && sel ? (
+                      <span>
+                        <b>{sel.name.trim() || "(unnamed)"}</b> · {sel.status} · {connections.length} link{connections.length === 1 ? "" : "s"}
+                        <button className="on" onClick={() => setSheet((c) => ({ ...c, snap: "half" }))}>
+                          Edit
+                        </button>
+                      </span>
+                    ) : null
+                  }
+                >
+                  {sheet.panel === "lists" ? browserEl : inspectorEl}
+                </BottomSheet>
+              ) : null}
+            </>
+          )}
+        </div>
+        <BottomNav active={navActive} onPick={onNav} addDisabled={!ready || readOnly || publicView} fieldDisabled={!ready || publicView || !project.id} />
+        {dialogsEl}
+      </div>
+    );
+  }
+
   return (
-        <div className="app2">
-          {v2Top}
-          <div className={`body2${browserOpen ? " with-browser" : ""}${inspectorOpen ? " with-inspector" : ""}`}>
+    <div className="app2">
+      {v2Top}
+      <div className={`body2${fieldEl ? "" : browserOpen ? " with-browser" : ""}${fieldEl ? "" : inspectorOpen ? " with-inspector" : ""}${fieldEl ? " in-field" : ""}`}>
+        {fieldEl ?? (
+          <>
             {toolRail}
             {browserOpen ? browserEl : null}
             {mapEl}
             {inspectorOpen ? inspectorEl : null}
-          </div>
-          {dialogsEl}
-        </div>
-    );
+          </>
+        )}
+      </div>
+      {dialogsEl}
+    </div>
+  );
 }

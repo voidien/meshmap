@@ -5,7 +5,9 @@ import { LINK_COLORS } from "../map/MapView";
 export function MapLegend({ otherName }: { otherName?: string | null }) {
   const [open, setOpen] = useState(() => {
     try {
-      return localStorage.getItem("meshmap.legend") !== "0";
+      const saved = localStorage.getItem("meshmap.legend");
+      // small screens start with the legend folded away
+      return saved === null ? !(typeof matchMedia !== "undefined" && matchMedia("(max-width: 700px)").matches) : saved !== "0";
     } catch {
       return true;
     }

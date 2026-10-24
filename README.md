@@ -149,6 +149,10 @@ to one app at a time. This follows the official meshcore.js protocol and is test
 - **Command palette** (`Ctrl/Cmd+K` or `/`): nodes, projects, actions, exports, coordinates; it works offline.
 - On a narrow screen the lists and details open over the map.
 
+## On a phone
+
+On a screen up to 700 px wide the app switches to a phone layout: a bottom bar (**Map, Lists, Add, Details, Field**) and a **bottom sheet** that rises from the bottom for the lists and the details. Drag its handle between peek, half and full height, or tap the handle to change size. Tapping a node shows a one-line summary at the bottom with an *Edit* button. **Add** puts a cross in the middle of the map: pan the map until the cross is on the spot (the strip shows the position and ground height) and press **Place here**; it stays on for the next node until *Done*. A **long press** on the map opens the right-click menu. In a link's profile, drag a finger along it to read the terrain and signal under it; tap to pick a spot. **Field** opens Field mode inside the same screen; **Map** goes back.
+
 ## Working with many nodes
 
 - **Map**: nodes are drawn on the map itself and cluster when you zoom out. Click a node to select it (then drag it). **Shift- or Ctrl-click** ticks nodes; **Shift-drag** draws a box and ticks everything inside it (Ctrl or Cmd adds to what is ticked).

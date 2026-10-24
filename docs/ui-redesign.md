@@ -19,7 +19,7 @@ Source: the UI/UX redesign report (map-first workspace). Built in phases; each p
 | 1 | Independent node / link selection, docked link drawer with live height controls, inspect any pair | done, awaiting review |
 | 2 | App shell: top bar, tool rail, Browser, Inspector; project menu, command palette; settings dialog; unified link-quality thresholds | done, awaiting review |
 | 3 | 100+ nodes: map layers instead of DOM markers, clustering, worker-based link analysis, virtualised lists, tags, bulk-edit tray, node CSV import | done, awaiting review |
-| 4 | Phone shell: bottom sheet, reticle placement, long-press menu, Field mode inside the shell | |
+| 4 | Phone shell: bottom sheet, reticle placement, long-press menu, Field mode inside the shell | done, awaiting review |
 | 5 | Offline areas manager, connectivity probe, offline editing with sync, node-level merge | |
 | 6 | Themes, accessible colour option, per-user units, reports, onboarding, comment badges, wording pass | |
 
@@ -80,3 +80,17 @@ Not done: pausing or prioritising the link analysis by what is on screen; cluste
 ## The switch is gone
 
 The new layout is the main app: `?ui=v1` / `?ui=v2`, *Try the new layout* / *Use the classic layout*, the classic sidebar (user bar, toolbar, project switcher, collapsible cards, Expand all / Collapse all, hide-menu button and `M` key) and the card-style Settings panel are removed. The radio-mismatch banner now sits in the Project tab with the other banners. `?dev=1` (developer commands for generating test networks) is kept.
+
+## Phase 4 (done)
+
+On a screen up to 700 px wide (`usePhone`) the layout changes; wider screens are unchanged.
+
+- **Bottom bar** with five places: Map, Lists, Add, Details, Field.
+- **Bottom sheet** for the lists and the details panel, with three heights: peek (96 px), half and full. Drag the handle (a quick flick goes a step further), or tap it to cycle. The map sits above the sheet and shrinks with it, so it never hides behind it and the map controls stay in reach. Tapping a node on the map raises a peek with a one-line summary (name, status, number of links) and an *Edit* button. The sheet steps aside while a link's profile is open.
+- **Placing nodes with a cross**: *Add* shows a cross in the middle of the map and a strip with the position, the ground height and *Place here* / *Done*. Tapping the map only moves it, so a fingertip never covers the spot; the tool stays on for the next node.
+- **Long press** (about half a second) on the map opens the same menu as a right-click (position, ground height, add a node here, suggest sites here). The elevation readout (hover only) is hidden on touch screens.
+- **Profile**: a finger drags along the terrain profile and the readout follows it; a tap still picks a spot. The profile has keyboard control (arrow keys move along it, Enter picks) and a text description for screen readers.
+- **Field mode** is now a mode of the same screen: the top bar and the bottom bar stay, and Map in the bottom bar goes back to planning (on desktop, the Plan | Field switch does). Its map, readings queue and offline behaviour are unchanged.
+- The tool rail floats over the map on a phone; the legend starts folded.
+
+Not done: the map keeps its own selected / placed state while Field mode is open only because the two maps are separate (a node picked in Field mode is not selected when you return); the full map overlay sheet with map padding; haptics other than the long-press buzz.

@@ -419,3 +419,37 @@ select.chip { padding: 1px 6px; width: auto; }
 .selection-tray .preview { background: #eef4ff; border: 1px solid #b9cdf7; border-radius: 8px; padding: 4px 8px; margin: 6px 0; font-size: 13px; }
 .selection-tray .tagrow { display: flex; gap: 8px; align-items: end; margin-top: 8px; } .selection-tray .tagrow .field { flex: 1; }
 @media (pointer: coarse) { .chip { padding: 6px 12px; min-height: 36px; } }
+
+/* ---- phase 4: phone layout ---- */
+.app2.phone { grid-template-rows: 48px minmax(0, 1fr) 58px; }
+.body2.phone { display: flex; flex-direction: column; position: relative; min-height: 0; grid-template-columns: none; }
+.body2.phone > .mapwrap { flex: 1 1 0; min-height: 0; }
+.body2.phone .toolrail { position: absolute; left: 6px; top: 62px; z-index: 14; flex-direction: column; background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px; box-shadow: 0 1px 6px rgba(0,0,0,.25); }
+.body2.phone .toolrail .railsep { display: none; }
+.body2.phone .map-status { left: 62px; top: 10px; max-width: calc(100% - 140px); }
+.sheet { flex: 0 0 auto; display: flex; flex-direction: column; background: var(--card); border-top: 1px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -6px 20px rgba(0,0,0,.18); min-height: 0; overflow: hidden; transition: height .18s ease; z-index: 16; }
+.sheet[style] { transition: none; }
+.sheet.peek { height: 96px; } .sheet.half { height: 50%; } .sheet.full { height: calc(100% - 110px); }
+.sheet-handle { touch-action: none; padding: 9px 0 7px; display: flex; justify-content: center; cursor: grab; flex: 0 0 auto; }
+.sheet-handle i { width: 46px; height: 5px; border-radius: 3px; background: #c4cad3; }
+.sheet-summary { padding: 0 12px 6px; font-size: 14px; flex: 0 0 auto; }
+.sheet-summary span { display: flex; gap: 8px; align-items: center; } .sheet-summary button { margin-left: auto; }
+.sheet-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.sheet .browser2, .sheet .inspector2 { position: static; width: auto; box-shadow: none; border: 0; flex: 1; min-height: 0; background: var(--card); }
+.sheet.peek .pane { display: none; }
+.sheet .vlist.fill { max-height: none; min-height: 120px; }
+.bottomnav { display: flex; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 17; }
+.bottomnav button { flex: 1; border: 0; border-radius: 0; background: transparent; display: grid; place-items: center; align-content: center; gap: 0; min-height: 56px; font-size: 20px; border-top: 3px solid transparent; }
+.bottomnav button small { font-size: 11px; color: var(--muted); }
+.bottomnav button.on { color: var(--accent); border-top-color: var(--accent); } .bottomnav button.on small { color: var(--accent); font-weight: 700; }
+.reticle { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; pointer-events: none; z-index: 13; }
+.reticle::before, .reticle::after { content: ""; position: absolute; background: #111; box-shadow: 0 0 0 1px #fff; }
+.reticle::before { left: 19px; top: 0; width: 2px; height: 40px; } .reticle::after { top: 19px; left: 0; height: 2px; width: 40px; }
+.reticle-strip { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 14; display: flex; gap: 8px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+.reticle-strip .where { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; min-width: 0; }
+.fieldhost { flex: 1; min-height: 0; position: relative; }
+.fieldhost .field-mode { position: static; inset: auto; height: 100%; z-index: auto; }
+.body2.in-field { display: block; }
+.body2.phone.in-field { display: flex; }
+/* no pointer to hover with: the elevation readout would only show the last tap, so it stays out of the way (long press for the numbers) */
+@media (pointer: coarse) { .elev-readout { display: none; } }
