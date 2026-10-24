@@ -25,7 +25,8 @@ import { CommandPalette } from "./shell/CommandPalette";
 import type { Command } from "./shell/palette";
 import { TopBar } from "./shell/TopBar";
 import { ToolRail, type Tool } from "./shell/ToolRail";
-import { getUiMode, storeUiMode, useStoredFlag, type UiMode } from "./shell/uiMode";
+import { devMode, getUiMode, storeUiMode, useStoredFlag, type UiMode } from "./shell/uiMode";
+import { generateNetwork } from "./engine/testNetwork";
 import { MapLegend } from "./components/MapLegend";
 import { StatusChip } from "./components/StatusChip";
 import { useConnectivity } from "./useConnectivity";
@@ -1100,6 +1101,14 @@ export function App({ auth }: { auth: AuthContext }) {
       ["x-links", "Export links (CSV)", "text/csv", () => linksCsv(project.nodes, allLinks), "links.csv"],
     ] as [string, string, string, () => string, string][]) act(id, label, () => download(`${slug}.${ext}`, make(), mime), { keywords: "download save" });
     act("help", "Open Help", () => setDialog("help"));
+    if (devMode()) {
+      for (const n of [100, 300, 600]) {
+        act(`dev-gen-${n}`, `Developer: new project with ${n} test nodes`, () => {
+          const c = project.nodes[0] ? { lat: project.nodes[0].lat, lon: project.nodes[0].lon } : { lat: 36.0, lon: -85.0 };
+          void addProject(`Test network (${n} nodes)`, { nodes: generateNetwork(project.settings, c, n, Math.max(15, Math.sqrt(n) * 4)), settings: { ...project.settings } });
+        }, { keywords: "benchmark many nodes generate" });
+      }
+    }
     act("layout", uiMode === "v2" ? "Use the classic layout" : "Try the new layout", () => { const m: UiMode = uiMode === "v2" ? "v1" : "v2"; storeUiMode(m); setUiMode(m); });
     for (const n of project.nodes) cmds.push({ id: `node-${n.id}`, label: `Go to ${n.name.trim() || "(unnamed)"}`, group: "Go to", hint: `${n.lat.toFixed(4)}, ${n.lon.toFixed(4)} · ${n.heightM} m`, keywords: "node", run: () => focusNode(n.id) });
     for (const p of projects) if (p.id !== project.id) cmds.push({ id: `proj-${p.id}`, label: `Switch to project “${p.name}”`, group: "Projects", run: () => switchTo(p.id) });

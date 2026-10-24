@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { computeLinks, SPACING_FAST_M, SPACING_FULL_M } from "./engine/analysis";
+import { SPACING_FAST_M, SPACING_FULL_M } from "./engine/analysis";
+import { computeLinksOffThread } from "./engine/linkClient";
 import type { Link, MeshNode, Settings } from "./types";
 
 const NO_LINKS: Link[] = [];
@@ -32,7 +33,7 @@ export function useLinks(nodes: MeshNode[], settings: Settings, dragging: boolea
       async () => {
         setStatus((s) => ({ ...s, busy: true, error: undefined }));
         try {
-          const result = await computeLinks(nodes, settings, {
+          const result = await computeLinksOffThread(nodes, settings, {
             spacingM: dragging ? SPACING_FAST_M : SPACING_FULL_M,
             isCancelled: () => id !== run.current,
             onProgress: (done, total) => id === run.current && setStatus({ busy: true, done, total }),

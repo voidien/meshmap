@@ -137,15 +137,17 @@ export async function analyzeWithProfile(
   return { dist, elev, clutter, bare: both.bare, withClutter: both.clutter ?? null, withFoliage: both.foliage ?? null, result: pick(both, s) };
 }
 
-const linkCache = new Map<string, Link>();
-const MAX_CACHE = 6000;
+/** Analysed pairs, keyed by what the result depends on (not by profile spacing, so a coarse pass while dragging can reuse fine results). */
+const linkCache = new Map<string, { link: Link; spacingM: number }>();
+const MAX_CACHE = 20000;
 
 async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: number): Promise<Link> {
   const [x, y] = a.id < b.id ? [a, b] : [b, a];
   const key = linkKey(x.id, y.id);
-  const cacheKey = `${spacingM}|${settingsSig(s)}|${nodeSig(x)}|${nodeSig(y)}|${x.id}|${y.id}`;
+  const cacheKey = `${settingsSig(s)}|${nodeSig(x)}|${nodeSig(y)}|${x.id}|${y.id}`;
   const hit = linkCache.get(cacheKey);
-  if (hit) return withMode(hit, s);
+  // a fine result serves any request; a coarse one only serves a coarse request
+  if (hit && hit.spacingM <= spacingM) return withMode(hit.link, s);
 
   const distanceM = wasm.haversine_m(x.lat, x.lon, y.lat, y.lon);
   const px = presetById(x.presetId);
@@ -165,7 +167,7 @@ async function analyzePair(a: MeshNode, b: MeshNode, s: Settings, spacingM: numb
     }
   }
   if (linkCache.size >= MAX_CACHE) linkCache.clear();
-  linkCache.set(cacheKey, link);
+  linkCache.set(cacheKey, { link, spacingM });
   return withMode(link, s);
 }
 

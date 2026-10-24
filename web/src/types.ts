@@ -27,6 +27,8 @@ export interface MeshNode {
   antenna?: AntennaPattern;
   /** Connects the mesh to the outside (an internet or MQTT uplink); used by mesh health. */
   gateway?: boolean;
+  /** free labels ("phase 1", "north ridge") to group, filter and select nodes by */
+  tags?: string[];
   presetId: string;
   status: NodeStatus;
   notes: string;

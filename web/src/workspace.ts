@@ -18,6 +18,17 @@ export function emptyProject(name = "Untitled project"): Project {
 }
 
 /** Tolerant parse for saved/imported projects: unknown fields dropped, missing ones defaulted. */
+/** Tags from stored data: trimmed, unique, at most 12 of 40 characters; nothing when there are none. */
+export function cleanTags(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: string[] = [];
+  for (const t of raw) {
+    const v = typeof t === "string" ? t.trim().slice(0, 40) : "";
+    if (v && !out.some((x) => x.toLowerCase() === v.toLowerCase()) && out.length < 12) out.push(v);
+  }
+  return out.length ? out : undefined;
+}
+
 export const FACTORY_NODE_DEFAULTS: NodeDefaults = { heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5 };
 
 /** A new planned node with the project's defaults for new nodes. */
@@ -47,6 +58,7 @@ export function parseProject(raw: unknown): Project | null {
       cableLossDb: num(n.cableLossDb, 0.5),
       antenna: cleanAntenna(n.antenna),
       gateway: n.gateway === true ? true : undefined,
+      tags: cleanTags(n.tags),
       presetId: typeof n.presetId === "string" && n.presetId !== "" ? n.presetId : NETWORKS.meshcore.presetId,
       status: n.status === "installed" ? "installed" : "planned",
       notes: typeof n.notes === "string" ? n.notes : "",
