@@ -581,9 +581,8 @@ export function App({ auth }: { auth: AuthContext }) {
     );
   }
 
-  return (
-    <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
-      <aside className="side" aria-hidden={!menuOpen} ref={sideRef}>
+  const userBarEl = (
+    <>
         <div className="userbar">
           <h1>meshmap</h1>
           <span className="ver" title="estimates only">v8</span>
@@ -597,6 +596,10 @@ export function App({ auth }: { auth: AuthContext }) {
           <button onClick={() => setDialog("help")} id="help-btn">Help</button>
           <button onClick={() => setDialog("account")}>Account</button>
         </div>
+    </>
+  );
+  const bannersEl = (
+    <>
         {sync.error ? <p className="banner warn">Can't save right now: {sync.error}. Your changes stay in this tab and are retried.</p> : null}
         {conflict ? (
           <div className="banner warn">
@@ -625,6 +628,10 @@ export function App({ auth }: { auth: AuthContext }) {
             </div>
           </div>
         ) : null}
+    </>
+  );
+  const sectionEl = (
+    <>
         <div className="tabs" role="tablist" aria-label="Section">
           <button role="tab" aria-selected={section === "mine"} className={section === "mine" ? "on" : ""} onClick={() => { setSection("mine"); setSelectedNode(null); setSelectedLink(null); }}>
             My projects
@@ -658,11 +665,19 @@ export function App({ auth }: { auth: AuthContext }) {
             )}
           </>
         ) : null}
+    </>
+  );
+  const nodePanelEl = (
+    <>
         {sel ? (
           <fieldset className="plain" disabled={readOnly} id="selected-node">
             <NodePanel node={sel} network={project.settings.network} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => setSelectedLink(k)} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
           </fieldset>
         ) : null}
+    </>
+  );
+  const projectEl = (
+    <>
         {section === "mine" ? (
         <ProjectSwitcher
           projects={projects}
@@ -693,6 +708,10 @@ export function App({ auth }: { auth: AuthContext }) {
             </div>
           );
         })()}
+    </>
+  );
+  const toolbarEl = (
+    <>
         <div className="toolbar">
           <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
             {addMode ? "Adding… (Esc to finish)" : "+ Node"}
@@ -717,7 +736,10 @@ export function App({ auth }: { auth: AuthContext }) {
         </div>
 
         {sel ? null : <p className="hint tight">{readOnly ? "View only." : "“+ Node”, then click the map. Click a link for its profile."}</p>}
-
+    </>
+  );
+  const nodeListEl = (
+    <>
         {ready ? (
         <fieldset className="plain" disabled={readOnly}>
         <NodeList
@@ -735,8 +757,15 @@ export function App({ auth }: { auth: AuthContext }) {
           />
         </fieldset>
         ) : null}
+    </>
+  );
+  const linkListEl = (
+    <>
         <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
-
+    </>
+  );
+  const commentsEl = (
+    <>
         {project.id && (pubProject || section === "mine") ? (
           <CommentsPanel
             key={project.id}
@@ -747,9 +776,17 @@ export function App({ auth }: { auth: AuthContext }) {
             title={pubProject ? "Comments on this published project" : "Comments"}
           />
         ) : null}
+    </>
+  );
+  const historyEl = (
+    <>
         {project.id && !pubProject && section === "mine" ? (
           <HistoryPanel key={project.id} project={project} readOnly={readOnly} onRestore={(n) => sync.restoreVersion(project.id, n)} />
         ) : null}
+    </>
+  );
+  const coverageEl = (
+    <>
         {pubProject ? null : <CoveragePanel
           layers={cov.layers}
           staleKeys={cov.staleKeys}
@@ -762,6 +799,10 @@ export function App({ auth }: { auth: AuthContext }) {
           onRemove={cov.remove}
           onChange={cov.patch}
         />}
+    </>
+  );
+  const healthEl = (
+    <>
         <MeshHealthPanel
           nodes={project.nodes}
           network={project.settings.network}
@@ -774,6 +815,10 @@ export function App({ auth }: { auth: AuthContext }) {
           onLink={(a, b) => setSelectedLink(linkKey(a, b))}
           onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
         />
+    </>
+  );
+  const calibrationEl = (
+    <>
         {pubProject || !project.id ? null : (
           <CalibrationPanel
             projectId={project.id}
@@ -783,6 +828,10 @@ export function App({ auth }: { auth: AuthContext }) {
             onApply={(scale, leafOn) => setProject((p) => ({ ...p, settings: { ...p.settings, foliageScale: scale, foliageLeafOn: leafOn, terrainMode: "foliage" } }))}
           />
         )}
+    </>
+  );
+  const placementEl = (
+    <>
         {pubProject ? null : <PlacementPanel
           nodes={project.nodes}
           area={placementArea}
@@ -812,6 +861,10 @@ export function App({ auth }: { auth: AuthContext }) {
           onZoom={(x) => setFocus({ lat: x.lat, lon: x.lon, key: Date.now() })}
           onAdd={addSuggestion}
         />}
+    </>
+  );
+  const compareEl = (
+    <>
         {pubProject ? null : <ComparePanel
           current={project}
           currentLinks={allLinks}
@@ -821,9 +874,17 @@ export function App({ auth }: { auth: AuthContext }) {
           busy={otherStatus.busy}
           onChange={setCompareId}
         />}
+    </>
+  );
+  const settingsEl = (
+    <>
         <fieldset className="plain" disabled={readOnly}>
         <SettingsPanel settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} />
         </fieldset>
+    </>
+  );
+  const exportEl = (
+    <>
         <Card id="export" title="Import / export">
           <div className="btnrow">
             <button onClick={() => fileInput.current?.click()}>Import files…</button>
@@ -839,7 +900,9 @@ export function App({ auth }: { auth: AuthContext }) {
           <input ref={fileInput} type="file" multiple accept=".json,application/json" hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) void importFiles(fs); e.target.value = ""; }} />
           <p className="hint">Import accepts meshmap JSON and MeshCore coverage_layers JSON; select several files to load each as its own project. Your projects are saved to your account automatically.</p>
         </Card>
-      </aside>
+    </>
+  );
+  const mapEl = (
       <main className="mapwrap">
         <div className="mapstage">
         <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
@@ -929,6 +992,34 @@ export function App({ auth }: { auth: AuthContext }) {
           />
         ) : null}
       </main>
+  );
+
+  const sidebarEl = (
+      <aside className="side" aria-hidden={!menuOpen} ref={sideRef}>
+        {userBarEl}
+        {bannersEl}
+        {sectionEl}
+        {nodePanelEl}
+        {projectEl}
+        {toolbarEl}
+        {nodeListEl}
+        {linkListEl}
+        {commentsEl}
+        {historyEl}
+        {coverageEl}
+        {healthEl}
+        {calibrationEl}
+        {placementEl}
+        {compareEl}
+        {settingsEl}
+        {exportEl}
+      </aside>
+  );
+
+  return (
+    <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
+      {sidebarEl}
+      {mapEl}
       {dialog === "help" ? <HelpDialog onClose={() => setDialog(null)} /> : null}
       {dialog === "account" ? <AccountMenu auth={auth} onClose={() => setDialog(null)} /> : null}
       {dialog === "admin" ? <AdminPanel meId={auth.user.id} onClose={() => setDialog(null)} /> : null}
