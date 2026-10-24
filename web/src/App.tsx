@@ -19,6 +19,10 @@ import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { ImportNodesDialog } from "./components/ImportNodesDialog";
+import { SelectionTray } from "./components/SelectionTray";
+import { applyTagOps } from "./listFilters";
+import type { ImportPlan } from "./nodesImport";
 import { PanelMode } from "./components/Card";
 import { Modal } from "./ui/Modal";
 import { CommandPalette } from "./shell/CommandPalette";
@@ -111,7 +115,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | "settings" | "history" | "export" | "compare" | "palette" | null>(null);
+  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | "settings" | "history" | "export" | "compare" | "palette" | "importNodes" | null>(null);
   const [menuOpen, setMenuOpen] = useState(() => store.get("meshmap.menu") !== "0");
   const toggleMenu = useCallback(() => {
     setMenuOpen((v) => {
@@ -339,11 +343,11 @@ export function App({ auth }: { auth: AuthContext }) {
 
   // a selected node brings up its details in the new layout
   useEffect(() => {
-    if (selectedNode && uiMode === "v2") {
+    if ((selectedNode || checked.size > 0) && uiMode === "v2") {
       setInspectorTab("selection");
       setInspectorOpen(true);
     }
-  }, [selectedNode, uiMode, setInspectorOpen]);
+  }, [selectedNode, checked, uiMode, setInspectorOpen]);
 
   const fail = (e: unknown) => notifyError(e);
 
@@ -537,6 +541,23 @@ export function App({ auth }: { auth: AuthContext }) {
           for (const { n, i } of removed) if (!nodes.some((x) => x.id === n.id)) nodes.splice(Math.min(i, nodes.length), 0, n);
           return { ...p, nodes };
         }),
+    });
+  };
+
+  const tagMany = (ids: string[], add: string | null, remove: string | null) => {
+    const set = new Set(ids);
+    setProject((p) => ({ ...p, nodes: p.nodes.map((n) => (set.has(n.id) ? { ...n, tags: applyTagOps(n, add, remove) } : n)) }));
+  };
+
+  /** Apply a CSV import; the toast can undo it (soon after: it puts the node list back as it was before). */
+  const importNodes = (plan: ImportPlan, fileName: string) => {
+    const before = project.nodes;
+    const patches = new Map(plan.update.map((u) => [u.id, u.patch]));
+    setProject((p) => ({ ...p, nodes: [...p.nodes.map((n) => (patches.has(n.id) ? { ...n, ...patches.get(n.id) } : n)), ...plan.add] }));
+    setDialog(null);
+    notify(`Imported from ${fileName}: ${plan.add.length} added${plan.update.length ? `, ${plan.update.length} updated` : ""}`, {
+      action: "Undo",
+      onAction: () => setProject((p) => ({ ...p, nodes: before })),
     });
   };
 
@@ -797,6 +818,10 @@ export function App({ auth }: { auth: AuthContext }) {
             links={allLinks}
             focusId={selectedNode}
             checked={checked}
+            weakBelowDb={project.settings.marginalMarginDb}
+            showTray={uiMode !== "v2"}
+            readOnly={readOnly}
+            onTags={tagMany}
             onFocus={focusNode}
             onToggle={toggleChecked}
             onSetChecked={(ids) => setChecked(new Set(ids))}
@@ -941,6 +966,7 @@ export function App({ auth }: { auth: AuthContext }) {
         <Card id="export" title="Import / export">
           <div className="btnrow">
             <button onClick={() => fileInput.current?.click()}>Import files…</button>
+            <button onClick={() => setDialog("importNodes")} disabled={readOnly} id="import-nodes-btn">Import nodes (CSV)…</button>
             <button onClick={() => download(`${slug}.meshmap.json`, JSON.stringify(project, null, 2), "application/json")}>Save JSON</button>
           </div>
           <div className="btnrow">
@@ -1095,6 +1121,7 @@ export function App({ auth }: { auth: AuthContext }) {
       act("field", "Field mode", () => setFieldMode(true), { keywords: "gps readings" });
     }
     act("export", "Import / export…", () => setDialog("export"));
+    if (!publicView && !readOnly) act("import-nodes", "Import nodes from a CSV file…", () => setDialog("importNodes"), { keywords: "spreadsheet add many" });
     for (const [id, label, mime, make, ext] of [
       ["x-json", "Download a backup (JSON)", "application/json", () => JSON.stringify(project, null, 2), "meshmap.json"],
       ["x-geojson", "Export GeoJSON", "application/geo+json", () => geojson(project, links), "geojson"],
@@ -1134,6 +1161,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onClose={() => setDialog(null)}
         />
       ) : null}
+      {dialog === "importNodes" ? <ImportNodesDialog existing={project.nodes} settings={project.settings} onImport={importNodes} onClose={() => setDialog(null)} /> : null}
       <PanelMode.Provider value="flat">
         {dialog === "settings" ? (
           <SettingsDialog settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} onClose={() => setDialog(null)} />
@@ -1162,7 +1190,10 @@ export function App({ auth }: { auth: AuthContext }) {
       <div className="pane">
         {inspectorTab === "selection" ? (
           <>
-            {sel ? nodePanelEl : <p className="hint card">Select a node on the map or in the list to see and edit it here. Click a link to open its profile under the map.</p>}
+            {checked.size > 0 ? (
+              <SelectionTray nodes={project.nodes} ids={project.nodes.filter((n) => checked.has(n.id)).map((n) => n.id)} network={project.settings.network} onBulk={patchMany} onTags={tagMany} onSetChecked={(ids) => setChecked(new Set(ids))} onDelete={deleteMany} readOnly={readOnly} />
+            ) : null}
+            {sel ? nodePanelEl : checked.size > 0 ? null : <p className="hint card">Select a node on the map or in the list to see and edit it here. Shift-drag on the map to select several. Click a link to open its profile under the map.</p>}
             {commentsEl}
           </>
         ) : null}

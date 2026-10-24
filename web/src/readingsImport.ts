@@ -21,7 +21,7 @@ const ALIASES: Record<string, string[]> = {
   accuracy: ["accuracy", "accuracy_m", "gps_accuracy_m", "gps_accuracy"],
 };
 
-function splitLine(line: string, delim: string): string[] {
+export function splitLine(line: string, delim: string): string[] {
   const out: string[] = [];
   let cur = "";
   let q = false;

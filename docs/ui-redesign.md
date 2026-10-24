@@ -18,7 +18,7 @@ Source: the UI/UX redesign report (map-first workspace). Built in phases; each p
 | 0 | Quick wins and bug fixes | done, awaiting review |
 | 1 | Independent node / link selection, docked link drawer with live height controls, inspect any pair | done, awaiting review |
 | 2 | App shell: top bar, tool rail, Browser, Inspector; project menu, command palette; settings dialog; unified link-quality thresholds | done, awaiting review |
-| 3 | 100+ nodes: map layers instead of DOM markers, clustering, worker-based link analysis, virtualised lists, tags, bulk-edit tray, node CSV import | |
+| 3 | 100+ nodes: map layers instead of DOM markers, clustering, worker-based link analysis, virtualised lists, tags, bulk-edit tray, node CSV import | done, awaiting review |
 | 4 | Phone shell: bottom sheet, reticle placement, long-press menu, Field mode inside the shell | |
 | 5 | Offline areas manager, connectivity probe, offline editing with sync, node-level merge | |
 | 6 | Themes, accessible colour option, per-user units, reports, onboarding, comment badges, wording pass | |
@@ -60,3 +60,19 @@ The new layout is behind a switch: open the app with `?ui=v2` (remembered), or u
 - `App.tsx` now names the sidebar sections and the map as elements (`nodeListEl`, `healthEl`, `mapEl`...), so both layouts use the same pieces; both layouts were checked with browser tests.
 
 Not in this phase (still to do): a global undo / redo, the Layers panel moved off the map, per-project tags, and the full set of Browser filters (Phase 3), and the issues list as an actionable list rather than the health card (Phase 3 / 6).
+
+## Phase 3 (done)
+
+Tried with generated networks (developer commands `?dev=1`, then the palette: 100 / 300 / 600 test nodes) and with a 300-node, 4,761-link project in a browser test.
+
+- **Map**: nodes are map layers (circle, ring for ticked and weak nodes, label), clustered when zoomed out (cluster click zooms in). Only the selected node is a real marker, and the only draggable one. Shift/Ctrl-click ticks a node; Shift-drag draws a box and ticks the nodes inside it (Ctrl/Cmd adds). Gateways have a thicker ring (map layers cannot draw squares without extra sprites).
+- **Link analysis in a worker** (`engine/linkWorker.ts`): the map and lists stay responsive; a newer request replaces an older one; if workers are unavailable it runs on the main thread. The pair cache no longer depends on the profile spacing, so dragging a node reuses every unchanged pair (before, the switch to coarse spacing missed the cache for all of them).
+- **Mesh health** no longer tests every link by removing it: articulation points and bridges come from one depth-first pass, and only those (and gateways) are checked exactly. A randomised test compares it with the exact method on 400 graphs (with and without gateways, with ties); at 300 nodes / 4,761 links it went from a 1.8 s pause to under 0.3 s.
+- **Lists**: Nodes and Links draw only the rows in view (26 of 300 rows in the test). Nodes: search (name, notes, tags), chips for planned / installed / problems (no link, or best link below the "good link" figure), tag filter, sort including *weakest first*. Links: search by node name, class chips, sort (weakest / longest / name), and a hint on links whose two directions differ by more than 6 dB.
+- **Tags** on nodes (node panel, selection tray, export to CSV and GeoJSON, import from CSV).
+- **Selection tray**: ticked nodes are edited together in one place (the details panel in the new layout, under the list in the classic one): only filled fields change, a line says what will happen before *Apply*, add or remove a tag on all of them, delete.
+- **Nodes CSV import** (`Import nodes (CSV)…` in the import / export card and the palette): preview of what the file holds and what was skipped, then *add all as new nodes* or *update nodes with the same name and add the rest*; the toast offers Undo. The "Nodes CSV" export is a valid file to import.
+
+Measured in the browser test (headless, software rendering): 300 nodes and 4,761 links analysed and shown in about 4.6 s from page load; during that time the page's longest blocked stretch was 0.2 s.
+
+Not done: pausing or prioritising the link analysis by what is on screen; clustering with a worst-link ring; the Issues tab as an actionable list; per-project label priority settings; map text for node names needs a font from a public server (self-hosted fonts come with Phase 5).

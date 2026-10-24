@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { allTags } from "../listFilters";
 import { Card } from "./Card";
 import { NumberField } from "../ui/NumberField";
 import { LINK_COLORS } from "../map/MapView";
@@ -40,6 +42,42 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
   );
 }
 
+function TagEditor({ tags, known, onChange }: { tags: string[]; known: string[]; onChange: (t: string[]) => void }) {
+  const [text, setText] = useState("");
+  const add = () => {
+    const v = text.trim().replace(/,$/, "").slice(0, 40);
+    setText("");
+    if (v && !tags.some((t) => t.toLowerCase() === v.toLowerCase()) && tags.length < 12) onChange([...tags, v]);
+  };
+  return (
+    <div className="field" id="node-tags">
+      <span>Tags</span>
+      <div className="chips-row">
+        {tags.map((t) => (
+          <button key={t} className="chip on" title={`Remove “${t}”`} onClick={() => onChange(tags.filter((x) => x !== t))}>
+            {t} ×
+          </button>
+        ))}
+      </div>
+      <input
+        list="known-tags"
+        placeholder="Add a tag (Enter), e.g. phase 1"
+        value={text}
+        maxLength={40}
+        aria-label="Add a tag"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), add())}
+        onBlur={add}
+      />
+      <datalist id="known-tags">
+        {known.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
 export function NodePanel({ node, connections, others, network, onChange, onDelete, onDuplicate, onZoom, onOpenLink, onSelectNode, onReport, reportBusy }: Props) {
   return (
     <Card id="node" title={`Node: ${node.name.trim() || "(unnamed)"}`} openWhen={node.id}>
@@ -73,6 +111,7 @@ export function NodePanel({ node, connections, others, network, onChange, onDele
         <span>Notes</span>
         <textarea rows={3} value={node.notes} onChange={(e) => onChange({ notes: e.target.value })} />
       </label>
+      <TagEditor tags={node.tags ?? []} known={allTags([node, ...others]).map((t) => t.tag)} onChange={(tags) => onChange({ tags: tags.length ? tags : undefined })} />
       <h3>Connections ({connections.length})</h3>
       {connections.length === 0 ? <p className="hint">No links within range. Raise the antenna, move closer, or increase the max range.</p> : null}
       {others.length > 0 ? (

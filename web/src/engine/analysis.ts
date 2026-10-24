@@ -26,6 +26,15 @@ export function presetById(id: string): Preset {
   return presetMap.get("meshcore_us")!;
 }
 
+/** A radio setting from text a person wrote or a file held: a preset id or name, or a `lora:<sf>:<bw>` setting; null when it means nothing. */
+export function resolvePresetText(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+  const hit = getPresets().find((p) => p.id.toLowerCase() === t.toLowerCase() || p.name.toLowerCase() === t.toLowerCase());
+  if (hit) return hit.id;
+  return radioFor(t) ? t : null;
+}
+
 /** One end of a link; with `toward`, the antenna gain is the one in the direction of the other end (directional antennas). */
 export function endpointOf(n: MeshNode, s: Settings, toward?: { lat: number; lon: number }): Endpoint {
   const p = presetById(n.presetId);

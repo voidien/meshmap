@@ -119,3 +119,38 @@ describe("mesh health", () => {
     expect(edgesFromLinks(links, 0).map((x) => `${x.a}${x.b}`)).toEqual(["ab", "bc", "de"]);
   });
 });
+
+import { rng } from "./engine/testNetwork";
+
+describe("mesh health: the fast path agrees with checking every removal", () => {
+  it("on many random graphs, with and without gateways", () => {
+    const rand = rng(42);
+    for (let round = 0; round < 400; round++) {
+      const n = 2 + Math.floor(rand() * 11);
+      const ids = Array.from({ length: n }, (_, i) => `n${i}`);
+      const edges: Edge[] = [];
+      const m = Math.floor(rand() * n * 1.6);
+      for (let k = 0; k < m; k++) {
+        const a = Math.floor(rand() * n);
+        const b = Math.floor(rand() * n);
+        if (a !== b) edges.push({ a: ids[a], b: ids[b], marginDb: 10 });
+      }
+      const gateways = rand() < 0.4 ? ids.filter(() => rand() < 0.25) : [];
+      const input = { nodeIds: ids, edges, gateways, hopLimit: 3 };
+      const fast = analyzeHealth(input);
+      const slow = analyzeHealth(input, { exact: true });
+      expect(fast.spofs).toEqual(slow.spofs);
+      expect(fast.bridges).toEqual(slow.bridges);
+    }
+  });
+  it("handles a few hundred nodes quickly", () => {
+    const n = 300;
+    const ids = Array.from({ length: n }, (_, i) => `n${i}`);
+    const rand = rng(7);
+    const edges: Edge[] = [];
+    for (let i = 0; i < n; i++) for (let k = 0; k < 16; k++) edges.push({ a: ids[i], b: ids[Math.floor(rand() * n)], marginDb: 10 });
+    const t = Date.now();
+    analyzeHealth({ nodeIds: ids, edges, gateways: [], hopLimit: 3 });
+    expect(Date.now() - t).toBeLessThan(1500);
+  });
+});

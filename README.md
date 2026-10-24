@@ -144,6 +144,15 @@ to one app at a time. This follows the official meshcore.js protocol and is test
 
 Open the app with `?ui=v2` (for example `https://your-host/?ui=v2`) for the new layout, remembered until you switch back (*Use the classic layout* in the account menu). It has a top bar (project menu, search, status, Plan | Field, account), a tool rail (Select `V`, Add nodes `N`, Inspect a link `L`, Suggest sites `P`), lists on the left (Nodes, Links, Issues, Published; `B`) and details on the right (Selection, Plan, Project; `I`). `Ctrl/Cmd+K` (or `/`), in either layout, opens the command palette: jump to a node, switch project, run an action, export, or type a position like `36.15, -85.43`. See `docs/ui-redesign.md`.
 
+## Working with many nodes
+
+- **Map**: nodes are drawn on the map itself and cluster when you zoom out. Click a node to select it (then drag it). **Shift- or Ctrl-click** ticks nodes; **Shift-drag** draws a box and ticks everything inside it (Ctrl or Cmd adds to what is ticked).
+- **Lists**: Nodes and Links only draw the rows in view, so hundreds are fine. Filter Nodes by name, notes or tag, by status, by *problems* (no link, or only weak ones), or by tag; sort by *weakest first*. Filter Links by node name or class; links whose two directions differ by more than 6 dB are marked.
+- **Tags**: give nodes labels such as "phase 1" (node panel), tag many at once, filter by them. They are saved with the project and in the CSV and GeoJSON exports.
+- **Edit many at once**: ticked nodes get one panel (the details panel in the new layout): fill in only the fields to change, read the line that says what will change, press Apply. The same panel adds or removes a tag on all of them, or deletes them.
+- **Import nodes from a CSV file** (Import / export, or Ctrl+K): a header row with `name`, `lat`, `lon`, optionally `height_agl_m`, `client_height_m`, `tx_dbm`, `gain_dbi`, `cable_loss_db`, `preset`, `status`, `notes`, `tags` (separated by semicolons). You see what was found before anything changes, and choose *add all* or *update the nodes with the same name*. The "Nodes CSV" export is a valid file.
+- Link analysis runs in the background, so the map stays usable while hundreds of links are worked out.
+
 ## Placement suggestions
 
 *Suggest new sites* (left panel) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),

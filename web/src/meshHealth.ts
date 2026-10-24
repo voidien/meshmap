@@ -111,7 +111,57 @@ function cutOffBy(input: HealthInput, reach: Set<string>, node?: string, edge?: 
   return [...reach].filter((id) => id !== node && !after.has(id));
 }
 
-export function analyzeHealth(input: HealthInput): Health {
+/** Articulation points (nodes) and bridges (indexes into `edges`) of the graph, by one depth-first pass (Tarjan). */
+export function cutPoints(nodeIds: string[], edges: Edge[]): { nodes: Set<string>; edges: Set<number> } {
+  const idx = new Map(nodeIds.map((id, i) => [id, i]));
+  const n = nodeIds.length;
+  const adj: [number, number][][] = Array.from({ length: n }, () => []);
+  edges.forEach((e, k) => {
+    const a = idx.get(e.a);
+    const b = idx.get(e.b);
+    if (a === undefined || b === undefined || a === b) return;
+    adj[a].push([b, k]);
+    adj[b].push([a, k]);
+  });
+  const disc = new Array<number>(n).fill(-1);
+  const low = new Array<number>(n).fill(0);
+  const nodes = new Set<string>();
+  const bridgeEdges = new Set<number>();
+  let time = 0;
+  for (let root = 0; root < n; root++) {
+    if (disc[root] !== -1) continue;
+    // iterative DFS: [node, edge used to arrive, next neighbour to look at]
+    const stack: [number, number, number][] = [[root, -1, 0]];
+    disc[root] = low[root] = time++;
+    let rootChildren = 0;
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const [v, viaEdge] = top;
+      if (top[2] < adj[v].length) {
+        const [w, k] = adj[v][top[2]++];
+        if (k === viaEdge) continue;
+        if (disc[w] === -1) {
+          disc[w] = low[w] = time++;
+          if (v === root) rootChildren++;
+          stack.push([w, k, 0]);
+        } else low[v] = Math.min(low[v], disc[w]);
+      } else {
+        stack.pop();
+        if (stack.length) {
+          const p = stack[stack.length - 1][0];
+          low[p] = Math.min(low[p], low[v]);
+          if (low[v] > disc[p]) bridgeEdges.add(viaEdge);
+          if (p !== root && low[v] >= disc[p]) nodes.add(nodeIds[p]);
+        }
+      }
+    }
+    if (rootChildren > 1) nodes.add(nodeIds[root]);
+  }
+  return { nodes, edges: bridgeEdges };
+}
+
+/** `exact: true` checks every node and link by removal (slow; what the fast path must agree with). */
+export function analyzeHealth(input: HealthInput, opts: { exact?: boolean } = {}): Health {
   const { nodeIds, edges, hopLimit } = input;
   const gateways = input.gateways.filter((g) => nodeIds.includes(g));
   const adj = adjacency(nodeIds, edges);
@@ -132,17 +182,29 @@ export function analyzeHealth(input: HealthInput): Health {
     maxHops = reached.length ? Math.max(...reached) : null;
   }
 
+  // Removing a node or link that does not split its group cannot cut anything off, so only articulation points, bridges
+  // and gateways need the exact (brute-force) check. That is the same answer, in time that grows with the graph rather
+  // than with its square. The exception is a near-tie between groups, where losing a node can change which group is the
+  // biggest: then everything is checked.
+  const sizes = groups.map((g) => g.length).sort((x, y) => y - x);
+  const ambiguous = gateways.length === 0 && sizes.length > 1 && sizes[1] >= sizes[0] - 1;
+  const cut = ambiguous || opts.exact ? null : cutPoints(nodeIds, edges);
+  const gw = new Set(gateways);
+
   const spofs: Spof[] = [];
   for (const id of nodeIds) {
     if (!reach.has(id)) continue;
+    if (cut && !cut.nodes.has(id) && !gw.has(id)) continue;
     const cutOff = cutOffBy(input, reach, id);
     if (cutOff.length > 0) spofs.push({ id, cutOff });
   }
   spofs.sort((x, y) => y.cutOff.length - x.cutOff.length || x.id.localeCompare(y.id));
 
   const bridges: BridgeLink[] = [];
-  for (const e of edges) {
+  for (let k = 0; k < edges.length; k++) {
+    const e = edges[k];
     if (!reach.has(e.a) && !reach.has(e.b)) continue;
+    if (cut && !cut.edges.has(k)) continue;
     const cutOff = cutOffBy(input, reach, undefined, e);
     if (cutOff.length > 0) bridges.push({ ...e, cutOff });
   }

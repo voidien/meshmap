@@ -13,8 +13,8 @@ const r = (x: number, d = 2) => Number(x.toFixed(d));
 
 export function nodesCsv(nodes: MeshNode[]): string {
   return csv([
-    ["name", "lat", "lon", "height_agl_m", "client_height_m", "tx_dbm", "gain_dbi", "cable_loss_db", "antenna", "antenna_azimuth_deg", "antenna_beamwidth_deg", "preset", "status", "notes"],
-    ...nodes.map((n) => [n.name, n.lat, n.lon, n.heightM, n.clientHeightM, n.txDbm, n.gainDbi, n.cableLossDb, n.antenna?.kind ?? "omni", n.antenna && n.antenna.kind !== "omni" ? Math.round(n.antenna.azimuthDeg) : "", n.antenna?.kind === "directional" ? n.antenna.beamwidthDeg : "", presetById(n.presetId).name, n.status, n.notes]),
+    ["name", "lat", "lon", "height_agl_m", "client_height_m", "tx_dbm", "gain_dbi", "cable_loss_db", "antenna", "antenna_azimuth_deg", "antenna_beamwidth_deg", "preset", "status", "notes", "tags"],
+    ...nodes.map((n) => [n.name, n.lat, n.lon, n.heightM, n.clientHeightM, n.txDbm, n.gainDbi, n.cableLossDb, n.antenna?.kind ?? "omni", n.antenna && n.antenna.kind !== "omni" ? Math.round(n.antenna.azimuthDeg) : "", n.antenna?.kind === "directional" ? n.antenna.beamwidthDeg : "", presetById(n.presetId).name, n.status, n.notes, (n.tags ?? []).join(";")]),
   ]);
 }
 
@@ -36,7 +36,7 @@ export function geojson(p: Project, links: Link[]): string {
   const features: unknown[] = p.nodes.map((n) => ({
     type: "Feature",
     geometry: { type: "Point", coordinates: [n.lon, n.lat] },
-    properties: { kind: "node", name: n.name, height_agl_m: n.heightM, tx_dbm: n.txDbm, gain_dbi: n.gainDbi, cable_loss_db: n.cableLossDb, antenna: n.antenna ?? { kind: "omni" }, preset: n.presetId, status: n.status, notes: n.notes },
+    properties: { kind: "node", name: n.name, height_agl_m: n.heightM, tx_dbm: n.txDbm, gain_dbi: n.gainDbi, cable_loss_db: n.cableLossDb, antenna: n.antenna ?? { kind: "omni" }, preset: n.presetId, status: n.status, notes: n.notes, tags: n.tags ?? [] },
   }));
   for (const l of links) {
     const a = byId.get(l.a), b = byId.get(l.b);
