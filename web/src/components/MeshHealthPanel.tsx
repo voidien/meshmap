@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import { Card } from "./Card";
+import { NumberField } from "../ui/NumberField";
 import type { Health, FailureImpact } from "../meshHealth";
 import { NETWORKS, type Network } from "../networks";
 import type { MeshNode } from "../types";
 
 export interface HealthOptions {
-  minMarginDb: number;
   hopLimit: number;
   highlight: boolean;
   failedId: string;
@@ -18,6 +18,9 @@ interface Props {
   failure: FailureImpact | null;
   options: HealthOptions;
   onOptions: (o: HealthOptions) => void;
+  /** The project's "usable link" threshold (Settings → Link quality); edited here too. */
+  usableMarginDb: number;
+  onUsableMargin: (v: number) => void;
   readOnly: boolean;
   onFocus: (id: string) => void;
   onLink: (a: string, b: string) => void;
@@ -27,7 +30,7 @@ interface Props {
 const num = (v: string, d: number) => (v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** Which nodes and links hold the network together, and what happens when one fails. */
-export function MeshHealthPanel({ nodes, network, health: h, failure, options: o, onOptions, readOnly, onFocus, onLink, onGateway }: Props) {
+export function MeshHealthPanel({ nodes, network, health: h, failure, options: o, onOptions, usableMarginDb, onUsableMargin, readOnly, onFocus, onLink, onGateway }: Props) {
   const name = useMemo(() => new Map(nodes.map((n) => [n.id, n.name.trim() || "(unnamed)"])), [nodes]);
   const nm = (id: string) => name.get(id) ?? "?";
   const set = (patch: Partial<HealthOptions>) => onOptions({ ...o, ...patch });
@@ -52,8 +55,8 @@ export function MeshHealthPanel({ nodes, network, health: h, failure, options: o
           </p>
           <div className="grid2">
             <label className="field">
-              <span>Link counts if margin ≥ (dB)</span>
-              <input type="number" step={1} value={o.minMarginDb} onChange={(e) => set({ minMarginDb: num(e.target.value, 6) })} />
+              <span title="The same figure as Settings → Link quality → usable">Link counts if margin ≥ (dB)</span>
+              <NumberField value={usableMarginDb} step={1} min={-20} max={60} onCommit={onUsableMargin} />
             </label>
             <label className="field">
               <span title={NETWORKS[network].hopNote}>Hops to plan for</span>

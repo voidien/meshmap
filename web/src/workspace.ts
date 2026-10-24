@@ -59,6 +59,7 @@ export function parseProject(raw: unknown): Project | null {
     k: num(s.k, DEFAULT_SETTINGS.k),
     maxRangeKm: num(s.maxRangeKm, DEFAULT_SETTINGS.maxRangeKm),
     marginalMarginDb: num(s.marginalMarginDb, DEFAULT_SETTINGS.marginalMarginDb),
+    usableMarginDb: num(s.usableMarginDb, DEFAULT_SETTINGS.usableMarginDb),
     noiseFigureDb: num(s.noiseFigureDb, DEFAULT_SETTINGS.noiseFigureDb),
     showNone: s.showNone === true,
     itmClimate: Number.isInteger(s.itmClimate) && (s.itmClimate as number) >= 1 && (s.itmClimate as number) <= 7 ? (s.itmClimate as number) : DEFAULT_SETTINGS.itmClimate,

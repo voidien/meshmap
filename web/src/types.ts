@@ -38,7 +38,10 @@ export interface Settings {
   freqMhz: number;
   k: number;
   maxRangeKm: number;
+  /** A link with less spare signal than this is "marginal" (default 10 dB). */
   marginalMarginDb: number;
+  /** A link counts as usable (for mesh health and for suggested sites' links) from this much spare signal (default 6 dB). */
+  usableMarginDb: number;
   noiseFigureDb: number;
   showNone: boolean;
   /** Longley-Rice (ITM) environment. */
@@ -167,6 +170,7 @@ export const DEFAULT_SETTINGS: Settings = {
   k: 4 / 3,
   maxRangeKm: 50,
   marginalMarginDb: 10,
+  usableMarginDb: 6,
   noiseFigureDb: 6,
   showNone: false,
   itmClimate: 5,

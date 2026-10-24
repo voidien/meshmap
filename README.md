@@ -140,6 +140,10 @@ fixed radio (the page matches adverts to project nodes by name, or pick the node
 form; *Save a reading automatically* records one per node every 10 s at your GPS position. Close the MeshCore phone app first: a radio talks
 to one app at a time. This follows the official meshcore.js protocol and is tested with simulated packets, **not yet with real hardware**.
 
+## The new layout (preview)
+
+Open the app with `?ui=v2` (for example `https://your-host/?ui=v2`) for the new layout, remembered until you switch back (*Use the classic layout* in the account menu). It has a top bar (project menu, search, status, Plan | Field, account), a tool rail (Select `V`, Add nodes `N`, Inspect a link `L`, Suggest sites `P`), lists on the left (Nodes, Links, Issues, Published; `B`) and details on the right (Selection, Plan, Project; `I`). `Ctrl/Cmd+K` (or `/`), in either layout, opens the command palette: jump to a node, switch project, run an action, export, or type a position like `36.15, -85.43`. See `docs/ui-redesign.md`.
+
 ## Placement suggestions
 
 *Suggest new sites* (left panel) answers "where should the next nodes go?". Pick an area (click the map, or "Around my nodes"),

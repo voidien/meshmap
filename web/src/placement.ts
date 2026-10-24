@@ -145,7 +145,8 @@ export function placementRequest(area: Area, template: MeshNode | null, existing
     minSpacingKm: o.minSpacingKm,
     minReliefM: o.minReliefM,
     minGainKm2: o.minGainKm2,
-    ...(o.backhaul ? { backhaul: o.backhaul } : {}),
+    // what counts as a usable link is one project setting, shared with mesh health
+    ...(o.backhaul ? { backhaul: { ...o.backhaul, minMarginDb: s.usableMarginDb } } : {}),
   };
 }
 

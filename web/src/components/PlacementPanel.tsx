@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card } from "./Card";
+import { NumberField } from "../ui/NumberField";
 import { DEFAULT_BACKHAUL, describeStop, type Area, type PlacementJob, type PlacementOptions, type Suggestion } from "../placement";
 import type { MeshNode } from "../types";
 
@@ -13,6 +14,9 @@ interface Props {
   onOptions: (o: PlacementOptions) => void;
   /** hops the network usually needs at most (used when the person has not set one) */
   defaultHopLimit: number;
+  /** The project's "usable link" threshold, shared with mesh health (Settings → Link quality). */
+  usableMarginDb: number;
+  onUsableMargin: (v: number) => void;
   templateId: string;
   onTemplate: (id: string) => void;
   job: PlacementJob | null;
@@ -134,7 +138,7 @@ export function PlacementPanel(p: Props) {
         <div className="grid2">
           <label className="field">
             <span>Minimum link margin (dB)</span>
-            <input type="number" step={1} value={o.backhaul.minMarginDb} onChange={(e) => set({ backhaul: { ...o.backhaul!, minMarginDb: num(e.target.value, 6) } })} />
+            <NumberField value={p.usableMarginDb} step={1} min={-20} max={60} onCommit={p.onUsableMargin} />
           </label>
           <label className="field">
             <span>Longest link (km)</span>

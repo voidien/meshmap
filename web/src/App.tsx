@@ -19,6 +19,13 @@ import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { PanelMode } from "./components/Card";
+import { Modal } from "./ui/Modal";
+import { CommandPalette } from "./shell/CommandPalette";
+import type { Command } from "./shell/palette";
+import { TopBar } from "./shell/TopBar";
+import { ToolRail, type Tool } from "./shell/ToolRail";
+import { getUiMode, storeUiMode, useStoredFlag, type UiMode } from "./shell/uiMode";
 import { MapLegend } from "./components/MapLegend";
 import { StatusChip } from "./components/StatusChip";
 import { useConnectivity } from "./useConnectivity";
@@ -38,7 +45,7 @@ import { useLinks } from "./useLinks";
 import { MapView } from "./map/MapView";
 import { NodePanel, type Connection } from "./components/NodePanel";
 import { NodeList } from "./components/NodeList";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsDialog, SettingsPanel } from "./components/SettingsPanel";
 import { LinkList } from "./components/LinkList";
 import { ProfileChart } from "./components/ProfileChart";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
@@ -86,6 +93,15 @@ export function App({ auth }: { auth: AuthContext }) {
   const [addMode, setAddMode] = useState(false);
   const addModeRef = useRef(false);
   addModeRef.current = addMode;
+  /** Link tool: undefined = off, null = waiting for the first node, a node id = waiting for the second. */
+  const [linkFirst, setLinkFirst] = useState<string | null | undefined>(undefined);
+  const linkFirstRef = useRef<string | null | undefined>(undefined);
+  linkFirstRef.current = linkFirst;
+  const [uiMode, setUiMode] = useState<UiMode>(getUiMode);
+  const [browserOpen, setBrowserOpen] = useStoredFlag("meshmap.browser", () => window.innerWidth > 900);
+  const [inspectorOpen, setInspectorOpen] = useStoredFlag("meshmap.inspector", () => window.innerWidth > 900);
+  const [browserTab, setBrowserTab] = useState<"nodes" | "links" | "issues" | "published">("nodes");
+  const [inspectorTab, setInspectorTab] = useState<"selection" | "plan" | "project">("project");
   const [placementArea, setPlacementArea] = useState<Area | null>(null);
   const [pickingArea, setPickingArea] = useState(false);
   const pickingRef = useRef(false);
@@ -94,7 +110,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | null>(null);
+  const [dialog, setDialog] = useState<"account" | "admin" | "share" | "publish" | "help" | "settings" | "history" | "export" | "compare" | "palette" | null>(null);
   const [menuOpen, setMenuOpen] = useState(() => store.get("meshmap.menu") !== "0");
   const toggleMenu = useCallback(() => {
     setMenuOpen((v) => {
@@ -114,7 +130,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const [profilePoint, setProfilePoint] = useState<{ lat: number; lon: number } | null>(null);
   const [radioBannerOff, setRadioBannerOff] = useState<string | null>(null);
   const [fieldMode, setFieldMode] = useState(false);
-  const [healthOpts, setHealthOpts] = useState<HealthOptions>({ minMarginDb: 6, hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
+  const [healthOpts, setHealthOpts] = useState<HealthOptions>({ hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
   const [viewPub, setViewPub] = useState<Publication | null>(null);
@@ -178,8 +194,8 @@ export function App({ auth }: { auth: AuthContext }) {
     setHealthOpts((o) => ({ ...o, hopLimit: NETWORKS[project.settings.network].hopLimit }));
   }, [project.settings.network, project.id]);
   const healthInput = useMemo(
-    () => ({ nodeIds: project.nodes.map((n) => n.id), edges: edgesFromLinks(allLinks, healthOpts.minMarginDb), gateways: project.nodes.filter((n) => n.gateway).map((n) => n.id), hopLimit: healthOpts.hopLimit }),
-    [project.nodes, allLinks, healthOpts.minMarginDb, healthOpts.hopLimit],
+    () => ({ nodeIds: project.nodes.map((n) => n.id), edges: edgesFromLinks(allLinks, project.settings.usableMarginDb), gateways: project.nodes.filter((n) => n.gateway).map((n) => n.id), hopLimit: healthOpts.hopLimit }),
+    [project.nodes, allLinks, project.settings.usableMarginDb, healthOpts.hopLimit],
   );
   const health = useMemo(() => analyzeHealth(healthInput), [healthInput]);
   const failure = useMemo(() => (healthOpts.failedId && healthInput.nodeIds.includes(healthOpts.failedId) ? simulateFailure(healthInput, healthOpts.failedId) : null), [healthInput, healthOpts.failedId]);
@@ -280,30 +296,45 @@ export function App({ auth }: { auth: AuthContext }) {
     if (previousId) switchTo(previousId);
   }, [previousId, switchTo]);
 
+  const chooseToolRef = useRef<(t: Tool) => void>(() => undefined);
+  const uiModeRef = useRef<UiMode>("v1");
+  uiModeRef.current = uiMode;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      // the command palette works from anywhere, even while typing in a field
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setDialog((d) => (d === "palette" ? null : "palette"));
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === "Escape" && t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return void t.blur();
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.key === "Escape" && typing) return void t!.blur();
+      if (typing) return;
       if (document.querySelector(".modal-back")) return;
+      const v2 = uiModeRef.current === "v2";
       if (e.key === "]") step(1);
       else if (e.key === "[") step(-1);
       else if (e.key === "`") flip();
       else if (e.key === "m" || e.key === "M") toggleMenu();
+      else if (e.key === "/" ) setDialog("palette");
       else if (e.key === "Escape") {
-        if (addModeRef.current || pickingRef.current) {
-          setAddMode(false);
-          setPickingArea(false);
-        } else if (linkOpenRef.current) setSelectedLink(null);
+        if (addModeRef.current || pickingRef.current || linkFirstRef.current !== undefined) chooseToolRef.current("select");
+        else if (linkOpenRef.current) setSelectedLink(null);
         else return;
-      } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) setAddMode((v) => !v);
+      } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) chooseToolRef.current("add");
+      else if (v2 && (e.key === "v" || e.key === "V")) chooseToolRef.current("select");
+      else if (v2 && (e.key === "l" || e.key === "L")) chooseToolRef.current("link");
+      else if (v2 && (e.key === "p" || e.key === "P")) chooseToolRef.current("plan");
+      else if (v2 && (e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
+      else if (v2 && (e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, flip, toggleMenu]);
+  }, [step, flip, toggleMenu, setBrowserOpen, setInspectorOpen]);
 
   const fail = (e: unknown) => notifyError(e);
 
@@ -439,6 +470,15 @@ export function App({ auth }: { auth: AuthContext }) {
   );
 
   const onNodeSelect = useCallback((id: string | null) => {
+    const first = linkFirstRef.current;
+    // link tool: the first node picked starts a pair, the second opens it
+    if (id && first !== undefined) {
+      if (first === null) setLinkFirst(id);
+      else if (id !== first) {
+        setSelectedLink(linkKey(first, id));
+        setLinkFirst(undefined);
+      }
+    }
     setSelectedNode(id);
   }, []);
 
@@ -810,6 +850,8 @@ export function App({ auth }: { auth: AuthContext }) {
           failure={failure}
           options={healthOpts}
           onOptions={setHealthOpts}
+          usableMarginDb={project.settings.usableMarginDb}
+          onUsableMargin={(v) => setProject((p) => ({ ...p, settings: { ...p.settings, usableMarginDb: v } }))}
           readOnly={readOnly}
           onFocus={focusNode}
           onLink={(a, b) => setSelectedLink(linkKey(a, b))}
@@ -844,6 +886,8 @@ export function App({ auth }: { auth: AuthContext }) {
           options={placementOpts}
           onOptions={setPlacementOpts}
           defaultHopLimit={NETWORKS[project.settings.network].hopLimit}
+          usableMarginDb={project.settings.usableMarginDb}
+          onUsableMargin={(v) => setProject((p) => ({ ...p, settings: { ...p.settings, usableMarginDb: v } }))}
           templateId={templateId}
           onTemplate={setTemplateId}
           job={placement.job}
@@ -934,10 +978,16 @@ export function App({ auth }: { auth: AuthContext }) {
             analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
             jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
           />
-          {addMode || pickingArea ? (
+          {addMode || pickingArea || linkFirst !== undefined ? (
             <div className="mode-chip" role="status">
-              {addMode ? "Adding nodes: click the map for each one" : "Pick the area: click the map"}
-              <button onClick={() => (setAddMode(false), setPickingArea(false))}>Done (Esc)</button>
+              {addMode
+                ? "Adding nodes: click the map for each one"
+                : pickingArea
+                  ? "Pick the area: click the map"
+                  : linkFirst === null
+                    ? "Inspect a link: click the first node"
+                    : `Inspect a link: now click the second node (from ${nodeById.get(linkFirst ?? "")?.name.trim() || "the first node"})`}
+              <button onClick={() => chooseToolRef.current("select")}>Done (Esc)</button>
             </div>
           ) : null}
         </div>
@@ -994,6 +1044,217 @@ export function App({ auth }: { auth: AuthContext }) {
       </main>
   );
 
+  // ---- tools, commands and the new layout ---------------------------------
+  const tool: Tool = linkFirst !== undefined ? "link" : pickingArea ? "plan" : addMode ? "add" : "select";
+  const chooseTool = (t: Tool) => {
+    const next: Tool = t === tool ? "select" : t;
+    setAddMode(next === "add");
+    setPickingArea(next === "plan");
+    setLinkFirst(next === "link" ? null : undefined);
+    if (next === "plan") {
+      setInspectorOpen(true);
+      setInspectorTab("plan");
+    }
+  };
+  chooseToolRef.current = chooseTool;
+
+  // a selected node brings up its details in the new layout
+  useEffect(() => {
+    if (selectedNode && uiMode === "v2") {
+      setInspectorTab("selection");
+      setInspectorOpen(true);
+    }
+  }, [selectedNode, uiMode, setInspectorOpen]);
+
+  const goTo = (lat: number, lon: number) => setFocus({ lat, lon, key: Date.now() });
+  const publicView = !!pubProject;
+
+  const buildCommands = (): Command[] => {
+    const cmds: Command[] = [];
+    const act = (id: string, label: string, run: () => void, extra: Partial<Command> = {}) => cmds.push({ id, label, group: "Actions", run, ...extra });
+    if (!publicView && !readOnly) {
+      act("add", "Add nodes (click the map)", () => chooseTool("add"), { shortcut: "N", keywords: "place new node" });
+      act("plan", "Suggest sites in an area", () => chooseTool("plan"), { shortcut: "P", keywords: "placement where" });
+    }
+    act("link", "Inspect a link between two nodes", () => chooseTool("link"), { shortcut: "L", keywords: "path profile pair" });
+    if (!publicView) {
+      act("predict-net", "Predict coverage for the whole network", () => void cov.run("network"), { keywords: "heatmap" });
+      if (sel) act("predict-node", `Predict coverage around ${sel.name.trim() || "the selected node"}`, () => void cov.run("node", sel.id), { keywords: "heatmap" });
+    }
+    act("3d", terrain3d ? "Turn 3D terrain off" : "Turn 3D terrain on", () => setTerrain3d((v) => !v));
+    act("names", showLabels ? "Hide node names" : "Show node names", () => setShowLabels((v) => !v));
+    if (!publicView) {
+      act("settings", "Project settings…", () => setDialog("settings"), { keywords: "assumptions frequency terrain thresholds" });
+      act("history", "History: restore an earlier version…", () => setDialog("history"), { keywords: "undo versions" });
+      act("compare", "Compare with another project…", () => setDialog("compare"));
+      act("share", "Share this project…", () => setDialog("share"));
+      act("publish", "Publish this project…", () => setDialog("publish"));
+      act("field", "Field mode", () => setFieldMode(true), { keywords: "gps readings" });
+    }
+    act("export", "Import / export…", () => setDialog("export"));
+    for (const [id, label, mime, make, ext] of [
+      ["x-json", "Download a backup (JSON)", "application/json", () => JSON.stringify(project, null, 2), "meshmap.json"],
+      ["x-geojson", "Export GeoJSON", "application/geo+json", () => geojson(project, links), "geojson"],
+      ["x-kml", "Export KML (Google Earth)", "application/vnd.google-earth.kml+xml", () => kml(project, links), "kml"],
+      ["x-nodes", "Export nodes (CSV)", "text/csv", () => nodesCsv(project.nodes), "nodes.csv"],
+      ["x-links", "Export links (CSV)", "text/csv", () => linksCsv(project.nodes, allLinks), "links.csv"],
+    ] as [string, string, string, () => string, string][]) act(id, label, () => download(`${slug}.${ext}`, make(), mime), { keywords: "download save" });
+    act("help", "Open Help", () => setDialog("help"));
+    act("layout", uiMode === "v2" ? "Use the classic layout" : "Try the new layout", () => { const m: UiMode = uiMode === "v2" ? "v1" : "v2"; storeUiMode(m); setUiMode(m); });
+    for (const n of project.nodes) cmds.push({ id: `node-${n.id}`, label: `Go to ${n.name.trim() || "(unnamed)"}`, group: "Go to", hint: `${n.lat.toFixed(4)}, ${n.lon.toFixed(4)} · ${n.heightM} m`, keywords: "node", run: () => focusNode(n.id) });
+    for (const p of projects) if (p.id !== project.id) cmds.push({ id: `proj-${p.id}`, label: `Switch to project “${p.name}”`, group: "Projects", run: () => switchTo(p.id) });
+    return cmds;
+  };
+
+  const dialogsEl = (
+    <>
+      {dialog === "help" ? <HelpDialog onClose={() => setDialog(null)} /> : null}
+      {dialog === "account" ? <AccountMenu auth={auth} onClose={() => setDialog(null)} /> : null}
+      {dialog === "admin" ? <AdminPanel meId={auth.user.id} onClose={() => setDialog(null)} /> : null}
+      {dialog === "publish" && ownProject.id ? <PublishDialog project={ownProject} onClose={() => setDialog(null)} onChanged={() => setPubReload((n) => n + 1)} /> : null}
+      {dialog === "share" && project.id ? (
+        <ShareDialog
+          project={project}
+          onMembers={(m) => sync.setMembers(project.id, m)}
+          onLeave={() => {
+            const next = projects.find((p) => p.id !== project.id);
+            void sync.leave(project.id, auth.user.id).then(() => next && setActiveId(next.id), fail);
+          }}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      <PanelMode.Provider value="flat">
+        {dialog === "settings" ? (
+          <SettingsDialog settings={project.settings} onChange={(patch) => setProject((p) => ({ ...p, settings: { ...p.settings, ...patch } }))} nodes={project.nodes} readOnly={readOnly} onApplyRadio={() => patchMany(project.nodes.filter((n) => !fitsNetwork(n.presetId, project.settings.network)).map((n) => n.id), { presetId: NETWORKS[project.settings.network].presetId })} onClose={() => setDialog(null)} />
+        ) : null}
+        {dialog === "history" ? <Modal label="History" onClose={() => setDialog(null)}><div className="modal-head"><h2>History</h2><button onClick={() => setDialog(null)}>Close</button></div>{historyEl}</Modal> : null}
+        {dialog === "export" ? <Modal label="Import and export" onClose={() => setDialog(null)}><div className="modal-head"><h2>Import / export</h2><button onClick={() => setDialog(null)}>Close</button></div>{exportEl}</Modal> : null}
+        {dialog === "compare" ? <Modal label="Compare" onClose={() => setDialog(null)}><div className="modal-head"><h2>Compare with another project</h2><button onClick={() => setDialog(null)}>Close</button></div>{compareEl}</Modal> : null}
+      </PanelMode.Provider>
+      {dialog === "palette" ? <CommandPalette commands={buildCommands()} onClose={() => setDialog(null)} onGoto={goTo} onAddAt={publicView || readOnly ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)} /> : null}
+    </>
+  );
+
+  const toolRail = (
+    <ToolRail tool={tool} onTool={chooseTool} disabled={!ready || readOnly || publicView} terrain3d={terrain3d} onToggle3d={() => setTerrain3d((v) => !v)} showLabels={showLabels} onToggleLabels={() => setShowLabels((v) => !v)} />
+  );
+
+  const inspectorEl = (
+    <aside className="inspector2" aria-label="Details">
+      <div className="tabs2" role="tablist">
+        {([["selection", "Selection"], ["plan", "Plan"], ["project", "Project"]] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={inspectorTab === id} className={inspectorTab === id ? "on" : ""} onClick={() => setInspectorTab(id)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="pane">
+        {inspectorTab === "selection" ? (
+          <>
+            {sel ? nodePanelEl : <p className="hint card">Select a node on the map or in the list to see and edit it here. Click a link to open its profile under the map.</p>}
+            {commentsEl}
+          </>
+        ) : null}
+        {inspectorTab === "plan" ? (
+          <>
+            {coverageEl}
+            {placementEl}
+          </>
+        ) : null}
+        {inspectorTab === "project" ? (
+          <>
+            <section className="card flat" id="project-summary">
+              <h3 className="flat-title">{project.name}</h3>
+              <p className="lmeta">
+                {project.nodes.length} nodes · {allLinks.length - counts.none} links
+                <span className="chips">
+                  <b className="c clear">{counts.clear}</b>
+                  <b className="c marginal">{counts.marginal}</b>
+                  <b className="c obstructed">{counts.obstructed}</b>
+                </span>
+              </p>
+              <div className="btnrow">
+                <button onClick={() => setDialog("settings")}>Settings…</button>
+                <button onClick={() => setDialog("history")}>History…</button>
+                <button onClick={() => setDialog("export")}>Import / export…</button>
+              </div>
+            </section>
+            {bannersEl}
+            {calibrationEl}
+            {commentsEl}
+          </>
+        ) : null}
+      </div>
+    </aside>
+  );
+
+  const browserEl = (
+    <aside className="browser2" aria-label="Lists">
+      <div className="tabs2" role="tablist">
+        {([["nodes", `Nodes (${project.nodes.length})`], ["links", `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => { setBrowserTab(id); if (id === "published") setSection("published"); else setSection("mine"); }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="pane">
+        {browserTab === "nodes" ? nodeListEl : null}
+        {browserTab === "links" ? linkListEl : null}
+        {browserTab === "issues" ? healthEl : null}
+        {browserTab === "published" ? sectionEl : null}
+      </div>
+    </aside>
+  );
+
+  const v2Top = (
+    <TopBar
+      projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+      activeId={project.id}
+      projectName={project.name}
+      canRename={!readOnly && project.role === "owner" && !publicView}
+      onRename={(name) => setProject((p) => ({ ...p, name }))}
+      canFlip={!!previousId}
+      onFlip={flip}
+      onSelect={(id) => (setSection("mine"), setBrowserTab((t) => (t === "published" ? "nodes" : t)), switchTo(id))}
+      onNew={newProject}
+      onDuplicate={duplicateProject}
+      onShare={() => setDialog("share")}
+      onPublish={() => setDialog("publish")}
+      onHistory={() => setDialog("history")}
+      onCompare={() => setDialog("compare")}
+      onImportExport={() => setDialog("export")}
+      onSettings={() => setDialog("settings")}
+      onDelete={() => void deleteProject()}
+      canDelete={projects.length > 1 && project.role === "owner" && !publicView}
+      published={publicView}
+      onPalette={() => setDialog("palette")}
+      status={
+        <StatusChip
+          id="topbar-status"
+          saveState={sync.saveState}
+          readOnly={readOnly || publicView}
+          online={online}
+          conflict={!!conflict}
+          onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
+          analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
+          jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
+        />
+      }
+      onField={() => setFieldMode(true)}
+      fieldDisabled={!ready || publicView || !project.id}
+      user={{ displayName: auth.user.displayName, isAdmin: auth.user.role === "admin" }}
+      onHelp={() => setDialog("help")}
+      onAccount={() => setDialog("account")}
+      onAdmin={() => setDialog("admin")}
+      onClassic={() => (storeUiMode("v1"), setUiMode("v1"))}
+      onSignOut={() => void auth.signOut()}
+      browserOpen={browserOpen}
+      inspectorOpen={inspectorOpen}
+      onToggleBrowser={() => setBrowserOpen((v) => !v)}
+      onToggleInspector={() => setInspectorOpen((v) => !v)}
+    />
+  );
+
   const sidebarEl = (
       <aside className="side" aria-hidden={!menuOpen} ref={sideRef}>
         {userBarEl}
@@ -1016,25 +1277,28 @@ export function App({ auth }: { auth: AuthContext }) {
       </aside>
   );
 
+  if (uiMode === "v2") {
+    return (
+      <PanelMode.Provider value="flat">
+        <div className="app2">
+          {v2Top}
+          <div className={`body2${browserOpen ? " with-browser" : ""}${inspectorOpen ? " with-inspector" : ""}`}>
+            {toolRail}
+            {browserOpen ? browserEl : null}
+            {mapEl}
+            {inspectorOpen ? inspectorEl : null}
+          </div>
+          {dialogsEl}
+        </div>
+      </PanelMode.Provider>
+    );
+  }
+
   return (
     <div className={`app${menuOpen ? "" : " menu-hidden"}`}>
       {sidebarEl}
       {mapEl}
-      {dialog === "help" ? <HelpDialog onClose={() => setDialog(null)} /> : null}
-      {dialog === "account" ? <AccountMenu auth={auth} onClose={() => setDialog(null)} /> : null}
-      {dialog === "admin" ? <AdminPanel meId={auth.user.id} onClose={() => setDialog(null)} /> : null}
-      {dialog === "publish" && ownProject.id ? <PublishDialog project={ownProject} onClose={() => setDialog(null)} onChanged={() => setPubReload((n) => n + 1)} /> : null}
-      {dialog === "share" && project.id ? (
-        <ShareDialog
-          project={project}
-          onMembers={(m) => sync.setMembers(project.id, m)}
-          onLeave={() => {
-            const next = projects.find((p) => p.id !== project.id);
-            void sync.leave(project.id, auth.user.id).then(() => next && setActiveId(next.id), fail);
-          }}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
+      {dialogsEl}
     </div>
   );
 }

@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+
+/** "flat" shows panels open with a plain heading (the new layout's Browser and Inspector); "cards" collapses them (classic sidebar). */
+export const PanelMode = createContext<"cards" | "flat">("cards");
 
 const KEY = (id: string) => `meshmap.panel.${id}`;
 const EVENT = "meshmap:panels";
@@ -38,6 +41,7 @@ interface Props {
 
 /** A sidebar panel with a heading that collapses it. State is remembered per panel. */
 export function Card({ id, title, children, defaultOpen = false, openWhen, domId, className = "" }: Props) {
+  const mode = useContext(PanelMode);
   const [open, setOpenState] = useState(() => stored(id, defaultOpen));
   const setOpen = useCallback(
     (v: boolean) => {
@@ -67,6 +71,14 @@ export function Card({ id, title, children, defaultOpen = false, openWhen, domId
   }, [openWhen]);
 
   const bodyId = `card-body-${id}`;
+  if (mode === "flat") {
+    return (
+      <section className={`card flat ${className}`} id={domId}>
+        <h3 className="flat-title">{title}</h3>
+        <div className="cardbody">{children}</div>
+      </section>
+    );
+  }
   return (
     <section className={`card collapsible ${open ? "open" : "closed"} ${className}`} id={domId}>
       <button type="button" className="cardhead" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>

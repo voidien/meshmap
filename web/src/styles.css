@@ -360,3 +360,66 @@ button.danger { background: var(--danger); color: #fff; border-color: var(--dang
 .suggest { margin: 2px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #eef4ff; border: 1px solid #b9cdf7; border-radius: 8px; padding: 6px 10px; }
 details.more { margin-top: 8px; } details.more > summary { cursor: pointer; font-weight: 600; }
 @media (max-width: 800px) { .hrow { grid-template-columns: 1fr; gap: 2px; } }
+
+.modal.settings-dialog { width: min(900px, 96vw); }
+.settings-layout { display: grid; grid-template-columns: 200px 1fr; gap: 16px; }
+.settings-layout nav { display: grid; gap: 4px; align-content: start; }
+.settings-layout nav button { text-align: left; }
+.settings-page { min-width: 0; max-height: 70vh; overflow-y: auto; padding-right: 6px; }
+.settings-page h3 { margin-top: 0; }
+@media (max-width: 700px) { .settings-layout { grid-template-columns: 1fr; } .settings-layout nav { grid-auto-flow: column; overflow-x: auto; } }
+
+/* ---- phase 2: the new layout (?ui=v2) ---- */
+.app2 { display: grid; grid-template-rows: 48px minmax(0, 1fr); height: 100%; height: 100dvh; background: var(--bg); }
+.topbar { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--card); border-bottom: 1px solid var(--line); position: relative; z-index: 30; }
+.topbar .spacer { flex: 1; }
+.topbar .iconbtn { width: 36px; padding: 0; font-size: 16px; }
+.topbar .projbtn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .searchbtn { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 220px; max-width: 420px; flex: 1 1 260px; color: var(--muted); text-align: left; }
+kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg); color: var(--muted); }
+.topstatus .status-chip { flex-wrap: nowrap; }
+.modeswitch { display: flex; } .modeswitch button { border-radius: 0; } .modeswitch button:first-child { border-radius: 6px 0 0 6px; } .modeswitch button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.topbar .avatar { width: 34px; height: 34px; border-radius: 50%; padding: 0; font-weight: 700; background: var(--accent); color: #fff; border-color: var(--accent); }
+.popover { position: relative; }
+.popmenu { position: absolute; top: calc(100% + 6px); min-width: 240px; max-width: 320px; z-index: 40; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.25); padding: 6px; display: grid; gap: 2px; }
+.popmenu.left { left: 0; } .popmenu.right { right: 0; }
+.popmenu button { text-align: left; border: 0; background: transparent; border-radius: 6px; padding: 6px 10px; }
+.popmenu button:hover:not(:disabled), .popmenu button.sel { background: #eef2ff; }
+.popmenu button.danger-text { color: var(--danger); }
+.popmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.popsection { font-size: 12px; color: var(--muted); padding: 4px 10px 2px; }
+.projlist { max-height: 200px; overflow-y: auto; display: grid; gap: 2px; }
+.popfield { display: grid; gap: 2px; padding: 4px 10px; font-size: 12px; color: var(--muted); } .popfield input { font-size: 14px; }
+.body2 { display: grid; grid-template-columns: 48px minmax(0, 1fr); min-height: 0; position: relative; }
+.body2.with-browser { grid-template-columns: 48px 340px minmax(0, 1fr); }
+.body2.with-inspector { grid-template-columns: 48px minmax(0, 1fr) 380px; }
+.body2.with-browser.with-inspector { grid-template-columns: 48px 340px minmax(0, 1fr) 380px; }
+.toolrail { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; background: var(--card); border-right: 1px solid var(--line); }
+.toolrail button { width: 38px; height: 38px; padding: 0; font-size: 17px; }
+.toolrail .railsep { flex: 1; }
+.browser2, .inspector2 { display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.browser2 { border-right: 1px solid var(--line); } .inspector2 { border-left: 1px solid var(--line); }
+.tabs2 { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--card); }
+.tabs2 button { border: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; background: transparent; padding: 6px 10px; }
+.tabs2 button.on { border-bottom-color: var(--accent); font-weight: 600; background: transparent; color: var(--text); }
+.pane { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.card.flat { padding: 10px 12px; } .flat-title { margin: 0 0 6px; font-size: 15px; }
+.browser2 .nodelist, .browser2 .links { max-height: none; }
+.app2 .sidetoggle, .app2 .map-status .status-chip { display: none; }
+.app2 .map-status { top: 8px; }
+.danger-text { color: var(--danger); }
+.palette { width: min(640px, 96vw); padding-top: 12px; }
+.palette-input { width: 100%; font-size: 16px; padding: 10px 12px; }
+.palette-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.palette-list li { display: grid; grid-template-columns: 74px 1fr auto; gap: 8px; align-items: baseline; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+.palette-list li.sel { background: #eef2ff; }
+.palette-list .grp { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.palette-list small { display: block; color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) {
+  .body2, .body2.with-browser, .body2.with-inspector, .body2.with-browser.with-inspector { grid-template-columns: 48px minmax(0, 1fr); }
+  .browser2, .inspector2 { position: absolute; top: 0; bottom: 0; z-index: 25; width: min(360px, calc(100vw - 56px)); box-shadow: 0 0 24px rgba(0,0,0,.3); }
+  .browser2 { left: 48px; } .inspector2 { right: 0; }
+  .topbar .searchbtn span { display: none; } .topbar .searchbtn { min-width: 0; flex: 0 0 auto; }
+  .topbar .searchbtn::before { content: "🔍"; }
+}
+.tabs2 button { white-space: nowrap; padding: 6px 8px; font-size: 13px; }
