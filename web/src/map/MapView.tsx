@@ -149,6 +149,9 @@ export function MapView(p: Props) {
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    // the map's box changes when the link drawer opens or the menu hides: follow it
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(container.current!);
     let probeTimer: number | undefined;
     let probeSeq = 0;
     map.on("mousemove", (e) => {
@@ -276,6 +279,7 @@ export function MapView(p: Props) {
     });
 
     return () => {
+      ro.disconnect();
       markers.current.forEach((m) => m.remove());
       markers.current.clear();
       map.remove();

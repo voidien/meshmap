@@ -8,7 +8,8 @@ body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; 
 .side h1 { margin: 0; font-size: 20px; }
 .ver { color: var(--muted); font-size: 12px; }
 .pname { font-weight: 600; }
-.mapwrap { position: relative; min-height: 0; }
+.mapwrap { position: relative; min-height: 0; display: flex; flex-direction: column; }
+.mapstage { position: relative; flex: 1 1 0; min-height: 140px; }
 .map { position: absolute; inset: 0; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .card h3 { margin: 0 0 8px; font-size: 14px; }
@@ -342,3 +343,20 @@ button.danger { background: var(--danger); color: #fff; border-color: var(--dang
   .side { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* ---- phase 1: docked link drawer ---- */
+.link-drawer { flex: 0 0 auto; max-height: 58%; overflow-y: auto; background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 8px 14px 12px; }
+.link-drawer .verdict { margin: 4px 0 6px; font-size: 14px; }
+.link-drawer .note { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.keynums { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 6px 0; }
+.keynums > div { border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; display: grid; }
+.keynums span, .keynums small { font-size: 12px; color: var(--muted); }
+.keynums b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.keynums .bad { border-color: var(--danger); } .keynums .bad b { color: var(--danger); }
+.heights { display: grid; gap: 6px; margin: 6px 0; }
+.hrow { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(120px, 2fr) 90px; gap: 10px; align-items: center; }
+.hrow input[type="range"] { width: 100%; }
+.hnum { display: flex; align-items: center; gap: 4px; } .hnum input { width: 64px; } .hnum em { color: var(--muted); font-style: normal; }
+.suggest { margin: 2px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #eef4ff; border: 1px solid #b9cdf7; border-radius: 8px; padding: 6px 10px; }
+details.more { margin-top: 8px; } details.more > summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 800px) { .hrow { grid-template-columns: 1fr; gap: 2px; } }

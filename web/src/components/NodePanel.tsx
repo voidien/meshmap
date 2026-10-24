@@ -1,6 +1,7 @@
 import { Card } from "./Card";
 import { NumberField } from "../ui/NumberField";
 import { LINK_COLORS } from "../map/MapView";
+import { linkKey } from "../engine/analysis";
 import { AntennaEditor } from "./AntennaEditor";
 import { RadioPicker } from "./RadioPicker";
 import type { Network } from "../networks";
@@ -74,6 +75,25 @@ export function NodePanel({ node, connections, others, network, onChange, onDele
       </label>
       <h3>Connections ({connections.length})</h3>
       {connections.length === 0 ? <p className="hint">No links within range. Raise the antenna, move closer, or increase the max range.</p> : null}
+      {others.length > 0 ? (
+        <label className="field">
+          <span>Inspect the path to any node</span>
+          <select
+            id="inspect-pair"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) onOpenLink(linkKey(node.id, e.target.value));
+            }}
+          >
+            <option value="">Choose a node…</option>
+            {others.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name.trim() || "(unnamed)"}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <ul className="conns">
         {connections.map(({ link, other }) => (
           <li key={link.key} onClick={() => onOpenLink(link.key)} title="Open terrain profile">

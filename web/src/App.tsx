@@ -13,6 +13,7 @@ import { CalibrationPanel } from "./components/CalibrationPanel";
 import { MeshHealthPanel, type HealthOptions } from "./components/MeshHealthPanel";
 import { analyzeHealth, edgesFromLinks, simulateFailure } from "./meshHealth";
 import { linkKey } from "./engine/analysis";
+import { explainPair } from "./engine/pairInfo";
 import { Card, openPanel, setAllPanels } from "./components/Card";
 import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
@@ -76,6 +77,8 @@ export function App({ auth }: { auth: AuthContext }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<string | null>(null);
+  const linkOpenRef = useRef(false);
+  linkOpenRef.current = selectedLink !== null;
   const [compareId, setCompareId] = useState<string | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
@@ -234,10 +237,18 @@ export function App({ auth }: { auth: AuthContext }) {
     const node = t ? { ...n, heightM: t.heightM, clientHeightM: t.clientHeightM, txDbm: t.txDbm, gainDbi: t.gainDbi, cableLossDb: t.cableLossDb, presetId: t.presetId } : n;
     setProject((p) => ({ ...p, nodes: [...p.nodes, node] }));
     setSelectedNode(node.id);
-    setSelectedLink(null);
     setFocus({ lat: x.lat, lon: x.lon, key: Date.now() });
   };
   const selLink = selectedLink ? links.find((l) => l.key === selectedLink) ?? null : null;
+  /** The two nodes of the open link view: a drawn link, or any pair picked to inspect. */
+  const pairNodes = useMemo(() => {
+    const ids = selectedLink?.split("|");
+    if (!ids || ids.length !== 2) return null;
+    const a = nodeById.get(ids[0]);
+    const b = nodeById.get(ids[1]);
+    return a && b ? { a, b } : null;
+  }, [selectedLink, nodeById]);
+  const pairInfo = useMemo(() => (pairNodes ? explainPair(pairNodes.a, pairNodes.b, project.settings) : null), [pairNodes, project.settings]);
   const counts = useMemo(() => {
     const c = { clear: 0, marginal: 0, obstructed: 0, none: 0 };
     for (const l of allLinks) c[l.class]++;
@@ -281,9 +292,11 @@ export function App({ auth }: { auth: AuthContext }) {
       else if (e.key === "`") flip();
       else if (e.key === "m" || e.key === "M") toggleMenu();
       else if (e.key === "Escape") {
-        if (!addModeRef.current && !pickingRef.current) return;
-        setAddMode(false);
-        setPickingArea(false);
+        if (addModeRef.current || pickingRef.current) {
+          setAddMode(false);
+          setPickingArea(false);
+        } else if (linkOpenRef.current) setSelectedLink(null);
+        else return;
       } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) setAddMode((v) => !v);
       else return;
       e.preventDefault();
@@ -395,7 +408,6 @@ export function App({ auth }: { auth: AuthContext }) {
       const id = uid();
       setProject((p) => ({ ...p, nodes: [...p.nodes, newNodeFor(p.settings, lat, lon, `Node ${p.nodes.length + 1}`, id)] }));
       setSelectedNode(id);
-      setSelectedLink(null);
     },
     [setProject, pickingArea],
   );
@@ -428,7 +440,6 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const onNodeSelect = useCallback((id: string | null) => {
     setSelectedNode(id);
-    if (id) setSelectedLink(null);
   }, []);
 
   const deleteNode = (id: string) => deleteMany([id]);
@@ -438,7 +449,6 @@ export function App({ auth }: { auth: AuthContext }) {
   const focusNode = (id: string) => {
     const n = nodeById.get(id);
     setSelectedNode(id);
-    setSelectedLink(null);
     if (n) setFocus({ lat: n.lat, lon: n.lon, key: Date.now() });
   };
 
@@ -446,7 +456,6 @@ export function App({ auth }: { auth: AuthContext }) {
     const n = newNode(project.nodes, lat, lon, name);
     setProject((p) => ({ ...p, nodes: [...p.nodes, n] }));
     setSelectedNode(n.id);
-    setSelectedLink(null);
     setFocus({ lat, lon, key: Date.now() });
   };
 
@@ -651,7 +660,7 @@ export function App({ auth }: { auth: AuthContext }) {
         ) : null}
         {sel ? (
           <fieldset className="plain" disabled={readOnly} id="selected-node">
-            <NodePanel node={sel} network={project.settings.network} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => { setSelectedLink(k); setSelectedNode(null); }} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
+            <NodePanel node={sel} network={project.settings.network} connections={connections} others={project.nodes.filter((n) => n.id !== sel.id)} onChange={(patch) => patchNode(sel.id, patch)} onDelete={() => deleteNode(sel.id)} onDuplicate={() => duplicateNode(sel.id)} onZoom={() => focusNode(sel.id)} onOpenLink={(k) => setSelectedLink(k)} onSelectNode={focusNode} onReport={() => void makeReport(sel)} reportBusy={reportBusy} />
           </fieldset>
         ) : null}
         {section === "mine" ? (
@@ -726,7 +735,7 @@ export function App({ auth }: { auth: AuthContext }) {
           />
         </fieldset>
         ) : null}
-        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => { setSelectedLink(k); setSelectedNode(null); }} />
+        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
 
         {project.id && (pubProject || section === "mine") ? (
           <CommentsPanel
@@ -762,7 +771,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onOptions={setHealthOpts}
           readOnly={readOnly}
           onFocus={focusNode}
-          onLink={(a, b) => { setSelectedLink(linkKey(a, b)); setSelectedNode(null); }}
+          onLink={(a, b) => setSelectedLink(linkKey(a, b))}
           onGateway={(id, on) => patchNode(id, { gateway: on ? true : undefined })}
         />
         {pubProject || !project.id ? null : (
@@ -832,6 +841,7 @@ export function App({ auth }: { auth: AuthContext }) {
         </Card>
       </aside>
       <main className="mapwrap">
+        <div className="mapstage">
         <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
           {menuOpen ? "◀ Hide menu" : "☰ Menu"}
         </button>
@@ -891,7 +901,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onMapClick={onMapClick}
           onNodeSelect={onNodeSelect}
           onNodeMove={onNodeMove}
-          onLinkSelect={(k) => { setSelectedLink(k); if (k) setSelectedNode(null); }}
+          onLinkSelect={(k) => setSelectedLink(k)}
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
           onPlanAround={pubProject ? undefined : (lat, lon) => {
             setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
@@ -899,12 +909,24 @@ export function App({ auth }: { auth: AuthContext }) {
             setTimeout(() => document.getElementById("placement-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
           }}
         />
-        {selLink && nodeById.get(selLink.a) && nodeById.get(selLink.b) ? (
-          selLink.result ? (
-            <ProfileChart a={nodeById.get(selLink.a)!} b={nodeById.get(selLink.b)!} settings={project.settings} onClose={() => setSelectedLink(null)} readOnly={readOnly || !!pubProject} onCursor={setProfilePoint} onPlaceNode={(lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)} />
-          ) : (
-            <div className="chart-panel"><div className="chart-head"><strong>{selLink.warning}</strong><span className="spacer" /><button onClick={() => setSelectedLink(null)}>✕</button></div></div>
-          )
+        </div>
+        {pairNodes ? (
+          <ProfileChart
+            a={pairNodes.a}
+            b={pairNodes.b}
+            settings={project.settings}
+            onClose={() => setSelectedLink(null)}
+            readOnly={readOnly || !!pubProject}
+            onCursor={setProfilePoint}
+            onPlaceNode={(lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
+            onChangeNode={(id, patch) => patchNode(id, patch)}
+            onLive={setDragging}
+            notes={pairInfo?.notes}
+            onFix={(kind) => {
+              if (kind === "range" && pairInfo) setProject((p) => ({ ...p, settings: { ...p.settings, maxRangeKm: Math.min(500, Math.ceil(pairInfo.distanceM / 1000) + 1) } }));
+              else if (kind === "radio") patchNode(pairNodes.b.id, { presetId: pairNodes.a.presetId });
+            }}
+          />
         ) : null}
       </main>
       {dialog === "help" ? <HelpDialog onClose={() => setDialog(null)} /> : null}
