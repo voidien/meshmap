@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { confirmDialog } from "../ui/confirm";
+import { Modal } from "../ui/Modal";
 import { api } from "../api";
 import type { Member, Project } from "../types";
 
@@ -28,8 +30,7 @@ export function ShareDialog({ project, onMembers, onLeave, onClose }: Props) {
   const base = `/api/projects/${project.id}/members`;
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Share project">
+    <Modal onClose={onClose} label="Share project">
         <div className="modal-head">
           <h2>Share “{project.name}”</h2>
           <button onClick={onClose}>Close</button>
@@ -93,8 +94,8 @@ export function ShareDialog({ project, onMembers, onLeave, onClose }: Props) {
         ) : (
           <button
             className="danger"
-            onClick={() => {
-              if (confirm(`Leave “${project.name}”? You will lose access until the owner shares it again.`)) {
+            onClick={async () => {
+              if (await confirmDialog({ body: `Leave “${project.name}”? You will lose access until the owner shares it again.`, confirm: "Leave", danger: true })) {
                 onLeave();
                 onClose();
               }
@@ -103,7 +104,6 @@ export function ShareDialog({ project, onMembers, onLeave, onClose }: Props) {
             Leave this project
           </button>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

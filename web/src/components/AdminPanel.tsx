@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { confirmDialog } from "../ui/confirm";
+import { Modal } from "../ui/Modal";
 import { api } from "../api";
 
 interface UserRow {
@@ -51,8 +53,7 @@ export function AdminPanel({ meId, onClose }: { meId: string; onClose: () => voi
   };
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Admin">
+    <Modal onClose={onClose} label="Admin">
         <div className="modal-head">
           <h2>Accounts</h2>
           <button onClick={onClose}>Close</button>
@@ -145,7 +146,7 @@ export function AdminPanel({ meId, onClose }: { meId: string; onClose: () => voi
                     <button
                       onClick={() =>
                         void act(async () => {
-                          if (u.hasPassword && !confirm(`Reset ${u.username}? Their password, passkeys and sessions are removed and they get a new invite link.`)) return;
+                          if (u.hasPassword && !(await confirmDialog({ body: `Reset ${u.username}? Their password, passkeys and sessions are removed and they get a new invite link.`, confirm: "Reset", danger: true }))) return;
                           showInvite(u.username, await api.post(`/api/admin/users/${u.id}/reset`, {}));
                         })
                       }
@@ -157,8 +158,8 @@ export function AdminPanel({ meId, onClose }: { meId: string; onClose: () => voi
                         <button onClick={() => void act(() => api.patch(`/api/admin/users/${u.id}`, { disabled: !u.disabled }))}>{u.disabled ? "Enable" : "Disable"}</button>
                         <button
                           className="danger"
-                          onClick={() => {
-                            if (confirm(`Delete ${u.username}? Their ${u.projectCount} project${u.projectCount === 1 ? "" : "s"} will be transferred to you.`)) void act(() => api.del(`/api/admin/users/${u.id}`));
+                          onClick={async () => {
+                            if (await confirmDialog({ body: `Delete ${u.username}? Their ${u.projectCount} project${u.projectCount === 1 ? "" : "s"} will be transferred to you.`, confirm: "Delete", danger: true })) void act(() => api.del(`/api/admin/users/${u.id}`));
                           }}
                         >
                           Delete
@@ -171,7 +172,6 @@ export function AdminPanel({ meId, onClose }: { meId: string; onClose: () => voi
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
+    </Modal>
   );
 }

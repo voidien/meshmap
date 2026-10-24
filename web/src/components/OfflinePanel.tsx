@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { downloadAll, type Progress } from "../offline/download";
 import { bboxOfPoints, padBBox, planOffline, type BBox, type OfflinePlan, type PackIndex } from "../offline/plan";
@@ -23,6 +23,20 @@ function lastSaved(): string | null {
   }
 }
 
+const mb = (b: number) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.round(b / 1e6)} MB`);
+
+/** How much this site stores on the device and whether the browser promises not to clear it. */
+async function storageSummary(): Promise<string | null> {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    const kept = await navigator.storage?.persisted?.();
+    if (!est || est.usage === undefined) return null;
+    return `Stored on this device: ${mb(est.usage)}${est.quota ? ` of about ${mb(est.quota)} available` : ""}. ${kept ? "Protected from automatic cleanup." : "The browser may clear it if the device runs low on space; open the app now and then."}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep the map, terrain and tree data of an area on this phone, so predictions and the map keep working without signal. */
 export function OfflinePanel({ nodes, pos }: Props) {
   const [area, setArea] = useState<Area>(pos ? "near15" : "project");
@@ -32,6 +46,10 @@ export function OfflinePanel({ nodes, pos }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const [saved, setSaved] = useState(lastSaved);
   const abort = useRef<AbortController | null>(null);
+  const [storage, setStorage] = useState<string | null>(null);
+  useEffect(() => {
+    void storageSummary().then(setStorage);
+  }, []);
 
   const boxFor = (): BBox | null => {
     if (area === "project") {
@@ -82,6 +100,13 @@ export function OfflinePanel({ nodes, pos }: Props) {
       /* private mode: nothing to remember */
     }
     setSaved(text);
+    // ask the browser not to clear what was just saved (it may say no), then show how much is stored
+    try {
+      await navigator.storage?.persist?.();
+    } catch {
+      /* not supported */
+    }
+    setStorage(await storageSummary());
   };
 
   return (
@@ -122,6 +147,7 @@ export function OfflinePanel({ nodes, pos }: Props) {
       ) : null}
       {msg ? <p className="hint">{msg}</p> : null}
       {saved ? <p className="hint">Last saved: {saved}</p> : null}
+      {storage ? <p className="hint" id="offline-storage">{storage}</p> : null}
     </div>
   );
 }

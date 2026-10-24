@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { confirmDialog } from "../ui/confirm";
 import { api } from "../api";
 import { Card } from "./Card";
 import { describeDiff, diffVersion } from "../versionDiff";
@@ -66,7 +67,7 @@ export function HistoryPanel({ project, readOnly, onRestore }: Props) {
       const lines = then ? describeDiff(diffVersion(project, then)) : [];
       const what = v.label || `the automatic version from ${when(v.createdAt)}`;
       const text = lines.length ? `Restore “${what}”?\n\n• ${lines.join("\n• ")}\n\nWhat you have now is kept as a new version, so this can be undone.` : `“${what}” is the same as the project now. Restore anyway?`;
-      if (!confirm(text)) return;
+      if (!(await confirmDialog({ title: "Restore this version?", body: text, confirm: "Restore" }))) return;
       await onRestore(v.number);
       setMsg("Restored. The previous state is in the list below.");
       await load();
@@ -78,7 +79,7 @@ export function HistoryPanel({ project, readOnly, onRestore }: Props) {
   };
 
   const remove = async (v: Version) => {
-    if (!confirm(`Delete the version “${v.label}”?`)) return;
+    if (!(await confirmDialog({ body: `Delete the version “${v.label}”?`, confirm: "Delete", danger: true }))) return;
     try {
       await api.del(`/api/projects/${id}/versions/${v.number}`);
       await load();

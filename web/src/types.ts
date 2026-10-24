@@ -63,6 +63,16 @@ export interface Settings {
   foliageScale: number;
   /** Trees in leaf (true) or bare (false). */
   foliageLeafOn: boolean;
+  /** What a node placed on the map starts with (the radio comes from the network). Factory values when absent. */
+  nodeDefaults?: NodeDefaults;
+}
+
+export interface NodeDefaults {
+  heightM: number;
+  clientHeightM: number;
+  txDbm: number;
+  gainDbi: number;
+  cableLossDb: number;
 }
 
 /** bare earth only; trees and buildings as solid obstacles; or bare earth plus foliage loss for the path through trees */

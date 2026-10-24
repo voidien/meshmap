@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirmDialog } from "./ui/confirm";
+import { notify, notifyError } from "./ui/toasts";
 import { useProjectSync } from "./useProjectSync";
 import { useCoverage } from "./useCoverage";
 import { CoveragePanel } from "./components/CoveragePanel";
@@ -16,6 +18,9 @@ import { HelpDialog } from "./components/HelpDialog";
 import { FieldMode } from "./components/FieldMode";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { MapLegend } from "./components/MapLegend";
+import { StatusChip } from "./components/StatusChip";
+import { useConnectivity } from "./useConnectivity";
 import { PublishDialog } from "./components/PublishDialog";
 import { PublishedGallery } from "./components/PublishedGallery";
 import { api } from "./api";
@@ -39,7 +44,7 @@ import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { ComparePanel } from "./components/ComparePanel";
 import { uid } from "./id";
 import { exportMeshcore, importMeshcore, isMeshcoreFile } from "./meshcore";
-import { baseName, loadWorkspace, parseProject, uniqueName } from "./workspace";
+import { baseName, loadWorkspace, newNodeFor, parseProject, uniqueName } from "./workspace";
 import { download, geojson, kml, linksCsv, nodesCsv } from "./export";
 import { DEFAULT_SETTINGS, type MeshNode, type Project } from "./types";
 
@@ -64,6 +69,7 @@ const NO_NODES: MeshNode[] = [];
 
 export function App({ auth }: { auth: AuthContext }) {
   const sync = useProjectSync(true);
+  const online = useConnectivity();
   const { ready: dataReady } = sync;
   const [wasmReady, setReady] = useState(false);
   const ready = wasmReady && dataReady;
@@ -75,8 +81,12 @@ export function App({ auth }: { auth: AuthContext }) {
   const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [addMode, setAddMode] = useState(false);
+  const addModeRef = useRef(false);
+  addModeRef.current = addMode;
   const [placementArea, setPlacementArea] = useState<Area | null>(null);
   const [pickingArea, setPickingArea] = useState(false);
+  const pickingRef = useRef(false);
+  pickingRef.current = pickingArea;
   const [placementOpts, setPlacementOpts] = useState<PlacementOptions>(DEFAULT_PLACEMENT);
   const [templateId, setTemplateId] = useState("");
   const [terrain3d, setTerrain3d] = useState(false);
@@ -125,6 +135,8 @@ export function App({ auth }: { auth: AuthContext }) {
   );
   const project: Project = pubProject ?? ownProject;
   const readOnly = project.role === "viewer";
+  const readOnlyRef = useRef(false);
+  readOnlyRef.current = readOnly;
   const other = compareId && compareId !== project.id ? projects.find((p) => p.id === compareId) ?? null : null;
   const conflict = sync.conflicts[project.id];
 
@@ -261,12 +273,18 @@ export function App({ auth }: { auth: AuthContext }) {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "Escape" && t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT")) return void t.blur();
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
       if (document.querySelector(".modal-back")) return;
       if (e.key === "]") step(1);
       else if (e.key === "[") step(-1);
       else if (e.key === "`") flip();
       else if (e.key === "m" || e.key === "M") toggleMenu();
+      else if (e.key === "Escape") {
+        if (!addModeRef.current && !pickingRef.current) return;
+        setAddMode(false);
+        setPickingArea(false);
+      } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) setAddMode((v) => !v);
       else return;
       e.preventDefault();
     };
@@ -274,7 +292,7 @@ export function App({ auth }: { auth: AuthContext }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [step, flip, toggleMenu]);
 
-  const fail = (e: unknown) => alert(e instanceof Error ? e.message : String(e));
+  const fail = (e: unknown) => notifyError(e);
 
   /** Build the printable site report for a node and open it in a new tab. */
   const makeReport = async (node: MeshNode) => {
@@ -346,7 +364,8 @@ export function App({ auth }: { auth: AuthContext }) {
   const duplicateProject = () => void addProject(`${project.name} (copy)`, { ...structuredClone({ nodes: project.nodes, settings: project.settings, overlays: project.overlays }), nodes: project.nodes.map((n) => ({ ...n, id: uid() })) });
 
   const deleteProject = async () => {
-    if (projects.length < 2 || project.role !== "owner" || !confirm(`Delete "${project.name}" and its ${project.nodes.length} nodes for everyone it is shared with? This cannot be undone.`)) return;
+    if (projects.length < 2 || project.role !== "owner") return;
+    if (!(await confirmDialog({ title: "Delete project", body: `Delete "${project.name}" and its ${project.nodes.length} nodes for everyone it is shared with? This cannot be undone.`, confirm: "Delete project", danger: true }))) return;
     try {
       const prev = previousId && projects.some((p) => p.id === previousId && p.id !== project.id) ? previousId : projects.find((p) => p.id !== project.id)!.id;
       await sync.remove(project.id);
@@ -372,17 +391,11 @@ export function App({ auth }: { auth: AuthContext }) {
         setPickingArea(false);
         return;
       }
+      // add mode stays on, so a run of nodes is one click each; Esc or the Done button ends it
       const id = uid();
-      setProject((p) => ({
-        ...p,
-        nodes: [
-          ...p.nodes,
-          { id, name: `Node ${p.nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5, presetId: NETWORKS[p.settings.network].presetId, status: "planned", notes: "" },
-        ],
-      }));
+      setProject((p) => ({ ...p, nodes: [...p.nodes, newNodeFor(p.settings, lat, lon, `Node ${p.nodes.length + 1}`, id)] }));
       setSelectedNode(id);
       setSelectedLink(null);
-      setAddMode(false);
     },
     [setProject, pickingArea],
   );
@@ -418,16 +431,9 @@ export function App({ auth }: { auth: AuthContext }) {
     if (id) setSelectedLink(null);
   }, []);
 
-  const deleteNode = (id: string) => {
-    setProject((p) => ({ ...p, nodes: p.nodes.filter((n) => n.id !== id) }));
-    setChecked((c) => new Set([...c].filter((x) => x !== id)));
-    setSelectedNode(null);
-  };
+  const deleteNode = (id: string) => deleteMany([id]);
 
-  const newNode = (nodes: MeshNode[], lat: number, lon: number, name: string): MeshNode => ({
-    id: uid(), name: name || `Node ${nodes.length + 1}`, lat, lon, heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3,
-    cableLossDb: 0.5, presetId: NETWORKS[project.settings.network].presetId, status: "planned", notes: "",
-  });
+  const newNode = (nodes: MeshNode[], lat: number, lon: number, name: string): MeshNode => newNodeFor(project.settings, lat, lon, name || `Node ${nodes.length + 1}`);
 
   const focusNode = (id: string) => {
     const n = nodeById.get(id);
@@ -457,12 +463,23 @@ export function App({ auth }: { auth: AuthContext }) {
     setProject((p) => ({ ...p, nodes: p.nodes.map((n) => (set.has(n.id) ? { ...n, ...patch } : n)) }));
   };
 
+  /** Remove nodes straight away and offer Undo, which puts them back where they were in the list. */
   const deleteMany = (ids: string[]) => {
-    if (!confirm(`Delete ${ids.length} node${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
     const set = new Set(ids);
+    const removed = project.nodes.map((n, i) => ({ n, i })).filter((x) => set.has(x.n.id));
+    if (removed.length === 0) return;
     setProject((p) => ({ ...p, nodes: p.nodes.filter((n) => !set.has(n.id)) }));
     setChecked(new Set());
     if (selectedNode && set.has(selectedNode)) setSelectedNode(null);
+    notify(removed.length === 1 ? `Deleted “${removed[0].n.name.trim() || "node"}”` : `Deleted ${removed.length} nodes`, {
+      action: "Undo",
+      onAction: () =>
+        setProject((p) => {
+          const nodes = [...p.nodes];
+          for (const { n, i } of removed) if (!nodes.some((x) => x.id === n.id)) nodes.splice(Math.min(i, nodes.length), 0, n);
+          return { ...p, nodes };
+        }),
+    });
   };
 
   const toggleChecked = (id: string) =>
@@ -520,7 +537,7 @@ export function App({ auth }: { auth: AuthContext }) {
       setSelectedNode(null);
       setSelectedLink(null);
     }
-    if (errors.length) alert(errors.join("\n"));
+    if (errors.length) notify(errors.join("\n"), { kind: "error", ms: 12000 });
   };
 
   const importLocal = async () => {
@@ -669,7 +686,7 @@ export function App({ auth }: { auth: AuthContext }) {
         })()}
         <div className="toolbar">
           <button className={addMode ? "on" : ""} onClick={() => setAddMode((v) => !v)} disabled={!ready || readOnly} hidden={!!pubProject}>
-            {addMode ? "Click the map…" : "+ Node"}
+            {addMode ? "Adding… (Esc to finish)" : "+ Node"}
           </button>
           <button className={terrain3d ? "on" : ""} onClick={() => setTerrain3d((v) => !v)} title="Tilted 3D terrain">
             3D
@@ -813,13 +830,6 @@ export function App({ auth }: { auth: AuthContext }) {
           <input ref={fileInput} type="file" multiple accept=".json,application/json" hidden onChange={(e) => { const fs = Array.from(e.target.files ?? []); if (fs.length) void importFiles(fs); e.target.value = ""; }} />
           <p className="hint">Import accepts meshmap JSON and MeshCore coverage_layers JSON; select several files to load each as its own project. Your projects are saved to your account automatically.</p>
         </Card>
-        <section className="legend card">
-          <span><i style={{ background: "#1a9850" }} />clear</span>
-          <span><i style={{ background: "#e0a800" }} />marginal</span>
-          <span><i style={{ background: "#d73027" }} />obstructed</span>
-          <span><i className="dashed" />none</span>
-          {other ? <span><i className="dashed" />dashed colour = "{other.name}"</span> : null}
-        </section>
       </aside>
       <main className="mapwrap">
         <button className="sidetoggle" id="menu-toggle" onClick={toggleMenu} aria-expanded={menuOpen} title="Hide or show the menu (M)">
@@ -841,6 +851,24 @@ export function App({ auth }: { auth: AuthContext }) {
             </button>
           </div>
         ) : null}
+        <div className="map-status">
+          <StatusChip
+            saveState={sync.saveState}
+            readOnly={readOnly || !!pubProject}
+            online={online}
+            conflict={!!conflict}
+            onConflict={() => (menuOpen ? document.querySelector(".banner")?.scrollIntoView({ behavior: "smooth" }) : toggleMenu())}
+            analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
+            jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
+          />
+          {addMode || pickingArea ? (
+            <div className="mode-chip" role="status">
+              {addMode ? "Adding nodes: click the map for each one" : "Pick the area: click the map"}
+              <button onClick={() => (setAddMode(false), setPickingArea(false))}>Done (Esc)</button>
+            </div>
+          ) : null}
+        </div>
+        <MapLegend otherName={other?.name} />
         <MapView
           nodes={project.nodes}
           links={healthOpts.failedId ? links.filter((l) => l.a !== healthOpts.failedId && l.b !== healthOpts.failedId) : links}

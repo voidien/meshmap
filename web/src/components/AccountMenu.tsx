@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { confirmDialog } from "../ui/confirm";
+import { Modal } from "../ui/Modal";
 import { api } from "../api";
 import { deviceName, passkeyErrorMessage, passkeysSupported, registerPasskey } from "../auth/webauthn";
 import type { AuthContext } from "../auth/AuthGate";
@@ -27,8 +29,7 @@ export function AccountMenu({ auth, onClose }: { auth: AuthContext; onClose: () 
   const fail = (e: unknown) => setMsg({ ok: false, text: passkeyErrorMessage(e) });
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Account">
+    <Modal onClose={onClose} label="Account">
         <div className="modal-head">
           <h2>
             {auth.user.displayName} <span className="tag">{auth.user.username}</span>
@@ -53,7 +54,7 @@ export function AccountMenu({ auth, onClose }: { auth: AuthContext; onClose: () 
                   <span className="lmeta">added {when(k.createdAt)} · last used {when(k.lastUsed)}</span>
                   <button
                     onClick={async () => {
-                      if (!confirm(`Remove the passkey "${k.name}"? You can still sign in with your password.`)) return;
+                      if (!(await confirmDialog({ body: `Remove the passkey "${k.name}"? You can still sign in with your password.`, confirm: "Remove", danger: true }))) return;
                       await api.del(`/api/passkeys/${k.id}`).catch(() => undefined);
                       await load();
                       await auth.refresh();
@@ -116,7 +117,6 @@ export function AccountMenu({ auth, onClose }: { auth: AuthContext; onClose: () 
 
         <h3>Session</h3>
         <button onClick={() => void auth.signOut()}>Sign out</button>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -1,6 +1,8 @@
 import { fitsNetwork, NETWORK_LIST, NETWORKS, type Network } from "../networks";
-import type { MeshNode, Settings, TerrainMode } from "../types";
+import type { MeshNode, NodeDefaults, Settings, TerrainMode } from "../types";
+import { FACTORY_NODE_DEFAULTS } from "../workspace";
 import { Card } from "./Card";
+import { NumberField } from "../ui/NumberField";
 
 interface Props {
   settings: Settings;
@@ -34,22 +36,14 @@ function Row(props: { label: string; value: number; step: number; min: number; m
   return (
     <label className="field">
       <span>{props.label}</span>
-      <input
-        type="number"
-        value={props.value}
-        step={props.step}
-        min={props.min}
-        max={props.max}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (Number.isFinite(v) && v >= props.min && (props.max === undefined || v <= props.max)) props.onChange(v);
-        }}
-      />
+      <NumberField value={props.value} step={props.step} min={props.min} max={props.max} onCommit={props.onChange} />
     </label>
   );
 }
 
 export function SettingsPanel({ settings: s, onChange, nodes, onApplyRadio, readOnly }: Props) {
+  const nd = s.nodeDefaults ?? FACTORY_NODE_DEFAULTS;
+  const setNd = (patch: Partial<NodeDefaults>) => onChange({ nodeDefaults: { ...nd, ...patch } });
   const ground = GROUNDS.find((g) => g.eps === s.groundEpsilon && g.sigma === s.groundSigma)?.id ?? "custom";
   return (
     <Card id="settings" title="Project settings & assumptions">
@@ -91,6 +85,21 @@ export function SettingsPanel({ settings: s, onChange, nodes, onApplyRadio, read
         <input type="checkbox" checked={s.showNone} onChange={(e) => onChange({ showNone: e.target.checked })} />
         Show out-of-range ("none") links
       </label>
+
+      <h4 className="subhead">Defaults for new nodes</h4>
+      <p className="hint">What a node starts with when you place it on the map (the radio comes from the network above).</p>
+      <fieldset className="plain" disabled={readOnly}>
+        <div className="grid2">
+          <Row label="Antenna height (m above ground)" value={nd.heightM} step={1} min={0} max={500} onChange={(v) => setNd({ heightM: v })} />
+          <Row label="Receiving device height (m)" value={nd.clientHeightM} step={0.5} min={0} max={100} onChange={(v) => setNd({ clientHeightM: v })} />
+          <Row label="TX power (dBm)" value={nd.txDbm} step={1} min={-10} max={36} onChange={(v) => setNd({ txDbm: v })} />
+          <Row label="Antenna gain (dBi)" value={nd.gainDbi} step={0.5} min={-10} max={40} onChange={(v) => setNd({ gainDbi: v })} />
+          <Row label="Cable loss (dB)" value={nd.cableLossDb} step={0.1} min={0} max={30} onChange={(v) => setNd({ cableLossDb: v })} />
+        </div>
+        {s.nodeDefaults ? (
+          <button onClick={() => onChange({ nodeDefaults: undefined })}>Back to factory defaults</button>
+        ) : null}
+      </fieldset>
 
       <h4 className="subhead">Longley-Rice (ITM) environment</h4>
       <label className="field">

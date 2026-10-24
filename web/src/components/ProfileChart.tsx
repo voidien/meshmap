@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeWithProfile, SPACING_FULL_M } from "../engine/analysis";
 import { LINK_COLORS } from "../map/MapView";
 import { highestAwayFromEnds, pointOnPath } from "../profilePick";
@@ -36,11 +36,17 @@ export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, r
   const [hover, setHover] = useState<number | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
 
+  // keep showing the last profile while a changed node is re-analysed; clear it only for a different pair
+  const pairKey = useRef("");
   useEffect(() => {
     let live = true;
-    setData(null);
+    const key = `${a.id}|${b.id}`;
+    if (pairKey.current !== key) {
+      pairKey.current = key;
+      setData(null);
+      setPicked(null);
+    }
     setError(null);
-    setPicked(null);
     analyzeWithProfile(a, b, settings, SPACING_FULL_M, true)
       .then((d) => live && setData(d))
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
@@ -104,7 +110,7 @@ export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, r
           {a.name} ↔ {b.name}
         </strong>
         {data ? (
-          <span className="badge" style={{ background: LINK_COLORS[data.result.class] }}>
+          <span className={`badge ${data.result.class}`} style={{ background: LINK_COLORS[data.result.class] }}>
             {data.result.class}
           </span>
         ) : null}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Modal } from "../ui/Modal";
 import { api } from "../api";
 import { renderMarkdown } from "../markdown";
 
@@ -82,8 +83,7 @@ export function HelpDialog({ onClose }: Props) {
   const html = useMemo(() => rendered?.html.replace(/ id="([^"]+)"/g, ' id="doc-$1"').replace(/href="#([^"]+)"/g, 'href="#$1"') ?? "", [rendered]);
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal help" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Help">
+    <Modal onClose={onClose} label="Help" className="help">
         <div className="modal-head">
           <h2>Help</h2>
           <button onClick={onClose}>Close</button>
@@ -113,7 +113,6 @@ export function HelpDialog({ onClose }: Props) {
             <div ref={body} className="doc" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
           </div>
         ) : null}
-      </div>
-    </div>
+    </Modal>
   );
 }

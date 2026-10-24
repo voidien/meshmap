@@ -1,4 +1,5 @@
 import { Card } from "./Card";
+import { NumberField } from "../ui/NumberField";
 import { LINK_COLORS } from "../map/MapView";
 import { AntennaEditor } from "./AntennaEditor";
 import { RadioPicker } from "./RadioPicker";
@@ -33,17 +34,7 @@ function Num(props: { label: string; value: number; step?: number; unit?: string
         {props.label}
         {props.unit ? <em> ({props.unit})</em> : null}
       </span>
-      <input
-        type="number"
-        value={props.value}
-        step={props.step ?? 1}
-        min={props.min}
-        max={props.max}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (Number.isFinite(v)) props.onChange(v);
-        }}
-      />
+      <NumberField value={props.value} step={props.step ?? 1} min={props.min} max={props.max} onCommit={props.onChange} />
     </label>
   );
 }

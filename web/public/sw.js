@@ -18,7 +18,7 @@ self.addEventListener("install", (e) => {
       } catch {
         /* offline install: the page will be cached on its next visit */
       }
-      await self.skipWaiting();
+      // a new version waits until the page says so (an "update available" message), so nobody is switched mid-edit
     })(),
   );
 });
@@ -95,6 +95,7 @@ self.addEventListener("fetch", (e) => {
 
 self.addEventListener("message", (e) => {
   const d = e.data || {};
+  if (d.type === "skip-waiting") return void self.skipWaiting();
   if (d.type === "cache-urls" && Array.isArray(d.urls)) {
     e.waitUntil(
       (async () => {

@@ -1,7 +1,7 @@
 import { cleanAntenna } from "./antenna";
 import { inferNetwork, isNetwork, NETWORKS } from "./networks";
 import { uid } from "./id";
-import { DEFAULT_SETTINGS, type MeshNode, type Project, type Settings } from "./types";
+import { DEFAULT_SETTINGS, type MeshNode, type NodeDefaults, type Project, type Settings } from "./types";
 
 /** All projects ("setups") the user has, plus which one is open and which was open before it. */
 export interface Workspace {
@@ -18,6 +18,14 @@ export function emptyProject(name = "Untitled project"): Project {
 }
 
 /** Tolerant parse for saved/imported projects: unknown fields dropped, missing ones defaulted. */
+export const FACTORY_NODE_DEFAULTS: NodeDefaults = { heightM: 5, clientHeightM: 1, txDbm: 22, gainDbi: 3, cableLossDb: 0.5 };
+
+/** A new planned node with the project's defaults for new nodes. */
+export function newNodeFor(s: Settings, lat: number, lon: number, name: string, id: string = uid()): MeshNode {
+  const d = s.nodeDefaults ?? FACTORY_NODE_DEFAULTS;
+  return { id, name, lat, lon, heightM: d.heightM, clientHeightM: d.clientHeightM, txDbm: d.txDbm, gainDbi: d.gainDbi, cableLossDb: d.cableLossDb, presetId: NETWORKS[s.network].presetId, status: "planned", notes: "" };
+}
+
 export function parseProject(raw: unknown): Project | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -68,6 +76,16 @@ export function parseProject(raw: unknown): Project | null {
     clientGainDbi: num(s.clientGainDbi, DEFAULT_SETTINGS.clientGainDbi),
     clientCableLossDb: num(s.clientCableLossDb, DEFAULT_SETTINGS.clientCableLossDb),
   };
+  const nd = s.nodeDefaults as Record<string, unknown> | undefined;
+  if (nd && typeof nd === "object") {
+    settings.nodeDefaults = {
+      heightM: num(nd.heightM, FACTORY_NODE_DEFAULTS.heightM),
+      clientHeightM: num(nd.clientHeightM, FACTORY_NODE_DEFAULTS.clientHeightM),
+      txDbm: num(nd.txDbm, FACTORY_NODE_DEFAULTS.txDbm),
+      gainDbi: num(nd.gainDbi, FACTORY_NODE_DEFAULTS.gainDbi),
+      cableLossDb: num(nd.cableLossDb, FACTORY_NODE_DEFAULTS.cableLossDb),
+    };
+  }
   return {
     id: typeof o.id === "string" ? o.id : uid(),
     name: typeof o.name === "string" ? o.name : "Untitled project",

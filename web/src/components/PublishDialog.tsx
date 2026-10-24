@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Modal } from "../ui/Modal";
 import { api } from "../api";
 import { ago, type Publication } from "../collab";
 import type { Project } from "../types";
@@ -47,8 +48,7 @@ export function PublishDialog({ project, onClose, onChanged }: Props) {
   };
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Publish project">
+    <Modal onClose={onClose} label="Publish project">
         <div className="modal-head">
           <h2>Publish “{project.name}”</h2>
           <button onClick={onClose}>Close</button>
@@ -90,7 +90,6 @@ export function PublishDialog({ project, onClose, onChanged }: Props) {
             ) : null}
           </div>
         </fieldset>
-      </div>
-    </div>
+    </Modal>
   );
 }

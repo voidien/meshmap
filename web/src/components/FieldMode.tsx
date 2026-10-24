@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { confirmDialog } from "../ui/confirm";
 import { api } from "../api";
 import { download } from "../export";
 import type { FieldReading } from "../collab";
@@ -149,7 +150,8 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
 
   const save = async () => {
     if (!pos) return setMsg("No position yet.");
-    const rs = rssi.trim() === "" ? null : Number(rssi);
+    // RSSI is never positive: typing 104 means -104 (some phone keypads have no minus sign)
+    const rs = rssi.trim() === "" ? null : -Math.abs(Number(rssi));
     const sn = snr.trim() === "" ? null : Number(snr);
     if ((rs !== null && !(rs <= 0 && rs >= -200)) || (sn !== null && !(Math.abs(sn) <= 50))) return setMsg("RSSI is a negative number of dBm (for example -104); SNR is in dB.");
     if (rs === null && sn === null && !note.trim()) return setMsg("Enter a signal value or a note.");
@@ -292,8 +294,8 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
             {chosen && canWrite && pos ? (
               <li className="factions">
                 <button
-                  onClick={() => {
-                    if (confirm(`Move “${chosen.name}” to your position (${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)}, ±${Math.round(pos.accuracyM)} m)?`)) onMoveNode(chosen.id, pos.lat, pos.lon);
+                  onClick={async () => {
+                    if (await confirmDialog({ body: `Move “${chosen.name}” to your position (${pos.lat.toFixed(5)}, ${pos.lon.toFixed(5)}, ±${Math.round(pos.accuracyM)} m)?`, confirm: "Move" })) onMoveNode(chosen.id, pos.lat, pos.lon);
                   }}
                 >
                   Move “{chosen.name.trim() || "node"}” here
@@ -341,7 +343,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
             <div className="grid2">
               <label className="field">
                 <span>
-                  RSSI <em>(dBm, e.g. -104)</em>
+                  RSSI <em>(dBm, type 104 for −104)</em>
                 </span>
                 <input id="f-rssi" inputMode="decimal" value={rssi} onChange={(e) => setRssi(e.target.value)} />
               </label>
