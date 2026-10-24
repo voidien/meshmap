@@ -109,6 +109,7 @@ export function TopBar(p: TopBarProps) {
         {(close) => (
           <>
             <div className="popsection">{p.user.displayName}</div>
+            {p.published ? null : item(close, "Field mode", p.onField, { disabled: p.fieldDisabled, id: "menu-field" })}
             {item(close, "Account…", p.onAccount)}
             {p.user.isAdmin ? item(close, "Admin…", p.onAdmin) : null}
             {item(close, "Help", p.onHelp, { id: "help-btn-v2" })}

@@ -337,6 +337,14 @@ export function App({ auth }: { auth: AuthContext }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [step, flip, toggleMenu, setBrowserOpen, setInspectorOpen]);
 
+  // a selected node brings up its details in the new layout
+  useEffect(() => {
+    if (selectedNode && uiMode === "v2") {
+      setInspectorTab("selection");
+      setInspectorOpen(true);
+    }
+  }, [selectedNode, uiMode, setInspectorOpen]);
+
   const fail = (e: unknown) => notifyError(e);
 
   /** Build the printable site report for a node and open it in a new tab. */
@@ -1014,6 +1022,8 @@ export function App({ auth }: { auth: AuthContext }) {
           terrain3d={terrain3d}
           onMapClick={onMapClick}
           onNodeSelect={onNodeSelect}
+          onNodeToggle={toggleChecked}
+          onBoxSelect={(ids, additive) => setChecked((c) => new Set(additive ? [...c, ...ids] : ids))}
           onNodeMove={onNodeMove}
           onLinkSelect={(k) => setSelectedLink(k)}
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
@@ -1058,14 +1068,6 @@ export function App({ auth }: { auth: AuthContext }) {
     }
   };
   chooseToolRef.current = chooseTool;
-
-  // a selected node brings up its details in the new layout
-  useEffect(() => {
-    if (selectedNode && uiMode === "v2") {
-      setInspectorTab("selection");
-      setInspectorOpen(true);
-    }
-  }, [selectedNode, uiMode, setInspectorOpen]);
 
   const goTo = (lat: number, lon: number) => setFocus({ lat, lon, key: Date.now() });
   const publicView = !!pubProject;

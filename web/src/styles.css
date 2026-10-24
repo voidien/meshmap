@@ -423,3 +423,29 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
   .topbar .searchbtn::before { content: "🔍"; }
 }
 .tabs2 button { white-space: nowrap; padding: 6px 8px; font-size: 13px; }
+
+.boxsel { position: absolute; border: 1.5px dashed var(--accent); background: rgba(36,87,214,.12); pointer-events: none; z-index: 5; }
+
+/* the top bar must never wrap or push things off the screen */
+.topbar { min-width: 0; overflow: visible; }
+.topbar > * { flex: 0 0 auto; }
+.topbar .searchbtn { flex: 1 1 120px; min-width: 0; }
+.topbar .projbtn { flex: 0 1 auto; min-width: 0; }
+.topstatus { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.status-chip .part { white-space: nowrap; font-size: 12px; padding: 2px 9px; line-height: 1.5; }
+@media (max-width: 700px) {
+  .topbar { gap: 4px; padding: 0 4px; }
+  .topbar .iconbtn { width: 40px; min-width: 40px; padding: 0; }
+  .topbar .projbtn { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+  .topbar .searchbtn { flex: 0 0 44px; min-width: 44px; padding: 0; justify-content: center; }
+  .topbar .searchbtn kbd, .topbar .searchbtn span { display: none; }
+  .topbar .searchbtn::before { content: "🔍"; }
+  .modeswitch { display: none; }
+  .topstatus .part:not(:first-child) { display: none; }
+  .topstatus .part { max-width: 28vw; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .avatar { min-width: 40px; width: 40px; height: 40px; padding: 0; }
+  .toolrail { padding: 6px 2px; gap: 4px; }
+  .toolrail button { width: 40px; height: 40px; min-width: 0; min-height: 0; }
+  .body2, .body2.with-browser, .body2.with-inspector, .body2.with-browser.with-inspector { grid-template-columns: 44px minmax(0, 1fr); }
+  .browser2 { left: 44px; }
+}

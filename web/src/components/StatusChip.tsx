@@ -18,10 +18,10 @@ export function StatusChip({ saveState, readOnly, online, conflict, onConflict, 
   if (!online) parts.push({ key: "offline", text: "Offline", tone: "warn" });
   if (readOnly) parts.push({ key: "save", text: "View only" });
   else if (saveState === "saving") parts.push({ key: "save", text: "Saving…", tone: "busy" });
-  else if (saveState === "error") parts.push({ key: "save", text: online ? "Not saved, retrying" : "Not saved (offline)", tone: "bad" });
+  else if (saveState === "error") parts.push({ key: "save", text: online ? "Not saved" : "Not saved (offline)", tone: "bad" });
   else parts.push({ key: "save", text: "✓ Saved" });
-  if (analysis.busy) parts.push({ key: "links", text: `Analysing links ${analysis.done}/${analysis.total}`, tone: "busy" });
-  if (jobsRunning > 0) parts.push({ key: "jobs", text: `${jobsRunning} heatmap job${jobsRunning === 1 ? "" : "s"} running`, tone: "busy" });
+  if (analysis.busy) parts.push({ key: "links", text: `Analysing ${analysis.done}/${analysis.total}`, tone: "busy" });
+  if (jobsRunning > 0) parts.push({ key: "jobs", text: `${jobsRunning} job${jobsRunning === 1 ? "" : "s"} running`, tone: "busy" });
   return (
     <div className="status-chip" id={id} aria-live="polite" role="status">
       {parts.map((p) =>

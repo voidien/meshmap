@@ -49,6 +49,10 @@ interface Props {
   terrain3d: boolean;
   onMapClick: (lat: number, lon: number) => void;
   onNodeSelect: (id: string | null) => void;
+  /** Shift/Ctrl-click on a node: add it to or remove it from the ticked nodes. */
+  onNodeToggle?: (id: string) => void;
+  /** Shift-drag a box on the map: the nodes inside it (`additive` with Ctrl/Cmd). */
+  onBoxSelect?: (ids: string[], additive: boolean) => void;
   onNodeMove: (id: string, lat: number, lon: number, dragging: boolean) => void;
   onLinkSelect: (key: string | null) => void;
   /** Right-click menu actions (omitted = not offered). */
@@ -118,6 +122,35 @@ function pointsGeoJSON(nodes: MeshNode[]): GeoJSON.FeatureCollection {
 }
 
 const CLASS_COLOR: maplibregl.ExpressionSpecification = ["match", ["get", "class"], "clear", LINK_COLORS.clear, "marginal", LINK_COLORS.marginal, "obstructed", LINK_COLORS.obstructed, LINK_COLORS.none];
+
+const coarsePointer = () => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
+const nodeLabel = (n: MeshNode) => `${n.letter ? n.letter + " · " : ""}${n.name.trim() || "node"}`;
+
+/** The nodes as map features: what the circle and label layers read (status, ticked, health marks, label, drawing priority). */
+function nodesGeoJSON(c: Pick<Props, "nodes" | "selectedNodeId" | "checkedIds" | "health">): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: c.nodes.map((n) => {
+      const health = c.health?.[n.id] ?? "";
+      return {
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [n.lon, n.lat] },
+        properties: {
+          id: n.id,
+          name: n.name,
+          label: nodeLabel(n),
+          status: n.status,
+          sel: c.selectedNodeId === n.id ? 1 : 0,
+          chk: c.checkedIds.has(n.id) ? 1 : 0,
+          gateway: n.gateway ? 1 : 0,
+          health,
+          // labels of weak and important nodes win when names collide
+          priority: health.includes("h-spof") ? 1 : n.gateway ? 2 : c.checkedIds.has(n.id) ? 3 : 5,
+        },
+      };
+    }),
+  };
+}
 
 export function MapView(p: Props) {
   const container = useRef<HTMLDivElement>(null);
@@ -248,6 +281,44 @@ export function MapView(p: Props) {
         source: "links",
         paint: { "line-color": "#000", "line-width": 14, "line-opacity": 0 },
       });
+      // nodes: circles and labels on the map itself (cheap for hundreds of nodes), clustered when zoomed far out.
+      // Only the selected node is a real, draggable marker (see syncNodes).
+      map.addSource("nodes", { type: "geojson", data: { type: "FeatureCollection", features: [] }, cluster: true, clusterMaxZoom: 8, clusterRadius: 36 });
+      map.addLayer({ id: "node-clusters", type: "circle", source: "nodes", filter: ["has", "point_count"], paint: { "circle-color": "#2457d6", "circle-opacity": 0.85, "circle-radius": ["step", ["get", "point_count"], 14, 10, 18, 50, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "node-cluster-count", type: "symbol", source: "nodes", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 12, "text-font": ["Noto Sans Regular"], "text-allow-overlap": true }, paint: { "text-color": "#fff" } });
+      const single: maplibregl.FilterSpecification = ["all", ["!", ["has", "point_count"]], ["!=", ["get", "sel"], 1]];
+      map.addLayer({ id: "nodes-halo", type: "circle", source: "nodes", filter: ["all", single, ["any", ["==", ["get", "chk"], 1], ["in", "h-spof", ["get", "health"]]]], paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 8, 12, 14], "circle-color": ["case", ["==", ["get", "chk"], 1], "#2457d6", "#d73027"], "circle-opacity": 0.35 } });
+      map.addLayer({
+        id: "nodes-circle",
+        type: "circle",
+        source: "nodes",
+        filter: single,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 4, 12, 8],
+          "circle-color": ["case", ["in", "h-cut", ["get", "health"]], "#fecaca", ["in", "h-isolated", ["get", "health"]], "#d1d5db", ["in", "h-failed", ["get", "health"]], "#111", ["==", ["get", "status"], "installed"], "#16a34a", "#ffffff"],
+          "circle-stroke-color": ["case", ["in", "h-cut", ["get", "health"]], "#b91c1c", ["in", "h-isolated", ["get", "health"]], "#6b7280", ["in", "h-far", ["get", "health"]], "#7c3aed", ["in", "h-failed", ["get", "health"]], "#111", ["==", ["get", "status"], "installed"], "#065f46", "#d97706"],
+          "circle-stroke-width": ["case", ["==", ["get", "gateway"], 1], 5, 3],
+        },
+      });
+      map.addLayer({ id: "nodes-hit", type: "circle", source: "nodes", filter: single, paint: { "circle-radius": coarsePointer() ? 22 : 13, "circle-opacity": 0 } });
+      map.addLayer({
+        id: "nodes-label",
+        type: "symbol",
+        source: "nodes",
+        filter: single,
+        minzoom: 7,
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 11,
+          "text-font": ["Noto Sans Regular"],
+          "text-anchor": "left",
+          "text-offset": [1.1, 0],
+          "text-optional": true,
+          "symbol-sort-key": ["get", "priority"],
+          visibility: latest.current.showLabels ? "visible" : "none",
+        },
+        paint: { "text-color": "#111", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 },
+      });
       loaded.current = true;
       applyLayers();
       refreshContours();
@@ -257,11 +328,67 @@ export function MapView(p: Props) {
       syncField();
     });
 
+    // Shift + drag draws a box and ticks the nodes inside it (Ctrl/Cmd adds to what is ticked)
+    map.boxZoom.disable();
+    let suppressClick = false;
+    const cont = map.getCanvasContainer();
+    cont.addEventListener("mousedown", (e: MouseEvent) => {
+      if (!e.shiftKey || e.button !== 0 || !latest.current.onBoxSelect) return;
+      const rect = cont.getBoundingClientRect();
+      const x0 = e.clientX - rect.left;
+      const y0 = e.clientY - rect.top;
+      const box = document.createElement("div");
+      box.className = "boxsel";
+      cont.appendChild(box);
+      map.dragPan.disable();
+      const draw = (ev: MouseEvent) => {
+        const x = ev.clientX - rect.left;
+        const y = ev.clientY - rect.top;
+        Object.assign(box.style, { left: `${Math.min(x, x0)}px`, top: `${Math.min(y, y0)}px`, width: `${Math.abs(x - x0)}px`, height: `${Math.abs(y - y0)}px` });
+      };
+      const done = (ev: MouseEvent) => {
+        window.removeEventListener("mousemove", draw);
+        window.removeEventListener("mouseup", done);
+        box.remove();
+        map.dragPan.enable();
+        const x1 = ev.clientX - rect.left;
+        const y1 = ev.clientY - rect.top;
+        if (Math.hypot(x1 - x0, y1 - y0) < 5) return;
+        suppressClick = true;
+        setTimeout(() => (suppressClick = false), 50);
+        const [lo, hi] = [[Math.min(x0, x1), Math.min(y0, y1)], [Math.max(x0, x1), Math.max(y0, y1)]];
+        const ids = latest.current.nodes.filter((n) => {
+          const pt = map.project([n.lon, n.lat]);
+          return pt.x >= lo[0] && pt.x <= hi[0] && pt.y >= lo[1] && pt.y <= hi[1];
+        }).map((n) => n.id);
+        latest.current.onBoxSelect?.(ids, ev.ctrlKey || ev.metaKey);
+      };
+      window.addEventListener("mousemove", draw);
+      window.addEventListener("mouseup", done);
+      e.preventDefault();
+    });
+
     map.on("click", (e) => {
+      if (suppressClick) return;
       setMenu(null);
       const c = latest.current;
       if (c.pickMode || (c.addMode && !c.readOnly)) {
         c.onMapClick(e.lngLat.lat, e.lngLat.lng);
+        return;
+      }
+      const cluster = map.queryRenderedFeatures(e.point, { layers: ["node-clusters"] })[0];
+      if (cluster) {
+        const src = map.getSource("nodes") as maplibregl.GeoJSONSource;
+        const center = (cluster.geometry as GeoJSON.Point).coordinates as [number, number];
+        void src.getClusterExpansionZoom(cluster.properties.cluster_id as number).then((z) => map.easeTo({ center, zoom: z + 0.5 }));
+        return;
+      }
+      const nodeHit = map.queryRenderedFeatures(e.point, { layers: ["nodes-hit"] })[0];
+      if (nodeHit) {
+        const id = nodeHit.properties.id as string;
+        const oe = e.originalEvent as MouseEvent;
+        if ((oe.shiftKey || oe.ctrlKey || oe.metaKey) && c.onNodeToggle) c.onNodeToggle(id);
+        else c.onNodeSelect(id);
         return;
       }
       const hit = map.queryRenderedFeatures(e.point, { layers: ["links-hit"] })[0];
@@ -274,7 +401,7 @@ export function MapView(p: Props) {
     });
     map.on("mousemove", (e) => {
       if (latest.current.addMode) return;
-      const over = map.queryRenderedFeatures(e.point, { layers: ["links-hit"] }).length > 0;
+      const over = map.queryRenderedFeatures(e.point, { layers: ["nodes-hit", "node-clusters", "links-hit"] }).length > 0;
       map.getCanvas().style.cursor = over ? "pointer" : baseCursor.current;
     });
 
@@ -293,7 +420,7 @@ export function MapView(p: Props) {
     const map = mapRef.current;
     if (!map) return;
     const c = latest.current;
-    syncMarkers(map, c);
+    syncNodes(map, c);
     if (loaded.current) {
       (map.getSource("links") as maplibregl.GeoJSONSource | undefined)?.setData(linksGeoJSON(c.nodes, c.links));
       (map.getSource("beams") as maplibregl.GeoJSONSource | undefined)?.setData(beamGeoJSON(c.nodes));
@@ -303,63 +430,63 @@ export function MapView(p: Props) {
     }
   }
 
-  function syncMarkers(map: maplibregl.Map, c: Props) {
-    const live = new Set(c.nodes.map((n) => n.id));
+  /** The nodes source (circles, labels, clusters) and the one real marker: the selected node, which can be dragged. */
+  function syncNodes(map: maplibregl.Map, c: Props) {
+    if (loaded.current) (map.getSource("nodes") as maplibregl.GeoJSONSource | undefined)?.setData(nodesGeoJSON(c));
+    const sel = c.selectedNodeId ? c.nodes.find((n) => n.id === c.selectedNodeId) : undefined;
     for (const [id, m] of markers.current) {
-      if (!live.has(id)) {
+      if (!sel || id !== sel.id) {
         m.remove();
         markers.current.delete(id);
       }
     }
-    for (const n of c.nodes) {
-      let m = markers.current.get(n.id);
-      // only the selected node can be dragged: a first tap selects, so a swipe across the map can't move one by accident
-      if (m) m.setDraggable(!c.readOnly && c.selectedNodeId === n.id);
-      if (!m) {
-        const el = document.createElement("div");
-        el.className = "node-marker";
-        let moved = false;
-        el.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          if (!moved) latest.current.onNodeSelect(n.id);
-          moved = false;
-        });
-        m = new maplibregl.Marker({ element: el, draggable: !c.readOnly && c.selectedNodeId === n.id }).setLngLat([n.lon, n.lat]).addTo(map);
-        let raf = 0;
-        const report = (dragging: boolean) => {
-          const ll = m!.getLngLat();
-          latest.current.onNodeMove(n.id, ll.lat, ll.lng, dragging);
-        };
-        m.on("dragstart", () => (moved = true));
-        m.on("drag", () => {
-          if (!raf) {
-            raf = requestAnimationFrame(() => {
-              raf = 0;
-              report(true);
-            });
-          }
-        });
-        m.on("dragend", () => {
-          if (raf) cancelAnimationFrame(raf);
-          raf = 0;
-          report(false);
-        });
-        markers.current.set(n.id, m);
-      }
-      const ll = m.getLngLat();
-      if (Math.abs(ll.lat - n.lat) > 1e-9 || Math.abs(ll.lng - n.lon) > 1e-9) m.setLngLat([n.lon, n.lat]);
-      const el = m.getElement();
-      el.className = `maplibregl-marker node-marker ${n.status}${c.selectedNodeId === n.id ? " selected" : ""}${c.checkedIds.has(n.id) ? " checked" : ""}${c.health?.[n.id] ? ` ${c.health[n.id]}` : ""}`;
-      el.title = `${n.name} (${n.status})`;
-      let label = el.querySelector<HTMLSpanElement>(".node-label");
-      if (!label) {
-        label = document.createElement("span");
-        label.className = "node-label";
-        el.appendChild(label);
-      }
-      const text = `${n.letter ? n.letter + " · " : ""}${n.name.trim() || "node"}`;
-      if (label.textContent !== text) label.textContent = text;
+    if (!sel) return;
+    let m = markers.current.get(sel.id);
+    if (!m) {
+      const el = document.createElement("div");
+      el.className = "node-marker";
+      let moved = false;
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (!moved) latest.current.onNodeSelect(sel.id);
+        moved = false;
+      });
+      m = new maplibregl.Marker({ element: el, draggable: !c.readOnly }).setLngLat([sel.lon, sel.lat]).addTo(map);
+      let raf = 0;
+      const report = (dragging: boolean) => {
+        const ll = m!.getLngLat();
+        latest.current.onNodeMove(sel.id, ll.lat, ll.lng, dragging);
+      };
+      m.on("dragstart", () => (moved = true));
+      m.on("drag", () => {
+        if (!raf) {
+          raf = requestAnimationFrame(() => {
+            raf = 0;
+            report(true);
+          });
+        }
+      });
+      m.on("dragend", () => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        report(false);
+      });
+      markers.current.set(sel.id, m);
     }
+    m.setDraggable(!c.readOnly);
+    const ll = m.getLngLat();
+    if (Math.abs(ll.lat - sel.lat) > 1e-9 || Math.abs(ll.lng - sel.lon) > 1e-9) m.setLngLat([sel.lon, sel.lat]);
+    const el = m.getElement();
+    el.className = `maplibregl-marker node-marker ${sel.status} selected${c.checkedIds.has(sel.id) ? " checked" : ""}${c.health?.[sel.id] ? ` ${c.health[sel.id]}` : ""}`;
+    el.title = `${sel.name} (${sel.status})`;
+    let label = el.querySelector<HTMLSpanElement>(".node-label");
+    if (!label) {
+      label = document.createElement("span");
+      label.className = "node-label";
+      el.appendChild(label);
+    }
+    const text = nodeLabel(sel);
+    if (label.textContent !== text) label.textContent = text;
   }
 
   useEffect(syncAll, [p.nodes, p.links, p.ghostNodes, p.ghostLinks, p.selectedNodeId, p.selectedLinkKey, p.checkedIds, p.readOnly, p.health]);
@@ -478,7 +605,9 @@ export function MapView(p: Props) {
   }, [p.coverageImages]);
 
   useEffect(() => {
-    mapRef.current?.getContainer().classList.toggle("show-labels", p.showLabels);
+    const m = mapRef.current;
+    m?.getContainer().classList.toggle("show-labels", p.showLabels);
+    if (m && loaded.current && m.getLayer("nodes-label")) m.setLayoutProperty("nodes-label", "visibility", p.showLabels ? "visible" : "none");
   }, [p.showLabels]);
 
   useEffect(() => {
