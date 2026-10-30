@@ -340,6 +340,19 @@ export function App({ auth }: { auth: AuthContext }) {
 
   const fail = (e: unknown) => notifyError(e);
 
+  /** Bring up the details at a tab: the right-hand column, or the bottom sheet on a phone. */
+  const showDetails = (tab: "selection" | "plan" | "project") => {
+    setInspectorTab(tab);
+    if (phone) setSheet((c) => ({ panel: "details", snap: c.snap === "peek" ? "half" : c.snap }));
+    else setInspectorOpen(true);
+  };
+  /** The phone's bottom sheet: show the lists or the details, or hide them when they are showing. */
+  const openPanel = (panel: "lists" | "details") => {
+    setFieldMode(false);
+    chooseToolRef.current("select");
+    setSheet((c) => (c.panel === panel ? { panel: null, snap: c.snap } : { panel, snap: c.snap === "peek" ? "half" : c.snap }));
+  };
+
   /** Build the printable site report for a node and open it in a new tab. */
   const makeReport = async (node: MeshNode) => {
     // open the tab now (while the click still counts as a user action); fill it when the report is ready
@@ -898,7 +911,7 @@ export function App({ auth }: { auth: AuthContext }) {
             readOnly={readOnly || !!pubProject}
             online={online}
             conflict={!!conflict}
-            onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
+            onConflict={() => showDetails("project")}
             analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
             jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
           />
@@ -961,8 +974,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
           onPlanAround={pubProject ? undefined : (lat, lon) => {
             setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
-            setInspectorTab("plan");
-            setInspectorOpen(true);
+            showDetails("plan");
           }}
         />
         </div>
@@ -994,10 +1006,7 @@ export function App({ auth }: { auth: AuthContext }) {
     setAddMode(next === "add");
     setPickingArea(next === "plan");
     setLinkFirst(next === "link" ? null : undefined);
-    if (next === "plan") {
-      setInspectorOpen(true);
-      setInspectorTab("plan");
-    }
+    if (next === "plan") showDetails("plan");
   };
   chooseToolRef.current = chooseTool;
 
@@ -1198,7 +1207,7 @@ export function App({ auth }: { auth: AuthContext }) {
           readOnly={readOnly || publicView}
           online={online}
           conflict={!!conflict}
-          onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
+          onConflict={() => showDetails("project")}
           analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
           jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
         />
@@ -1212,10 +1221,10 @@ export function App({ auth }: { auth: AuthContext }) {
       onAccount={() => setDialog("account")}
       onAdmin={() => setDialog("admin")}
       onSignOut={() => void auth.signOut()}
-      browserOpen={browserOpen}
-      inspectorOpen={inspectorOpen}
-      onToggleBrowser={() => setBrowserOpen((v) => !v)}
-      onToggleInspector={() => setInspectorOpen((v) => !v)}
+      browserOpen={phone ? sheet.panel === "lists" : browserOpen}
+      inspectorOpen={phone ? sheet.panel === "details" : inspectorOpen}
+      onToggleBrowser={() => (phone ? openPanel("lists") : setBrowserOpen((v) => !v))}
+      onToggleInspector={() => (phone ? openPanel("details") : setInspectorOpen((v) => !v))}
     />
   );
 
@@ -1236,11 +1245,6 @@ export function App({ auth }: { auth: AuthContext }) {
   if (phone) {
     const showSheet = !!sheet.panel && !pairNodes && !fieldActive;
     const navActive: NavItem = fieldActive ? "field" : tool === "add" ? "add" : sheet.panel === "lists" ? "lists" : sheet.panel === "details" ? "details" : "map";
-    const openPanel = (panel: "lists" | "details") => {
-      setFieldMode(false);
-      chooseToolRef.current("select");
-      setSheet((c) => (c.panel === panel ? { panel: null, snap: c.snap } : { panel, snap: c.snap === "peek" ? "half" : c.snap }));
-    };
     const onNav = (i: NavItem) => {
       if (i === "map") {
         setFieldMode(false);
