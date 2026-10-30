@@ -31,6 +31,7 @@ import { BottomNav, type NavItem } from "./shell/BottomNav";
 import { BottomSheet } from "./shell/BottomSheet";
 import type { Snap } from "./shell/sheet";
 import { usePhone } from "./shell/usePhone";
+import { useBackToClose } from "./shell/useBackToClose";
 import { terrain } from "./engine/terrain";
 import { ToolRail, type Tool } from "./shell/ToolRail";
 import { devMode, useStoredFlag } from "./shell/uiMode";
@@ -266,6 +267,14 @@ export function App({ auth }: { auth: AuthContext }) {
     for (const l of allLinks) c[l.class]++;
     return c;
   }, [allLinks]);
+
+  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
+  // on a phone, Back closes the link view, then a raised sheet, before it leaves the app
+  const backLayer = !phone || fieldActive ? null : pairNodes ? "link" : sheet.panel && sheet.snap !== "peek" ? "sheet" : null;
+  useBackToClose(backLayer, () => {
+    if (backLayer === "link") setSelectedLink(null);
+    else setSheet((c) => ({ panel: null, snap: c.snap }));
+  });
 
   // ---- project switching -------------------------------------------------
   const switchTo = useCallback(
@@ -1166,7 +1175,6 @@ export function App({ auth }: { auth: AuthContext }) {
     </aside>
   );
 
-  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
   const v2Top = (
     <TopBar
       projects={projects.map((p) => ({ id: p.id, name: p.name }))}
