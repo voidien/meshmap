@@ -328,8 +328,9 @@ export function App({ auth }: { auth: AuthContext }) {
       else if ((e.key === "v" || e.key === "V")) chooseToolRef.current("select");
       else if ((e.key === "l" || e.key === "L")) chooseToolRef.current("link");
       else if ((e.key === "p" || e.key === "P") && !readOnlyRef.current) chooseToolRef.current("plan");
-      else if ((e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
-      else if ((e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
+      // the side columns: a phone shows its lists and details in the bottom sheet instead
+      else if ((e.key === "b" || e.key === "B") && !phoneRef.current) setBrowserOpen((x) => !x);
+      else if ((e.key === "i" || e.key === "I") && !phoneRef.current) setInspectorOpen((x) => !x);
       else return;
       e.preventDefault();
     };
