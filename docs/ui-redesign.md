@@ -102,3 +102,5 @@ Not done: the map keeps its own selected / placed state while Field mode is open
 - On a phone, Back closes an open link view, then a raised sheet, before it leaves the app (one history entry, taken back off when they are closed another way).
 - The map credits start folded behind their (i) button.
 - The Nodes and Links lists work from the keyboard (one Tab stop, arrow keys / Home / End / Page Up / Down, Enter or Space opens a row).
+- A published project's Nodes, Links and Issues can be browsed (read only, with *Back to my project*); its Plan tab says why it is empty.
+- On a phone, picking in the Lists sheet keeps the list (a strip at the top names the pick, with *Open details*); touch screens say "tap" instead of "click".
