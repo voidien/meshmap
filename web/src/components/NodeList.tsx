@@ -103,6 +103,7 @@ export function NodeList(p: Props) {
         ariaLabel="Nodes"
         keyOf={(n) => n.id}
         rowClass={(n) => (n.id === p.focusId ? "sel" : "")}
+        isCurrent={(n) => n.id === p.focusId}
         onRowClick={(n) => p.onFocus(n.id)}
         row={(n) => {
           const s = stats.get(n.id);

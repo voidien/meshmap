@@ -61,6 +61,7 @@ export function LinkList({ nodes, links, analysing = false, selectedKey, onSelec
         ariaLabel="Links"
         keyOf={(l) => l.key}
         rowClass={(l) => (l.key === selectedKey ? "sel" : "")}
+        isCurrent={(l) => l.key === selectedKey}
         onRowClick={(l) => onSelect(l.key)}
         row={(l) => {
           const asym = asymmetryDb(l);
