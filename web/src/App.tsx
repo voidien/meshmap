@@ -408,6 +408,13 @@ export function App({ auth }: { auth: AuthContext }) {
       fail(e);
     }
   };
+  /** Leave an open publication for the user's own project (the lists and the map show it again). */
+  const leavePublication = () => {
+    setViewPub(null);
+    setSection("mine");
+    setSelectedNode(null);
+    setSelectedLink(null);
+  };
   const copyPublication = async () => {
     if (!viewPub?.data) return;
     const d = viewPub.data;
@@ -1162,12 +1169,25 @@ export function App({ auth }: { auth: AuthContext }) {
     <aside className="browser2" aria-label="Lists">
       <div className="tabs2" role="tablist">
         {([["nodes", `Nodes (${project.nodes.length})`], ["links", analysing ? "Links (…)" : `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => { setBrowserTab(id); if (id === "published") setSection("published"); else setSection("mine"); }}>
+          <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => {
+            setBrowserTab(id);
+            // with a publication open, its own nodes, links and issues are shown (read only) until the user goes back
+            if (id === "published" || viewPub) setSection("published");
+            else setSection("mine");
+          }}>
             {label}
           </button>
         ))}
       </div>
       <div className="pane">
+        {pubProject && viewPub && browserTab !== "published" ? (
+          <div className="banner pubstrip" id="published-strip">
+            Published: <b>{viewPub.title}</b> · read only
+            <div className="row-actions">
+              <button onClick={leavePublication}>Back to my project</button>
+            </div>
+          </div>
+        ) : null}
         {browserTab === "nodes" ? nodeListEl : null}
         {browserTab === "links" ? linkListEl : null}
         {browserTab === "issues" ? healthEl : null}
