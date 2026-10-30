@@ -231,9 +231,6 @@ export function App({ auth }: { auth: AuthContext }) {
     [cov.layers, pubProject],
   );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
-  // the selected node's panel is at the top of the menu: show it
-  useEffect(() => {
-  }, [selectedNode]);
   const placement = usePlacement(project.id);
   const placementTemplate = project.nodes.find((n) => n.id === templateId) ?? null;
   const placementReq = useMemo(
@@ -725,20 +722,15 @@ export function App({ auth }: { auth: AuthContext }) {
         {ready ? (
         <fieldset className="plain" disabled={readOnly}>
         <NodeList
-            network={project.settings.network}
             nodes={project.nodes}
             links={allLinks}
             focusId={selectedNode}
             checked={checked}
             weakBelowDb={project.settings.marginalMarginDb}
-            showTray={false}
             readOnly={readOnly}
-            onTags={tagMany}
             onFocus={focusNode}
             onToggle={toggleChecked}
             onSetChecked={(ids) => setChecked(new Set(ids))}
-            onBulk={patchMany}
-            onDeleteMany={deleteMany}
             onAddAt={addNodeAt}
           />
         </fieldset>
@@ -906,15 +898,6 @@ export function App({ auth }: { auth: AuthContext }) {
           </div>
         ) : null}
         <div className="map-status">
-          <StatusChip
-            saveState={sync.saveState}
-            readOnly={readOnly || !!pubProject}
-            online={online}
-            conflict={!!conflict}
-            onConflict={() => showDetails("project")}
-            analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
-            jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
-          />
           {(addMode && !phone) || pickingArea || linkFirst !== undefined ? (
             <div className="mode-chip" role="status">
               {addMode

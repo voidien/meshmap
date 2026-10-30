@@ -1,28 +1,20 @@
 import { useMemo, useState } from "react";
 import { Card } from "./Card";
-import { SelectionTray } from "./SelectionTray";
 import { VirtualList } from "../ui/VirtualList";
 import { allTags, filterNodes, NO_NODE_FILTER, nodeStats, type NodeFilter, type NodeSort } from "../listFilters";
-import type { Network } from "../networks";
 import type { Link, MeshNode } from "../types";
 
 interface Props {
   nodes: MeshNode[];
   links: Link[];
   focusId: string | null;
-  network: Network;
   checked: ReadonlySet<string>;
   /** below this much spare signal a node counts as weak (the project's "good link" figure) */
   weakBelowDb: number;
-  /** show the edit tray for ticked nodes under the list (the new layout shows it in the details panel instead) */
-  showTray?: boolean;
   readOnly?: boolean;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
   onSetChecked: (ids: string[]) => void;
-  onBulk: (ids: string[], patch: Partial<MeshNode>) => void;
-  onTags: (ids: string[], add: string | null, remove: string | null) => void;
-  onDeleteMany: (ids: string[]) => void;
   onAddAt: (lat: number, lon: number, name: string) => void;
 }
 
@@ -127,10 +119,6 @@ export function NodeList(p: Props) {
           );
         }}
       />
-
-      {checkedIds.length > 0 && p.showTray !== false ? (
-        <SelectionTray nodes={p.nodes} ids={checkedIds} network={p.network} onBulk={p.onBulk} onTags={p.onTags} onSetChecked={p.onSetChecked} onDelete={p.onDeleteMany} readOnly={!!p.readOnly} />
-      ) : null}
 
       <details className="bulk">
         <summary>Add a node by coordinates</summary>
