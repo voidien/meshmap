@@ -273,7 +273,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
 
         {tab === "here" ? (
           <ul className="fnear">
-            {near.length === 0 ? <li className="hint">No nodes in this project yet.</li> : null}
+            {project.nodes.length === 0 ? <li className="hint">No nodes in this project yet.</li> : null}
             {near.map((n) => {
               const p = predicted.get(n.node.id);
               return (
