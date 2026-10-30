@@ -449,7 +449,6 @@ select.chip { padding: 1px 6px; width: auto; }
 .reticle-strip .where { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; min-width: 0; }
 .fieldhost { flex: 1; min-height: 0; position: relative; }
 .fieldhost .field-mode { position: static; inset: auto; height: 100%; z-index: auto; }
-.body2.in-field { display: block; }
-.body2.phone.in-field { display: flex; }
+.body2.in-field { display: flex; flex-direction: column; }
 /* no pointer to hover with: the elevation readout would only show the last tap, so it stays out of the way (long press for the numbers) */
 @media (pointer: coarse) { .elev-readout { display: none; } }
