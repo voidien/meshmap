@@ -1168,6 +1168,7 @@ export function App({ auth }: { auth: AuthContext }) {
     </aside>
   );
 
+  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
   const v2Top = (
     <TopBar
       projects={projects.map((p) => ({ id: p.id, name: p.name }))}
@@ -1203,6 +1204,8 @@ export function App({ auth }: { auth: AuthContext }) {
         />
       }
       onField={() => setFieldMode(true)}
+      inField={fieldActive}
+      onPlan={() => setFieldMode(false)}
       fieldDisabled={!ready || publicView || !project.id}
       user={{ displayName: auth.user.displayName, isAdmin: auth.user.role === "admin" }}
       onHelp={() => setDialog("help")}
@@ -1217,7 +1220,6 @@ export function App({ auth }: { auth: AuthContext }) {
   );
 
 
-  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
   const fieldEl = fieldActive ? (
     <div className="fieldhost">
       <FieldMode
