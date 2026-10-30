@@ -84,7 +84,7 @@ export function NodeList(p: Props) {
           ) : null}
         </div>
       ) : null}
-      {p.nodes.length === 0 ? <p className="hint">No nodes yet. Use “+ Add node” on the map, add by coordinates below, or import a file.</p> : null}
+      {p.nodes.length === 0 ? <p className="hint">{p.readOnly ? "No nodes yet." : "No nodes yet. Use Add (＋) to place them on the map, add one by coordinates below, or import a file."}</p> : null}
       {p.nodes.length > 0 ? (
         <label className="check">
           <input type="checkbox" checked={allVisibleChecked} onChange={() => p.onSetChecked(allVisibleChecked ? [] : visible.map((n) => n.id))} />
