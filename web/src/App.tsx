@@ -319,7 +319,7 @@ export function App({ auth }: { auth: AuthContext }) {
       } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) chooseToolRef.current("add");
       else if ((e.key === "v" || e.key === "V")) chooseToolRef.current("select");
       else if ((e.key === "l" || e.key === "L")) chooseToolRef.current("link");
-      else if ((e.key === "p" || e.key === "P")) chooseToolRef.current("plan");
+      else if ((e.key === "p" || e.key === "P") && !readOnlyRef.current) chooseToolRef.current("plan");
       else if ((e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
       else if ((e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
       else return;
