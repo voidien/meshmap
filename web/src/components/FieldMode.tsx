@@ -24,6 +24,10 @@ interface Props {
 
 const NO_NODES: MeshNode[] = [];
 const NO_LINKS: Link[] = [];
+// fixed values for the map: new ones on every render would make it redraw its layers each time
+const NONE_CHECKED: ReadonlySet<string> = new Set();
+const NO_IMAGES: never[] = [];
+const NO_PLACEMENT = { area: null, sites: [] };
 
 /** Phone-friendly mode for standing at a site: where am I, what should the signal be, and record what it really is. */
 export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPatchNode }: Props) {
@@ -209,7 +213,7 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
     }
   }, [pos]);
 
-  const nodeLinks = links.filter((l) => l.class !== "none");
+  const nodeLinks = useMemo(() => links.filter((l) => l.class !== "none"), [links]);
 
   return (
     <div className="field-mode" id="field-mode">
@@ -229,13 +233,13 @@ export function FieldMode({ project, links, readOnly, onClose, onMoveNode, onPat
           ghostLinks={NO_LINKS}
           fitKey={`field-${project.id}`}
           selectedNodeId={nodeId || null}
-          checkedIds={new Set()}
+          checkedIds={NONE_CHECKED}
           showLabels
-          coverageImages={[]}
+          coverageImages={NO_IMAGES}
           readOnly
           focus={focus}
           selectedLinkKey={null}
-          placement={{ area: null, sites: [] }}
+          placement={NO_PLACEMENT}
           field={mapField}
           addMode={false}
           pickMode={!!manual}
