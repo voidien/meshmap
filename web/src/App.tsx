@@ -720,8 +720,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const nodeListEl = (
     <>
         {ready ? (
-        <fieldset className="plain" disabled={readOnly}>
-        <NodeList
+          <NodeList
             nodes={project.nodes}
             links={allLinks}
             focusId={selectedNode}
@@ -733,7 +732,6 @@ export function App({ auth }: { auth: AuthContext }) {
             onSetChecked={(ids) => setChecked(new Set(ids))}
             onAddAt={addNodeAt}
           />
-        </fieldset>
         ) : null}
     </>
   );

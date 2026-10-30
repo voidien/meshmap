@@ -11,6 +11,7 @@ interface Props {
   checked: ReadonlySet<string>;
   /** below this much spare signal a node counts as weak (the project's "good link" figure) */
   weakBelowDb: number;
+  /** a viewer can search, sort and tick, but not add nodes */
   readOnly?: boolean;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
@@ -120,29 +121,31 @@ export function NodeList(p: Props) {
         }}
       />
 
-      <details className="bulk">
-        <summary>Add a node by coordinates</summary>
-        <label className="field">
-          <span>Latitude, longitude</span>
-          <input placeholder="36.1507, -85.4376" value={coords} onChange={(e) => setCoords(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Name (optional)</span>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} />
-        </label>
-        <button
-          disabled={!parsed}
-          onClick={() => {
-            if (!parsed) return;
-            p.onAddAt(parsed[0], parsed[1], newName.trim());
-            setCoords("");
-            setNewName("");
-          }}
-        >
-          Add node
-        </button>
-        {coords && !parsed ? <p className="hint err">Enter “latitude, longitude” in decimal degrees.</p> : null}
-      </details>
+      {p.readOnly ? null : (
+        <details className="bulk">
+          <summary>Add a node by coordinates</summary>
+          <label className="field">
+            <span>Latitude, longitude</span>
+            <input placeholder="36.1507, -85.4376" value={coords} onChange={(e) => setCoords(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Name (optional)</span>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </label>
+          <button
+            disabled={!parsed}
+            onClick={() => {
+              if (!parsed) return;
+              p.onAddAt(parsed[0], parsed[1], newName.trim());
+              setCoords("");
+              setNewName("");
+            }}
+          >
+            Add node
+          </button>
+          {coords && !parsed ? <p className="hint err">Enter “latitude, longitude” in decimal degrees.</p> : null}
+        </details>
+      )}
     </Card>
   );
 }
