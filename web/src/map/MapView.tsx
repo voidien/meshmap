@@ -186,6 +186,17 @@ export function MapView(p: Props) {
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    // the map credits (compact by default) start folded behind their (i) button: open, they covered the legend and
+    // the elevation readout until the first drag
+    const foldCredits = () => {
+      const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      if (!el) return;
+      el.classList.remove("maplibregl-compact-show");
+      map.off("styledata", foldCredits);
+      map.off("sourcedata", foldCredits);
+    };
+    map.on("styledata", foldCredits);
+    map.on("sourcedata", foldCredits);
     // the map's box changes when the link drawer opens or the menu hides: follow it
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(container.current!);
