@@ -235,7 +235,8 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
     if (e.key === "ArrowRight") (e.preventDefault(), setHover(Math.min(n - 1, at + step)));
     else if (e.key === "ArrowLeft") (e.preventDefault(), setHover(Math.max(0, at - step)));
     else if ((e.key === "Enter" || e.key === " ") && onPick && hover !== null) (e.preventDefault(), onPick(Math.min(n - 2, Math.max(1, hover))));
-    else if (e.key === "Escape") setHover(null);
+    // Esc first clears the spot the arrow keys moved to; a second Esc closes the link view as usual
+    else if (e.key === "Escape" && hover !== null) (e.stopPropagation(), setHover(null));
   };
   const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const i = indexAt(e);
