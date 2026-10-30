@@ -10,6 +10,7 @@ import { circleRing, type Area } from "../placement";
 import { beamGeoJSON } from "./beams";
 import { buildContours } from "./contours";
 import { cursorCss } from "./cursors";
+import { coarsePointer } from "../ui/pointer";
 import { DEFAULT_LAYERS, ElevationReadout, LayersControl, loadLayers, MapContextMenu, RELIEF_STOPS, saveLayers, type MapLayers, type MenuState } from "./MapOverlays";
 import { terrain, type SpotInfo } from "../engine/terrain";
 import type { Link, MeshNode } from "../types";
@@ -127,7 +128,6 @@ function pointsGeoJSON(nodes: MeshNode[]): GeoJSON.FeatureCollection {
 
 const CLASS_COLOR: maplibregl.ExpressionSpecification = ["match", ["get", "class"], "clear", LINK_COLORS.clear, "marginal", LINK_COLORS.marginal, "obstructed", LINK_COLORS.obstructed, LINK_COLORS.none];
 
-const coarsePointer = () => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 const nodeLabel = (n: MeshNode) => `${n.letter ? n.letter + " · " : ""}${n.name.trim() || "node"}`;
 
 /** The nodes as map features: what the circle and label layers read (status, ticked, health marks, label, drawing priority). */

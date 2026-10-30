@@ -31,6 +31,7 @@ import { BottomNav, type NavItem } from "./shell/BottomNav";
 import { BottomSheet } from "./shell/BottomSheet";
 import type { Snap } from "./shell/sheet";
 import { usePhone } from "./shell/usePhone";
+import { clickWord, coarsePointer } from "./ui/pointer";
 import { useBackToClose } from "./shell/useBackToClose";
 import { terrain } from "./engine/terrain";
 import { ToolRail, type Tool } from "./shell/ToolRail";
@@ -936,13 +937,13 @@ export function App({ auth }: { auth: AuthContext }) {
           {(addMode && !phone) || pickingArea || linkFirst !== undefined ? (
             <div className="mode-chip" role="status">
               {addMode
-                ? "Adding nodes: click the map for each one"
+                ? `Adding nodes: ${clickWord()} the map for each one`
                 : pickingArea
-                  ? "Pick the area: click the map"
+                  ? `Pick the area: ${clickWord()} the map`
                   : linkFirst === null
-                    ? "Inspect a link: click the first node"
-                    : `Inspect a link: now click the second node (from ${nodeById.get(linkFirst ?? "")?.name.trim() || "the first node"})`}
-              <button onClick={() => chooseToolRef.current("select")}>Done (Esc)</button>
+                    ? `Inspect a link: ${clickWord()} the first node`
+                    : `Inspect a link: now ${clickWord()} the second node (from ${nodeById.get(linkFirst ?? "")?.name.trim() || "the first node"})`}
+              <button onClick={() => chooseToolRef.current("select")}>{coarsePointer() ? "Done" : "Done (Esc)"}</button>
             </div>
           ) : null}
         </div>
@@ -1052,7 +1053,7 @@ export function App({ auth }: { auth: AuthContext }) {
     const cmds: Command[] = [];
     const act = (id: string, label: string, run: () => void, extra: Partial<Command> = {}) => cmds.push({ id, label, group: "Actions", run, ...extra });
     if (!publicView && !readOnly) {
-      act("add", "Add nodes (click the map)", () => chooseTool("add"), { shortcut: "N", keywords: "place new node" });
+      act("add", phone ? "Add nodes (place them at the cross)" : `Add nodes (${clickWord()} the map)`, () => chooseTool("add"), { shortcut: "N", keywords: "place new node" });
       act("plan", "Suggest sites in an area", () => chooseTool("plan"), { shortcut: "P", keywords: "placement where" });
     }
     act("link", "Inspect a link between two nodes", () => chooseTool("link"), { shortcut: "L", keywords: "path profile pair" });
@@ -1140,12 +1141,13 @@ export function App({ auth }: { auth: AuthContext }) {
             {checked.size > 0 ? (
               <SelectionTray nodes={project.nodes} ids={project.nodes.filter((n) => checked.has(n.id)).map((n) => n.id)} network={project.settings.network} onBulk={patchMany} onTags={tagMany} onSetChecked={(ids) => setChecked(new Set(ids))} onDelete={deleteMany} readOnly={readOnly} />
             ) : null}
-            {sel ? nodePanelEl : checked.size > 0 ? null : <p className="hint card">Select a node on the map or in the list to see and edit it here. Shift-drag on the map to select several. Click a link to open its profile under the map.</p>}
+            {sel ? nodePanelEl : checked.size > 0 ? null : <p className="hint card">{coarsePointer() ? "Select a node on the map or in the list to see and edit it here. Tap a link to open its profile." : "Select a node on the map or in the list to see and edit it here. Shift-drag on the map to select several. Click a link to open its profile under the map."}</p>}
             {commentsEl}
           </>
         ) : null}
         {inspectorTab === "plan" ? (
           <>
+            {pubProject ? <p className="hint card" id="plan-published">Heatmaps and suggested sites are not part of a published project. Copy it to your projects to plan with it.</p> : null}
             {coverageEl}
             {placementEl}
           </>

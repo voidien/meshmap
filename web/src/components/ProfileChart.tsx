@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeWithProfile, SPACING_FULL_M } from "../engine/analysis";
 import { GOOD_CLEARANCE_PCT, suggestRaise, type PairNote, type Raise } from "../engine/pairInfo";
 import { NumberField } from "../ui/NumberField";
+import { clickWord, coarsePointer } from "../ui/pointer";
 import { LINK_COLORS } from "../map/MapView";
 import { highestAwayFromEnds, pointOnPath } from "../profilePick";
 import type { LinkResult, MeshNode, Settings, TerrainMode } from "../types";
@@ -116,7 +117,7 @@ export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, r
           </div>
         </>
       ) : (
-        <p className="hint tight">Tap the profile to pick a spot, or jump to the highest point, then place a node there.</p>
+        <p className="hint tight">{clickWord(true)} the profile to pick a spot, or jump to the highest point, then place a node there.</p>
       )}
     </div>
   ) : null;
@@ -390,7 +391,7 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
             {f((100 * (s.ray_m[hover] - s.terrain_eff_m[hover])) / (s.fresnel_m[hover] || Infinity), 0)} % of F1
           </>
         ) : (
-          "Point at the profile for details, or click it to pick a spot."
+          coarsePointer() ? "Drag a finger along the profile for details, or tap it to pick a spot." : "Point at the profile for details, or click it to pick a spot."
         )}
       </div>
       <div className="heights">

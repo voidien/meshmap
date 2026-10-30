@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card } from "./Card";
 import { NumberField } from "../ui/NumberField";
+import { clickWord } from "../ui/pointer";
 import { DEFAULT_BACKHAUL, describeStop, type Area, type PlacementJob, type PlacementOptions, type Suggestion } from "../placement";
 import type { MeshNode } from "../types";
 
@@ -65,7 +66,7 @@ export function PlacementPanel(p: Props) {
 
       <div className="btnrow">
         <button className={p.picking ? "on" : ""} onClick={() => p.onPick(!p.picking)}>
-          {p.picking ? "Click the map…" : p.area ? "Move area" : "Pick area on map"}
+          {p.picking ? `${clickWord(true)} the map…` : p.area ? "Move area" : "Pick area on map"}
         </button>
         {p.nodes.length ? (
           <button
@@ -103,7 +104,7 @@ export function PlacementPanel(p: Props) {
           </label>
         </div>
       ) : (
-        <p className="hint">Pick the area you want covered: click the map, or use the middle of your nodes.</p>
+        <p className="hint">Pick the area you want covered: {clickWord()} the map, or use the middle of your nodes.</p>
       )}
 
       {o.goal === "redundancy" ? (
