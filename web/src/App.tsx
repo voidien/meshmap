@@ -182,7 +182,9 @@ export function App({ auth }: { auth: AuthContext }) {
     setLocalProjects(local);
   }, [dataReady, auth.user.id]);
 
-  const { links: allLinks, status } = useLinks(project.nodes, project.settings, dragging, ready, project.id);
+  const { links: allLinks, status, analysed } = useLinks(project.nodes, project.settings, dragging, ready, project.id);
+  /** No links worked out yet for this project (the engine is loading, or the first analysis runs): panels say so instead of showing empty results. */
+  const analysing = !analysed && !status.error;
   const { links: otherAllLinks, status: otherStatus } = useLinks(other?.nodes ?? NO_NODES, other?.settings ?? project.settings, false, ready && !!other, other?.id ?? "none");
   const links = useMemo(() => (project.settings.showNone ? allLinks : allLinks.filter((l) => l.class !== "none")), [allLinks, project.settings.showNone]);
   const ghostLinks = useMemo(() => (other ? otherAllLinks.filter((l) => l.class !== "none") : []), [other, otherAllLinks]);
@@ -198,7 +200,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const health = useMemo(() => analyzeHealth(healthInput), [healthInput]);
   const failure = useMemo(() => (healthOpts.failedId && healthInput.nodeIds.includes(healthOpts.failedId) ? simulateFailure(healthInput, healthOpts.failedId) : null), [healthInput, healthOpts.failedId]);
   const healthMarks = useMemo(() => {
-    if (!healthOpts.highlight && !failure) return undefined;
+    if ((!healthOpts.highlight && !failure) || analysing) return undefined;
     const m: Record<string, string> = {};
     const add = (id: string, c: string) => (m[id] = m[id] ? `${m[id]} ${c}` : c);
     for (const n of project.nodes) if (n.gateway) add(n.id, "h-gateway");
@@ -213,7 +215,7 @@ export function App({ auth }: { auth: AuthContext }) {
       for (const id of failure.cutOff) add(id, "h-cut");
     }
     return m;
-  }, [healthOpts.highlight, failure, health, project.nodes]);
+  }, [healthOpts.highlight, failure, health, project.nodes, analysing]);
 
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
 
@@ -721,6 +723,7 @@ export function App({ auth }: { auth: AuthContext }) {
     <>
         {ready ? (
           <NodeList
+            analysing={analysing}
             nodes={project.nodes}
             links={allLinks}
             focusId={selectedNode}
@@ -732,12 +735,14 @@ export function App({ auth }: { auth: AuthContext }) {
             onSetChecked={(ids) => setChecked(new Set(ids))}
             onAddAt={addNodeAt}
           />
-        ) : null}
+        ) : (
+          <p className="hint card" role="status">Analysing…</p>
+        )}
     </>
   );
   const linkListEl = (
     <>
-        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
+        <LinkList nodes={project.nodes} links={links} analysing={analysing} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
     </>
   );
   const commentsEl = (
@@ -783,6 +788,7 @@ export function App({ auth }: { auth: AuthContext }) {
           nodes={project.nodes}
           network={project.settings.network}
           health={health}
+          analysing={analysing}
           failure={failure}
           options={healthOpts}
           onOptions={setHealthOpts}
@@ -1118,12 +1124,14 @@ export function App({ auth }: { auth: AuthContext }) {
             <section className="card flat" id="project-summary">
               <h3 className="flat-title">{project.name}</h3>
               <p className="lmeta">
-                {project.nodes.length} nodes · {allLinks.length - counts.none} links
-                <span className="chips">
-                  <b className="c clear">{counts.clear}</b>
-                  <b className="c marginal">{counts.marginal}</b>
-                  <b className="c obstructed">{counts.obstructed}</b>
-                </span>
+                {project.nodes.length} nodes · {analysing ? "analysing links…" : `${allLinks.length - counts.none} links`}
+                {analysing ? null : (
+                  <span className="chips">
+                    <b className="c clear">{counts.clear}</b>
+                    <b className="c marginal">{counts.marginal}</b>
+                    <b className="c obstructed">{counts.obstructed}</b>
+                  </span>
+                )}
               </p>
               <div className="btnrow">
                 <button onClick={() => setDialog("settings")}>Settings…</button>
@@ -1143,7 +1151,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const browserEl = (
     <aside className="browser2" aria-label="Lists">
       <div className="tabs2" role="tablist">
-        {([["nodes", `Nodes (${project.nodes.length})`], ["links", `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
+        {([["nodes", `Nodes (${project.nodes.length})`], ["links", analysing ? "Links (…)" : `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => { setBrowserTab(id); if (id === "published") setSection("published"); else setSection("mine"); }}>
             {label}
           </button>
@@ -1189,7 +1197,7 @@ export function App({ auth }: { auth: AuthContext }) {
           online={online}
           conflict={!!conflict}
           onConflict={() => showDetails("project")}
-          analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
+          analysis={{ busy: status.busy || analysing, done: status.done, total: status.total, error: status.error }}
           jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
         />
       }

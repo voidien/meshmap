@@ -8,13 +8,15 @@ import type { Link, LinkClass, MeshNode } from "../types";
 interface Props {
   nodes: MeshNode[];
   links: Link[];
+  /** no links worked out yet */
+  analysing?: boolean;
   selectedKey: string | null;
   onSelect: (key: string) => void;
 }
 
 const CLASSES: LinkClass[] = ["obstructed", "marginal", "clear"];
 
-export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
+export function LinkList({ nodes, links, analysing = false, selectedKey, onSelect }: Props) {
   const [filter, setFilter] = useState<LinkFilter>(NO_LINK_FILTER);
   const [sort, setSort] = useState<LinkSort>("weakest");
   const name = useMemo(() => new Map(nodes.map((n) => [n.id, n.name])), [nodes]);
@@ -22,7 +24,7 @@ export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
   const filtering = filter.query.trim() !== "" || filter.classes.size > 0;
   const toggle = (c: LinkClass) => setFilter((x) => ({ ...x, classes: new Set(x.classes.has(c) ? [...x.classes].filter((v) => v !== c) : [...x.classes, c]) }));
   return (
-    <Card id="links" title={`Links (${links.length})`}>
+    <Card id="links" title={analysing ? "Links" : `Links (${links.length})`}>
       {links.length > 0 ? (
         <>
           <div className="nodes-tools">
@@ -47,7 +49,7 @@ export function LinkList({ nodes, links, selectedKey, onSelect }: Props) {
           </div>
         </>
       ) : (
-        <p className="hint">Add two or more nodes within range to see links.</p>
+        <p className="hint" role={analysing ? "status" : undefined}>{analysing ? "Analysing…" : "Add two or more nodes within range to see links."}</p>
       )}
       {filtering ? <p className="lmeta">{visible.length} of {links.length} shown</p> : null}
       <VirtualList

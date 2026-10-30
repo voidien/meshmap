@@ -8,6 +8,8 @@ interface Props {
   nodes: MeshNode[];
   links: Link[];
   focusId: string | null;
+  /** no links worked out yet: the link counts are not known */
+  analysing?: boolean;
   checked: ReadonlySet<string>;
   /** below this much spare signal a node counts as weak (the project's "good link" figure) */
   weakBelowDb: number;
@@ -113,8 +115,14 @@ export function NodeList(p: Props) {
                 {n.name.trim() || "(unnamed)"}
               </span>
               <span className="lmeta">
-                {s?.links ?? 0} link{s?.links === 1 ? "" : "s"}
-                {s?.best != null ? ` · ${s.best.toFixed(0)} dB` : ""}
+                {p.analysing ? (
+                  "analysing…"
+                ) : (
+                  <>
+                    {s?.links ?? 0} link{s?.links === 1 ? "" : "s"}
+                    {s?.best != null ? ` · ${s.best.toFixed(0)} dB` : ""}
+                  </>
+                )}
               </span>
             </>
           );
