@@ -15,6 +15,8 @@ interface Props {
   nodes: MeshNode[];
   network: Network;
   health: Health;
+  /** no links worked out yet: the counts would all say "isolated" */
+  analysing?: boolean;
   failure: FailureImpact | null;
   options: HealthOptions;
   onOptions: (o: HealthOptions) => void;
@@ -30,7 +32,7 @@ interface Props {
 const num = (v: string, d: number) => (v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** Which nodes and links hold the network together, and what happens when one fails. */
-export function MeshHealthPanel({ nodes, network, health: h, failure, options: o, onOptions, usableMarginDb, onUsableMargin, readOnly, onFocus, onLink, onGateway }: Props) {
+export function MeshHealthPanel({ nodes, network, health: h, analysing = false, failure, options: o, onOptions, usableMarginDb, onUsableMargin, readOnly, onFocus, onLink, onGateway }: Props) {
   const name = useMemo(() => new Map(nodes.map((n) => [n.id, n.name.trim() || "(unnamed)"])), [nodes]);
   const nm = (id: string) => name.get(id) ?? "?";
   const set = (patch: Partial<HealthOptions>) => onOptions({ ...o, ...patch });
@@ -44,6 +46,13 @@ export function MeshHealthPanel({ nodes, network, health: h, failure, options: o
     </div>
   );
 
+  if (analysing && nodes.length >= 2) {
+    return (
+      <Card id="health" domId="mesh-health" title="Mesh health">
+        <p className="hint" role="status">Analysing…</p>
+      </Card>
+    );
+  }
   return (
     <Card id="health" domId="mesh-health" title="Mesh health">
       {nodes.length < 2 ? (

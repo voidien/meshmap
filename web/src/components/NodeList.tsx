@@ -1,28 +1,23 @@
 import { useMemo, useState } from "react";
 import { Card } from "./Card";
-import { SelectionTray } from "./SelectionTray";
 import { VirtualList } from "../ui/VirtualList";
 import { allTags, filterNodes, NO_NODE_FILTER, nodeStats, type NodeFilter, type NodeSort } from "../listFilters";
-import type { Network } from "../networks";
 import type { Link, MeshNode } from "../types";
 
 interface Props {
   nodes: MeshNode[];
   links: Link[];
   focusId: string | null;
-  network: Network;
+  /** no links worked out yet: the link counts are not known */
+  analysing?: boolean;
   checked: ReadonlySet<string>;
   /** below this much spare signal a node counts as weak (the project's "good link" figure) */
   weakBelowDb: number;
-  /** show the edit tray for ticked nodes under the list (the new layout shows it in the details panel instead) */
-  showTray?: boolean;
+  /** a viewer can search, sort and tick, but not add nodes */
   readOnly?: boolean;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
   onSetChecked: (ids: string[]) => void;
-  onBulk: (ids: string[], patch: Partial<MeshNode>) => void;
-  onTags: (ids: string[], add: string | null, remove: string | null) => void;
-  onDeleteMany: (ids: string[]) => void;
   onAddAt: (lat: number, lon: number, name: string) => void;
 }
 
@@ -91,7 +86,7 @@ export function NodeList(p: Props) {
           ) : null}
         </div>
       ) : null}
-      {p.nodes.length === 0 ? <p className="hint">No nodes yet. Use “+ Add node” on the map, add by coordinates below, or import a file.</p> : null}
+      {p.nodes.length === 0 ? <p className="hint">{p.readOnly ? "No nodes yet." : "No nodes yet. Use Add (＋) to place them on the map, add one by coordinates below, or import a file."}</p> : null}
       {p.nodes.length > 0 ? (
         <label className="check">
           <input type="checkbox" checked={allVisibleChecked} onChange={() => p.onSetChecked(allVisibleChecked ? [] : visible.map((n) => n.id))} />
@@ -108,6 +103,7 @@ export function NodeList(p: Props) {
         ariaLabel="Nodes"
         keyOf={(n) => n.id}
         rowClass={(n) => (n.id === p.focusId ? "sel" : "")}
+        isCurrent={(n) => n.id === p.focusId}
         onRowClick={(n) => p.onFocus(n.id)}
         row={(n) => {
           const s = stats.get(n.id);
@@ -120,41 +116,45 @@ export function NodeList(p: Props) {
                 {n.name.trim() || "(unnamed)"}
               </span>
               <span className="lmeta">
-                {s?.links ?? 0} link{s?.links === 1 ? "" : "s"}
-                {s?.best != null ? ` · ${s.best.toFixed(0)} dB` : ""}
+                {p.analysing ? (
+                  "analysing…"
+                ) : (
+                  <>
+                    {s?.links ?? 0} link{s?.links === 1 ? "" : "s"}
+                    {s?.best != null ? ` · ${s.best.toFixed(0)} dB` : ""}
+                  </>
+                )}
               </span>
             </>
           );
         }}
       />
 
-      {checkedIds.length > 0 && p.showTray !== false ? (
-        <SelectionTray nodes={p.nodes} ids={checkedIds} network={p.network} onBulk={p.onBulk} onTags={p.onTags} onSetChecked={p.onSetChecked} onDelete={p.onDeleteMany} readOnly={!!p.readOnly} />
-      ) : null}
-
-      <details className="bulk">
-        <summary>Add a node by coordinates</summary>
-        <label className="field">
-          <span>Latitude, longitude</span>
-          <input placeholder="36.1507, -85.4376" value={coords} onChange={(e) => setCoords(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Name (optional)</span>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} />
-        </label>
-        <button
-          disabled={!parsed}
-          onClick={() => {
-            if (!parsed) return;
-            p.onAddAt(parsed[0], parsed[1], newName.trim());
-            setCoords("");
-            setNewName("");
-          }}
-        >
-          Add node
-        </button>
-        {coords && !parsed ? <p className="hint err">Enter “latitude, longitude” in decimal degrees.</p> : null}
-      </details>
+      {p.readOnly ? null : (
+        <details className="bulk">
+          <summary>Add a node by coordinates</summary>
+          <label className="field">
+            <span>Latitude, longitude</span>
+            <input placeholder="36.1507, -85.4376" value={coords} onChange={(e) => setCoords(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>Name (optional)</span>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </label>
+          <button
+            disabled={!parsed}
+            onClick={() => {
+              if (!parsed) return;
+              p.onAddAt(parsed[0], parsed[1], newName.trim());
+              setCoords("");
+              setNewName("");
+            }}
+          >
+            Add node
+          </button>
+          {coords && !parsed ? <p className="hint err">Enter “latitude, longitude” in decimal degrees.</p> : null}
+        </details>
+      )}
     </Card>
   );
 }

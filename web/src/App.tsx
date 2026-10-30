@@ -31,6 +31,8 @@ import { BottomNav, type NavItem } from "./shell/BottomNav";
 import { BottomSheet } from "./shell/BottomSheet";
 import type { Snap } from "./shell/sheet";
 import { usePhone } from "./shell/usePhone";
+import { clickWord, coarsePointer } from "./ui/pointer";
+import { useBackToClose } from "./shell/useBackToClose";
 import { terrain } from "./engine/terrain";
 import { ToolRail, type Tool } from "./shell/ToolRail";
 import { devMode, useStoredFlag } from "./shell/uiMode";
@@ -96,7 +98,7 @@ export function App({ auth }: { auth: AuthContext }) {
   linkOpenRef.current = selectedLink !== null;
   const [compareId, setCompareId] = useState<string | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
+  const [focus, setFocus] = useState<{ lat: number; lon: number; key: number; fit?: [[number, number], [number, number]] } | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [addMode, setAddMode] = useState(false);
   const addModeRef = useRef(false);
@@ -128,6 +130,8 @@ export function App({ auth }: { auth: AuthContext }) {
   phoneRef.current = phone;
   /** the phone's bottom sheet: which panel it shows, and how tall */
   const [sheet, setSheet] = useState<{ panel: "lists" | "details" | null; snap: Snap }>({ panel: null, snap: "half" });
+  /** a link picked in the phone's Lists sheet: marked on the map, its profile opens from the sheet's strip */
+  const [listLink, setListLink] = useState<string | null>(null);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
@@ -182,7 +186,9 @@ export function App({ auth }: { auth: AuthContext }) {
     setLocalProjects(local);
   }, [dataReady, auth.user.id]);
 
-  const { links: allLinks, status } = useLinks(project.nodes, project.settings, dragging, ready, project.id);
+  const { links: allLinks, status, analysed } = useLinks(project.nodes, project.settings, dragging, ready, project.id);
+  /** No links worked out yet for this project (the engine is loading, or the first analysis runs): panels say so instead of showing empty results. */
+  const analysing = !analysed && !status.error;
   const { links: otherAllLinks, status: otherStatus } = useLinks(other?.nodes ?? NO_NODES, other?.settings ?? project.settings, false, ready && !!other, other?.id ?? "none");
   const links = useMemo(() => (project.settings.showNone ? allLinks : allLinks.filter((l) => l.class !== "none")), [allLinks, project.settings.showNone]);
   const ghostLinks = useMemo(() => (other ? otherAllLinks.filter((l) => l.class !== "none") : []), [other, otherAllLinks]);
@@ -198,7 +204,7 @@ export function App({ auth }: { auth: AuthContext }) {
   const health = useMemo(() => analyzeHealth(healthInput), [healthInput]);
   const failure = useMemo(() => (healthOpts.failedId && healthInput.nodeIds.includes(healthOpts.failedId) ? simulateFailure(healthInput, healthOpts.failedId) : null), [healthInput, healthOpts.failedId]);
   const healthMarks = useMemo(() => {
-    if (!healthOpts.highlight && !failure) return undefined;
+    if ((!healthOpts.highlight && !failure) || analysing) return undefined;
     const m: Record<string, string> = {};
     const add = (id: string, c: string) => (m[id] = m[id] ? `${m[id]} ${c}` : c);
     for (const n of project.nodes) if (n.gateway) add(n.id, "h-gateway");
@@ -213,7 +219,7 @@ export function App({ auth }: { auth: AuthContext }) {
       for (const id of failure.cutOff) add(id, "h-cut");
     }
     return m;
-  }, [healthOpts.highlight, failure, health, project.nodes]);
+  }, [healthOpts.highlight, failure, health, project.nodes, analysing]);
 
   const nodeById = useMemo(() => new Map(project.nodes.map((n) => [n.id, n])), [project.nodes]);
 
@@ -231,9 +237,6 @@ export function App({ auth }: { auth: AuthContext }) {
     [cov.layers, pubProject],
   );
   const sel = selectedNode ? nodeById.get(selectedNode) ?? null : null;
-  // the selected node's panel is at the top of the menu: show it
-  useEffect(() => {
-  }, [selectedNode]);
   const placement = usePlacement(project.id);
   const placementTemplate = project.nodes.find((n) => n.id === templateId) ?? null;
   const placementReq = useMemo(
@@ -267,6 +270,14 @@ export function App({ auth }: { auth: AuthContext }) {
     for (const l of allLinks) c[l.class]++;
     return c;
   }, [allLinks]);
+
+  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
+  // on a phone, Back closes the link view, then a raised sheet, before it leaves the app
+  const backLayer = !phone || fieldActive ? null : pairNodes ? "link" : sheet.panel && sheet.snap !== "peek" ? "sheet" : null;
+  useBackToClose(backLayer, () => {
+    if (backLayer === "link") setSelectedLink(null);
+    else setSheet((c) => ({ panel: null, snap: c.snap }));
+  });
 
   // ---- project switching -------------------------------------------------
   const switchTo = useCallback(
@@ -319,9 +330,10 @@ export function App({ auth }: { auth: AuthContext }) {
       } else if ((e.key === "n" || e.key === "N") && !readOnlyRef.current) chooseToolRef.current("add");
       else if ((e.key === "v" || e.key === "V")) chooseToolRef.current("select");
       else if ((e.key === "l" || e.key === "L")) chooseToolRef.current("link");
-      else if ((e.key === "p" || e.key === "P")) chooseToolRef.current("plan");
-      else if ((e.key === "b" || e.key === "B")) setBrowserOpen((x) => !x);
-      else if ((e.key === "i" || e.key === "I")) setInspectorOpen((x) => !x);
+      else if ((e.key === "p" || e.key === "P") && !readOnlyRef.current) chooseToolRef.current("plan");
+      // the side columns: a phone shows its lists and details in the bottom sheet instead
+      else if ((e.key === "b" || e.key === "B") && !phoneRef.current) setBrowserOpen((x) => !x);
+      else if ((e.key === "i" || e.key === "I") && !phoneRef.current) setInspectorOpen((x) => !x);
       else return;
       e.preventDefault();
     };
@@ -333,12 +345,37 @@ export function App({ auth }: { auth: AuthContext }) {
   useEffect(() => {
     if (selectedNode || checked.size > 0) {
       setInspectorTab("selection");
-      if (phoneRef.current) setSheet((s) => (s.panel === "details" ? s : { panel: "details", snap: "peek" }));
+      // on a phone the Lists sheet stays open (its strip offers the details); otherwise the details peek up
+      if (phoneRef.current) setSheet((s) => (s.panel === "details" || s.panel === "lists" ? s : { panel: "details", snap: "peek" }));
       else setInspectorOpen(true);
     }
   }, [selectedNode, checked, setInspectorOpen]);
 
   const fail = (e: unknown) => notifyError(e);
+
+  /** Bring up the details at a tab: the right-hand column, or the bottom sheet on a phone. */
+  const showDetails = (tab: "selection" | "plan" | "project") => {
+    setInspectorTab(tab);
+    if (phone) setSheet((c) => ({ panel: "details", snap: c.snap === "peek" ? "half" : c.snap }));
+    else setInspectorOpen(true);
+  };
+  /** The link picked in the phone's Lists sheet, while that sheet is showing. */
+  const shownListLink = phone && sheet.panel === "lists" && listLink && links.some((l) => l.key === listLink) ? listLink : null;
+  /** A link picked in the Links list: its profile opens, except in the phone's Lists sheet, which stays and marks it on the map. */
+  const pickLink = (k: string) => {
+    if (!(phone && sheet.panel === "lists")) return setSelectedLink(k);
+    setListLink(k);
+    const l = links.find((x) => x.key === k);
+    const a = l && nodeById.get(l.a);
+    const b = l && nodeById.get(l.b);
+    if (a && b) setFocus({ lat: (a.lat + b.lat) / 2, lon: (a.lon + b.lon) / 2, key: Date.now(), fit: [[Math.min(a.lon, b.lon), Math.min(a.lat, b.lat)], [Math.max(a.lon, b.lon), Math.max(a.lat, b.lat)]] });
+  };
+  /** The phone's bottom sheet: show the lists or the details, or hide them when they are showing. */
+  const openPanel = (panel: "lists" | "details") => {
+    setFieldMode(false);
+    chooseToolRef.current("select");
+    setSheet((c) => (c.panel === panel ? { panel: null, snap: c.snap } : { panel, snap: c.snap === "peek" ? "half" : c.snap }));
+  };
 
   /** Build the printable site report for a node and open it in a new tab. */
   const makeReport = async (node: MeshNode) => {
@@ -385,6 +422,13 @@ export function App({ auth }: { auth: AuthContext }) {
     } catch (e) {
       fail(e);
     }
+  };
+  /** Leave an open publication for the user's own project (the lists and the map show it again). */
+  const leavePublication = () => {
+    setViewPub(null);
+    setSection("mine");
+    setSelectedNode(null);
+    setSelectedLink(null);
   };
   const copyPublication = async () => {
     if (!viewPub?.data) return;
@@ -710,31 +754,27 @@ export function App({ auth }: { auth: AuthContext }) {
   const nodeListEl = (
     <>
         {ready ? (
-        <fieldset className="plain" disabled={readOnly}>
-        <NodeList
-            network={project.settings.network}
+          <NodeList
+            analysing={analysing}
             nodes={project.nodes}
             links={allLinks}
             focusId={selectedNode}
             checked={checked}
             weakBelowDb={project.settings.marginalMarginDb}
-            showTray={false}
             readOnly={readOnly}
-            onTags={tagMany}
-            onFocus={focusNode}
+            onFocus={(id) => (setListLink(null), focusNode(id))}
             onToggle={toggleChecked}
             onSetChecked={(ids) => setChecked(new Set(ids))}
-            onBulk={patchMany}
-            onDeleteMany={deleteMany}
             onAddAt={addNodeAt}
           />
-        </fieldset>
-        ) : null}
+        ) : (
+          <p className="hint card" role="status">Analysing…</p>
+        )}
     </>
   );
   const linkListEl = (
     <>
-        <LinkList nodes={project.nodes} links={links} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
+        <LinkList nodes={project.nodes} links={links} analysing={analysing} selectedKey={selectedLink ?? shownListLink} onSelect={pickLink} />
     </>
   );
   const commentsEl = (
@@ -780,6 +820,7 @@ export function App({ auth }: { auth: AuthContext }) {
           nodes={project.nodes}
           network={project.settings.network}
           health={health}
+          analysing={analysing}
           failure={failure}
           options={healthOpts}
           onOptions={setHealthOpts}
@@ -893,25 +934,16 @@ export function App({ auth }: { auth: AuthContext }) {
           </div>
         ) : null}
         <div className="map-status">
-          <StatusChip
-            saveState={sync.saveState}
-            readOnly={readOnly || !!pubProject}
-            online={online}
-            conflict={!!conflict}
-            onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
-            analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
-            jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
-          />
           {(addMode && !phone) || pickingArea || linkFirst !== undefined ? (
             <div className="mode-chip" role="status">
               {addMode
-                ? "Adding nodes: click the map for each one"
+                ? `Adding nodes: ${clickWord()} the map for each one`
                 : pickingArea
-                  ? "Pick the area: click the map"
+                  ? `Pick the area: ${clickWord()} the map`
                   : linkFirst === null
-                    ? "Inspect a link: click the first node"
-                    : `Inspect a link: now click the second node (from ${nodeById.get(linkFirst ?? "")?.name.trim() || "the first node"})`}
-              <button onClick={() => chooseToolRef.current("select")}>Done (Esc)</button>
+                    ? `Inspect a link: ${clickWord()} the first node`
+                    : `Inspect a link: now ${clickWord()} the second node (from ${nodeById.get(linkFirst ?? "")?.name.trim() || "the first node"})`}
+              <button onClick={() => chooseToolRef.current("select")}>{coarsePointer() ? "Done" : "Done (Esc)"}</button>
             </div>
           ) : null}
         </div>
@@ -945,7 +977,7 @@ export function App({ auth }: { auth: AuthContext }) {
           coverageImages={coverageImages}
           readOnly={readOnly}
           focus={focus}
-          selectedLinkKey={selectedLink}
+          selectedLinkKey={selectedLink ?? shownListLink}
           addMode={addMode}
           reticle={phone && addMode}
           onCenter={setMapCenter}
@@ -961,8 +993,7 @@ export function App({ auth }: { auth: AuthContext }) {
           onAddNodeAt={pubProject ? undefined : (lat, lon) => addNodeAt(lat, lon, `Node ${project.nodes.length + 1}`)}
           onPlanAround={pubProject ? undefined : (lat, lon) => {
             setPlacementArea((a) => ({ lat, lon, radiusKm: a?.radiusKm ?? 20 }));
-            setInspectorTab("plan");
-            setInspectorOpen(true);
+            showDetails("plan");
           }}
         />
         </div>
@@ -994,10 +1025,7 @@ export function App({ auth }: { auth: AuthContext }) {
     setAddMode(next === "add");
     setPickingArea(next === "plan");
     setLinkFirst(next === "link" ? null : undefined);
-    if (next === "plan") {
-      setInspectorOpen(true);
-      setInspectorTab("plan");
-    }
+    if (next === "plan") showDetails("plan");
   };
   chooseToolRef.current = chooseTool;
 
@@ -1025,7 +1053,7 @@ export function App({ auth }: { auth: AuthContext }) {
     const cmds: Command[] = [];
     const act = (id: string, label: string, run: () => void, extra: Partial<Command> = {}) => cmds.push({ id, label, group: "Actions", run, ...extra });
     if (!publicView && !readOnly) {
-      act("add", "Add nodes (click the map)", () => chooseTool("add"), { shortcut: "N", keywords: "place new node" });
+      act("add", phone ? "Add nodes (place them at the cross)" : `Add nodes (${clickWord()} the map)`, () => chooseTool("add"), { shortcut: "N", keywords: "place new node" });
       act("plan", "Suggest sites in an area", () => chooseTool("plan"), { shortcut: "P", keywords: "placement where" });
     }
     act("link", "Inspect a link between two nodes", () => chooseTool("link"), { shortcut: "L", keywords: "path profile pair" });
@@ -1113,12 +1141,13 @@ export function App({ auth }: { auth: AuthContext }) {
             {checked.size > 0 ? (
               <SelectionTray nodes={project.nodes} ids={project.nodes.filter((n) => checked.has(n.id)).map((n) => n.id)} network={project.settings.network} onBulk={patchMany} onTags={tagMany} onSetChecked={(ids) => setChecked(new Set(ids))} onDelete={deleteMany} readOnly={readOnly} />
             ) : null}
-            {sel ? nodePanelEl : checked.size > 0 ? null : <p className="hint card">Select a node on the map or in the list to see and edit it here. Shift-drag on the map to select several. Click a link to open its profile under the map.</p>}
+            {sel ? nodePanelEl : checked.size > 0 ? null : <p className="hint card">{coarsePointer() ? "Select a node on the map or in the list to see and edit it here. Tap a link to open its profile." : "Select a node on the map or in the list to see and edit it here. Shift-drag on the map to select several. Click a link to open its profile under the map."}</p>}
             {commentsEl}
           </>
         ) : null}
         {inspectorTab === "plan" ? (
           <>
+            {pubProject ? <p className="hint card" id="plan-published">Heatmaps and suggested sites are not part of a published project. Copy it to your projects to plan with it.</p> : null}
             {coverageEl}
             {placementEl}
           </>
@@ -1128,12 +1157,14 @@ export function App({ auth }: { auth: AuthContext }) {
             <section className="card flat" id="project-summary">
               <h3 className="flat-title">{project.name}</h3>
               <p className="lmeta">
-                {project.nodes.length} nodes · {allLinks.length - counts.none} links
-                <span className="chips">
-                  <b className="c clear">{counts.clear}</b>
-                  <b className="c marginal">{counts.marginal}</b>
-                  <b className="c obstructed">{counts.obstructed}</b>
-                </span>
+                {project.nodes.length} nodes · {analysing ? "analysing links…" : `${allLinks.length - counts.none} links`}
+                {analysing ? null : (
+                  <span className="chips">
+                    <b className="c clear">{counts.clear}</b>
+                    <b className="c marginal">{counts.marginal}</b>
+                    <b className="c obstructed">{counts.obstructed}</b>
+                  </span>
+                )}
               </p>
               <div className="btnrow">
                 <button onClick={() => setDialog("settings")}>Settings…</button>
@@ -1153,13 +1184,26 @@ export function App({ auth }: { auth: AuthContext }) {
   const browserEl = (
     <aside className="browser2" aria-label="Lists">
       <div className="tabs2" role="tablist">
-        {([["nodes", `Nodes (${project.nodes.length})`], ["links", `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => { setBrowserTab(id); if (id === "published") setSection("published"); else setSection("mine"); }}>
+        {([["nodes", `Nodes (${project.nodes.length})`], ["links", analysing ? "Links (…)" : `Links (${links.length})`], ["issues", "Issues"], ["published", "Published"]] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={browserTab === id} className={browserTab === id ? "on" : ""} onClick={() => {
+            setBrowserTab(id);
+            // with a publication open, its own nodes, links and issues are shown (read only) until the user goes back
+            if (id === "published" || viewPub) setSection("published");
+            else setSection("mine");
+          }}>
             {label}
           </button>
         ))}
       </div>
       <div className="pane">
+        {pubProject && viewPub && browserTab !== "published" ? (
+          <div className="banner pubstrip" id="published-strip">
+            Published: <b>{viewPub.title}</b> · read only
+            <div className="row-actions">
+              <button onClick={leavePublication}>Back to my project</button>
+            </div>
+          </div>
+        ) : null}
         {browserTab === "nodes" ? nodeListEl : null}
         {browserTab === "links" ? linkListEl : null}
         {browserTab === "issues" ? healthEl : null}
@@ -1197,27 +1241,28 @@ export function App({ auth }: { auth: AuthContext }) {
           readOnly={readOnly || publicView}
           online={online}
           conflict={!!conflict}
-          onConflict={() => (setInspectorTab("project"), setInspectorOpen(true))}
-          analysis={{ busy: status.busy, done: status.done, total: status.total, error: status.error }}
+          onConflict={() => showDetails("project")}
+          analysis={{ busy: status.busy || analysing, done: status.done, total: status.total, error: status.error }}
           jobsRunning={cov.layers.filter((l) => l.state === "queued" || l.state === "running").length + (placement.running ? 1 : 0)}
         />
       }
       onField={() => setFieldMode(true)}
+      inField={fieldActive}
+      onPlan={() => setFieldMode(false)}
       fieldDisabled={!ready || publicView || !project.id}
       user={{ displayName: auth.user.displayName, isAdmin: auth.user.role === "admin" }}
       onHelp={() => setDialog("help")}
       onAccount={() => setDialog("account")}
       onAdmin={() => setDialog("admin")}
       onSignOut={() => void auth.signOut()}
-      browserOpen={browserOpen}
-      inspectorOpen={inspectorOpen}
-      onToggleBrowser={() => setBrowserOpen((v) => !v)}
-      onToggleInspector={() => setInspectorOpen((v) => !v)}
+      browserOpen={phone ? sheet.panel === "lists" : browserOpen}
+      inspectorOpen={phone ? sheet.panel === "details" : inspectorOpen}
+      onToggleBrowser={() => (phone ? openPanel("lists") : setBrowserOpen((v) => !v))}
+      onToggleInspector={() => (phone ? openPanel("details") : setInspectorOpen((v) => !v))}
     />
   );
 
 
-  const fieldActive = fieldMode && ready && !!ownProject.id && !pubProject;
   const fieldEl = fieldActive ? (
     <div className="fieldhost">
       <FieldMode
@@ -1232,13 +1277,9 @@ export function App({ auth }: { auth: AuthContext }) {
   ) : null;
 
   if (phone) {
+    const pickedLink = shownListLink ? links.find((x) => x.key === shownListLink) ?? null : null;
     const showSheet = !!sheet.panel && !pairNodes && !fieldActive;
     const navActive: NavItem = fieldActive ? "field" : tool === "add" ? "add" : sheet.panel === "lists" ? "lists" : sheet.panel === "details" ? "details" : "map";
-    const openPanel = (panel: "lists" | "details") => {
-      setFieldMode(false);
-      chooseToolRef.current("select");
-      setSheet((c) => (c.panel === panel ? { panel: null, snap: c.snap } : { panel, snap: c.snap === "peek" ? "half" : c.snap }));
-    };
     const onNav = (i: NavItem) => {
       if (i === "map") {
         setFieldMode(false);
@@ -1274,8 +1315,26 @@ export function App({ auth }: { auth: AuthContext }) {
                           Edit
                         </button>
                       </span>
+                    ) : sheet.panel === "lists" && pickedLink ? (
+                      <span id="list-pick">
+                        <b>
+                          {nodeById.get(pickedLink.a)?.name.trim() || "?"} – {nodeById.get(pickedLink.b)?.name.trim() || "?"}
+                        </b>{" "}
+                        · {pickedLink.class}
+                        <button className="on" onClick={() => setSelectedLink(pickedLink.key)}>
+                          Open details
+                        </button>
+                      </span>
+                    ) : sheet.panel === "lists" && sel ? (
+                      <span id="list-pick">
+                        <b>{sel.name.trim() || "(unnamed)"}</b> · {sel.status} · {connections.length} link{connections.length === 1 ? "" : "s"}
+                        <button className="on" onClick={() => setSheet({ panel: "details", snap: "half" })}>
+                          Open details
+                        </button>
+                      </span>
                     ) : null
                   }
+                  summaryAlways={sheet.panel === "lists"}
                 >
                   {sheet.panel === "lists" ? browserEl : inspectorEl}
                 </BottomSheet>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { analyzeWithProfile, SPACING_FULL_M } from "../engine/analysis";
 import { GOOD_CLEARANCE_PCT, suggestRaise, type PairNote, type Raise } from "../engine/pairInfo";
 import { NumberField } from "../ui/NumberField";
+import { clickWord, coarsePointer } from "../ui/pointer";
 import { LINK_COLORS } from "../map/MapView";
 import { highestAwayFromEnds, pointOnPath } from "../profilePick";
 import type { LinkResult, MeshNode, Settings, TerrainMode } from "../types";
@@ -116,7 +117,7 @@ export function ProfileChart({ a, b, settings, onClose, onPlaceNode, onCursor, r
           </div>
         </>
       ) : (
-        <p className="hint tight">Tap the profile to pick a spot, or jump to the highest point, then place a node there.</p>
+        <p className="hint tight">{clickWord(true)} the profile to pick a spot, or jump to the highest point, then place a node there.</p>
       )}
     </div>
   ) : null;
@@ -235,7 +236,8 @@ export function ProfileSvg(props: { data: ProfileData; a: MeshNode; b: MeshNode;
     if (e.key === "ArrowRight") (e.preventDefault(), setHover(Math.min(n - 1, at + step)));
     else if (e.key === "ArrowLeft") (e.preventDefault(), setHover(Math.max(0, at - step)));
     else if ((e.key === "Enter" || e.key === " ") && onPick && hover !== null) (e.preventDefault(), onPick(Math.min(n - 2, Math.max(1, hover))));
-    else if (e.key === "Escape") setHover(null);
+    // Esc first clears the spot the arrow keys moved to; a second Esc closes the link view as usual
+    else if (e.key === "Escape" && hover !== null) (e.stopPropagation(), setHover(null));
   };
   const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const i = indexAt(e);
@@ -389,7 +391,7 @@ function Body(props: { data: ProfileData; a: MeshNode; b: MeshNode; settings: Se
             {f((100 * (s.ray_m[hover] - s.terrain_eff_m[hover])) / (s.fresnel_m[hover] || Infinity), 0)} % of F1
           </>
         ) : (
-          "Point at the profile for details, or click it to pick a spot."
+          coarsePointer() ? "Drag a finger along the profile for details, or tap it to pick a spot." : "Point at the profile for details, or click it to pick a spot."
         )}
       </div>
       <div className="heights">

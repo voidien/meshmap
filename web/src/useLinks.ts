@@ -52,5 +52,7 @@ export function useLinks(nodes: MeshNode[], settings: Settings, dragging: boolea
     return () => clearTimeout(timer);
   }, [nodes, settings, dragging, ready, key]);
 
-  return { links: results.current.get(key) ?? NO_LINKS, status };
+  // false until the first analysis for this key has finished (the links are then only stale while a newer one runs)
+  const analysed = results.current.has(key);
+  return { links: results.current.get(key) ?? NO_LINKS, status, analysed };
 }

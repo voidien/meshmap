@@ -321,7 +321,7 @@ details.more { margin-top: 8px; } details.more > summary { cursor: pointer; font
 .settings-layout nav button { text-align: left; }
 .settings-page { min-width: 0; max-height: 70vh; overflow-y: auto; padding-right: 6px; }
 .settings-page h3 { margin-top: 0; }
-@media (max-width: 700px) { .settings-layout { grid-template-columns: 1fr; } .settings-layout nav { grid-auto-flow: column; overflow-x: auto; } }
+@media (max-width: 700px) { .settings-layout { grid-template-columns: 1fr; } .settings-layout nav { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; } }
 
 /* ---- phase 2: the new layout (?ui=v2) ---- */
 .app2 { display: grid; grid-template-rows: 48px minmax(0, 1fr); height: 100%; height: 100dvh; background: var(--bg); }
@@ -337,6 +337,8 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 .popover { position: relative; }
 .popmenu { position: absolute; top: calc(100% + 6px); min-width: 240px; max-width: 320px; z-index: 40; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.25); padding: 6px; display: grid; gap: 2px; }
 .popmenu.left { left: 0; } .popmenu.right { right: 0; }
+/* a long menu scrolls instead of running off a short screen */
+.popmenu { max-height: calc(100dvh - 60px); overflow-y: auto; }
 .popmenu button { text-align: left; border: 0; background: transparent; border-radius: 6px; padding: 6px 10px; }
 .popmenu button:hover:not(:disabled), .popmenu button.sel { background: #eef2ff; }
 .popmenu button.danger-text { color: var(--danger); }
@@ -359,8 +361,6 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 .pane { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .card.flat { padding: 10px 12px; } .flat-title { margin: 0 0 6px; font-size: 15px; }
 .browser2 .nodelist, .browser2 .links { max-height: none; }
-.map-status .status-chip { display: none; }
-.map-status { top: 56px; }
 .danger-text { color: var(--danger); }
 .palette { width: min(640px, 96vw); padding-top: 12px; }
 .palette-input { width: 100%; font-size: 16px; padding: 10px 12px; }
@@ -405,11 +405,13 @@ kbd { font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; borde
 }
 
 /* ---- phase 3: virtual lists, chips, selection tray ---- */
-.vlist { overflow-y: auto; position: relative; }
+.vlist { overflow-y: auto; position: relative; overflow-anchor: none; } /* the rows change under the scroll: the browser must not re-anchor it */
 .vlist.fill { max-height: calc(100dvh - 360px); min-height: 160px; }
 .vlist ul { list-style: none; margin: 0; padding-left: 0; padding-right: 0; box-sizing: content-box; }
 .vlist .nodelist, .vlist .links { max-height: none; overflow: visible; }
 .vlist .nodelist li, .vlist .links li { overflow: hidden; box-sizing: border-box; }
+.vlist:focus { outline: none; }
+.vlist li:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .vlist .lname, .vlist .nname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asym { color: #8a5a00; font-size: 11px; }
 .chips-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; align-items: center; }
@@ -437,6 +439,8 @@ select.chip { padding: 1px 6px; width: auto; }
 .sheet-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .sheet .browser2, .sheet .inspector2 { position: static; width: auto; box-shadow: none; border: 0; flex: 1; min-height: 0; background: var(--card); }
 .sheet.peek .pane { display: none; }
+/* a peek with a summary line has no room for the tabs: they would show cut in half */
+.sheet.peek .sheet-summary + .sheet-body .tabs2 { display: none; }
 .sheet .vlist.fill { max-height: none; min-height: 120px; }
 .bottomnav { display: flex; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 17; }
 .bottomnav button { flex: 1; border: 0; border-radius: 0; background: transparent; display: grid; place-items: center; align-content: center; gap: 0; min-height: 56px; font-size: 20px; border-top: 3px solid transparent; }
@@ -449,7 +453,6 @@ select.chip { padding: 1px 6px; width: auto; }
 .reticle-strip .where { flex: 1; font-variant-numeric: tabular-nums; font-size: 13px; min-width: 0; }
 .fieldhost { flex: 1; min-height: 0; position: relative; }
 .fieldhost .field-mode { position: static; inset: auto; height: 100%; z-index: auto; }
-.body2.in-field { display: block; }
-.body2.phone.in-field { display: flex; }
+.body2.in-field { display: flex; flex-direction: column; }
 /* no pointer to hover with: the elevation readout would only show the last tap, so it stays out of the way (long press for the numbers) */
 @media (pointer: coarse) { .elev-readout { display: none; } }

@@ -53,11 +53,11 @@ This layout was first behind a switch (`?ui=v2`); the switch and the classic lay
 - **Tool rail** (left of the map): Select `V`, Add nodes `N` (stays on), Inspect a link between two nodes `L` (click two nodes), Suggest sites `P`, 3D, node names.
 - **Lists** (left, `B`): Nodes, Links, Issues (mesh health), Published. Full height, no collapsing.
 - **Details** (right, `I`): *Selection* (the node's panel and comments; opens by itself when a node is picked), *Plan* (heatmaps and suggested sites), *Project* (counts, settings / history / export shortcuts, banners, foliage calibration, comments).
-- **Command palette** (`Ctrl/Cmd+K` or `/`, in both layouts): jump to a node, switch project, run an action, export, or type a position (`36.15, -85.43`) to go there or add a node there. Works offline.
-- **Settings dialog** with sections (Network & radio, Link quality, Terrain & trees, Propagation, Coverage heatmaps) and one-click *Quick estimate (50 / 50)* and *Design margin (90 / 90)*. The classic sidebar shows the same sections in its card.
+- **Command palette** (`Ctrl/Cmd+K` or `/`): jump to a node, switch project, run an action, export, or type a position (`36.15, -85.43`) to go there or add a node there. Works offline.
+- **Settings dialog** with sections (Network & radio, Link quality, Terrain & trees, Propagation, Coverage heatmaps) and one-click *Quick estimate (50 / 50)* and *Design margin (90 / 90)*.
 - **One "usable link" threshold**: new project setting `usableMarginDb` (default 6 dB, the old default of both) is used by mesh health and by suggested sites; the "good" threshold (`marginalMarginDb`, default 10 dB) keeps its job for link colours. Mesh health and the suggestion panel edit the same figure.
 - On narrow screens the lists and details become overlays over the map (the phone layout proper is Phase 4).
-- `App.tsx` now names the sidebar sections and the map as elements (`nodeListEl`, `healthEl`, `mapEl`...), so both layouts use the same pieces; both layouts were checked with browser tests.
+- `App.tsx` now names the sidebar sections and the map as elements (`nodeListEl`, `healthEl`, `mapEl`...), so the two layouts could share them while both existed (both were checked with browser tests then; the classic one has since been removed).
 
 Not in this phase (still to do): a global undo / redo, the Layers panel moved off the map, per-project tags, and the full set of Browser filters (Phase 3), and the issues list as an actionable list rather than the health card (Phase 3 / 6).
 
@@ -70,7 +70,7 @@ Tried with generated networks (developer commands `?dev=1`, then the palette: 10
 - **Mesh health** no longer tests every link by removing it: articulation points and bridges come from one depth-first pass, and only those (and gateways) are checked exactly. A randomised test compares it with the exact method on 400 graphs (with and without gateways, with ties); at 300 nodes / 4,761 links it went from a 1.8 s pause to under 0.3 s.
 - **Lists**: Nodes and Links draw only the rows in view (26 of 300 rows in the test). Nodes: search (name, notes, tags), chips for planned / installed / problems (no link, or best link below the "good link" figure), tag filter, sort including *weakest first*. Links: search by node name, class chips, sort (weakest / longest / name), and a hint on links whose two directions differ by more than 6 dB.
 - **Tags** on nodes (node panel, selection tray, export to CSV and GeoJSON, import from CSV).
-- **Selection tray**: ticked nodes are edited together in one place (the details panel in the new layout, under the list in the classic one): only filled fields change, a line says what will happen before *Apply*, add or remove a tag on all of them, delete.
+- **Selection tray**: ticked nodes are edited together in one place (the details panel): only filled fields change, a line says what will happen before *Apply*, add or remove a tag on all of them, delete.
 - **Nodes CSV import** (`Import nodes (CSV)…` in the import / export card and the palette): preview of what the file holds and what was skipped, then *add all as new nodes* or *update nodes with the same name and add the rest*; the toast offers Undo. The "Nodes CSV" export is a valid file to import.
 
 Measured in the browser test (headless, software rendering): 300 nodes and 4,761 links analysed and shown in about 4.6 s from page load; during that time the page's longest blocked stretch was 0.2 s.
@@ -94,3 +94,13 @@ On a screen up to 700 px wide (`usePhone`) the layout changes; wider screens are
 - The tool rail floats over the map on a phone; the legend starts folded.
 
 Not done: the map keeps its own selected / placed state while Field mode is open only because the two maps are separate (a node picked in Field mode is not selected when you return); the full map overlay sheet with map padding; haptics other than the long-press buzz.
+
+## Review follow-ups (after Phase 4)
+
+- Fixes: the Plan | Field switch shows Field mode and Plan leaves it; Field mode fills the desktop screen; on a phone the Suggest sites tool, *Suggest sites around here*, the conflict chip and the top bar's panel buttons raise the sheet; the map menu stays on the map; viewers can search and filter the Nodes list; `P` does nothing in a view-only project; long top-bar menus scroll on short screens.
+- Until a project's links are worked out, the lists, the Issues tab, the project summary and the status chip say *Analysing…* instead of showing empty results (every node "isolated").
+- On a phone, Back closes an open link view, then a raised sheet, before it leaves the app (one history entry, taken back off when they are closed another way).
+- The map credits start folded behind their (i) button.
+- The Nodes and Links lists work from the keyboard (one Tab stop, arrow keys / Home / End / Page Up / Down, Enter or Space opens a row).
+- A published project's Nodes, Links and Issues can be browsed (read only, with *Back to my project*); its Plan tab says why it is empty.
+- On a phone, picking in the Lists sheet keeps the list (a strip at the top names the pick, with *Open details*); touch screens say "tap" instead of "click".

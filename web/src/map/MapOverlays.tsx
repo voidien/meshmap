@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { bearingDeg, compass, distanceM, fmtDistance } from "../fieldMath";
 import type { SpotInfo } from "../engine/terrain";
 import type { MeshNode } from "../types";
@@ -134,6 +134,14 @@ export interface MenuState {
 export function MapContextMenu(p: { menu: MenuState; nodes: MeshNode[]; readOnly: boolean; onClose: () => void; onAddNode?: (lat: number, lon: number) => void; onPlanAround?: (lat: number, lon: number) => void }) {
   const { menu: m } = p;
   const [copied, setCopied] = useState<string | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(m.y);
+  // keep the whole menu on the map: near the bottom edge (a long press low on a phone) it opens upwards
+  useLayoutEffect(() => {
+    const el = box.current;
+    const room = (el?.offsetParent as HTMLElement | null)?.clientHeight;
+    setTop(el && room ? Math.max(4, Math.min(m.y, room - el.offsetHeight - 4)) : m.y);
+  }, [m.y, m.info, copied]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && p.onClose();
     window.addEventListener("keydown", k);
@@ -152,7 +160,7 @@ export function MapContextMenu(p: { menu: MenuState; nodes: MeshNode[]; readOnly
   };
   const coords = `${m.lat.toFixed(6)}, ${m.lon.toFixed(6)}`;
   return (
-    <div className="ctxmenu" style={{ left: m.x, top: m.y }} role="menu" id="map-context-menu" onContextMenu={(e) => e.preventDefault()}>
+    <div ref={box} className="ctxmenu" style={{ left: m.x, top }} role="menu" id="map-context-menu" onContextMenu={(e) => e.preventDefault()}>
       <div className="ctxhead">{coords}</div>
       <div className="ctxinfo">
         {m.info ? (

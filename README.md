@@ -142,7 +142,7 @@ to one app at a time. This follows the official meshcore.js protocol and is test
 
 ## The screen
 
-- **Top bar**: the project menu (switch, rename, new, duplicate, Settings, History, Compare, Import / export, Share, Publish, Delete), search / command palette, status chip, **Plan | Field** switch (on a phone, Field mode is in the account menu), and the account menu (Account, Admin, Help, Sign out).
+- **Top bar**: the project menu (switch, rename, new, duplicate, Settings, History, Compare, Import / export, Share, Publish, Delete), search / command palette, status chip, **Plan | Field** switch (on a phone, Field is in the bottom bar and the account menu), and the account menu (Account, Admin, Help, Sign out).
 - **Tool rail** (left of the map): Select `V`; Add nodes `N` (stays on until `Esc`); Inspect a link `L` (click two nodes); Suggest sites `P`; 3D; node names.
 - **Lists** (left, `B`): Nodes, Links, Issues (mesh health), Published projects.
 - **Details** (right, `I`): *Selection* (the node's panel, its comments, and the edit panel when several nodes are ticked), *Plan* (heatmaps and suggested sites), *Project* (counts, shortcuts, banners, foliage calibration, comments).
@@ -151,14 +151,14 @@ to one app at a time. This follows the official meshcore.js protocol and is test
 
 ## On a phone
 
-On a screen up to 700 px wide the app switches to a phone layout: a bottom bar (**Map, Lists, Add, Details, Field**) and a **bottom sheet** that rises from the bottom for the lists and the details. Drag its handle between peek, half and full height, or tap the handle to change size. Tapping a node shows a one-line summary at the bottom with an *Edit* button. **Add** puts a cross in the middle of the map: pan the map until the cross is on the spot (the strip shows the position and ground height) and press **Place here**; it stays on for the next node until *Done*. A **long press** on the map opens the right-click menu. In a link's profile, drag a finger along it to read the terrain and signal under it; tap to pick a spot. **Field** opens Field mode inside the same screen; **Map** goes back.
+On a screen up to 700 px wide the app switches to a phone layout: a bottom bar (**Map, Lists, Add, Details, Field**) and a **bottom sheet** that rises from the bottom for the lists and the details. Drag its handle between peek, half and full height, or tap the handle to change size. Tapping a node shows a one-line summary at the bottom with an *Edit* button. Picking a node or link in the Lists sheet keeps the list open: the pick is shown on the map and named at the top of the sheet, with *Open details*. **Add** puts a cross in the middle of the map: pan the map until the cross is on the spot (the strip shows the position and ground height) and press **Place here**; it stays on for the next node until *Done*. A **long press** on the map opens the right-click menu. In a link's profile, drag a finger along it to read the terrain and signal under it; tap to pick a spot. **Field** opens Field mode inside the same screen; **Map** goes back. The phone's **Back** button closes an open link view, then a raised sheet, before it leaves the app.
 
 ## Working with many nodes
 
 - **Map**: nodes are drawn on the map itself and cluster when you zoom out. Click a node to select it (then drag it). **Shift- or Ctrl-click** ticks nodes; **Shift-drag** draws a box and ticks everything inside it (Ctrl or Cmd adds to what is ticked).
-- **Lists**: Nodes and Links only draw the rows in view, so hundreds are fine. Filter Nodes by name, notes or tag, by status, by *problems* (no link, or only weak ones), or by tag; sort by *weakest first*. Filter Links by node name or class; links whose two directions differ by more than 6 dB are marked.
+- **Lists**: Nodes and Links only draw the rows in view, so hundreds are fine. Filter Nodes by name, notes or tag, by status, by *problems* (no link, or only weak ones), or by tag; sort by *weakest first*. From the keyboard: Tab to a list, move with the arrow keys (Home / End, Page Up / Down), Enter opens the row. Filter Links by node name or class; links whose two directions differ by more than 6 dB are marked.
 - **Tags**: give nodes labels such as "phase 1" (node panel), tag many at once, filter by them. They are saved with the project and in the CSV and GeoJSON exports.
-- **Edit many at once**: ticked nodes get one panel (the details panel in the new layout): fill in only the fields to change, read the line that says what will change, press Apply. The same panel adds or removes a tag on all of them, or deletes them.
+- **Edit many at once**: ticked nodes get one panel (in the details panel): fill in only the fields to change, read the line that says what will change, press Apply. The same panel adds or removes a tag on all of them, or deletes them.
 - **Import nodes from a CSV file** (Import / export, or Ctrl+K): a header row with `name`, `lat`, `lon`, optionally `height_agl_m`, `client_height_m`, `tx_dbm`, `gain_dbi`, `cable_loss_db`, `preset`, `status`, `notes`, `tags` (separated by semicolons). You see what was found before anything changes, and choose *add all* or *update the nodes with the same name*. The "Nodes CSV" export is a valid file.
 - Link analysis runs in the background, so the map stays usable while hundreds of links are worked out.
 

@@ -10,6 +10,7 @@ import { circleRing, type Area } from "../placement";
 import { beamGeoJSON } from "./beams";
 import { buildContours } from "./contours";
 import { cursorCss } from "./cursors";
+import { coarsePointer } from "../ui/pointer";
 import { DEFAULT_LAYERS, ElevationReadout, LayersControl, loadLayers, MapContextMenu, RELIEF_STOPS, saveLayers, type MapLayers, type MenuState } from "./MapOverlays";
 import { terrain, type SpotInfo } from "../engine/terrain";
 import type { Link, MeshNode } from "../types";
@@ -32,8 +33,8 @@ interface Props {
   coverageImages: { id: string; url: string; bounds: { west: number; south: number; east: number; north: number }; opacity: number }[];
   /** Viewers can look but not move nodes. */
   readOnly: boolean;
-  /** Ask the map to centre on a point; a new `key` triggers a move. */
-  focus: { lat: number; lon: number; key: number } | null;
+  /** Ask the map to centre on a point (or to show the box `fit`, such as both ends of a link); a new `key` triggers a move. */
+  focus: { lat: number; lon: number; key: number; fit?: [[number, number], [number, number]] } | null;
   selectedLinkKey: string | null;
   /** The area being planned for and the sites suggested for it. */
   placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
@@ -127,7 +128,6 @@ function pointsGeoJSON(nodes: MeshNode[]): GeoJSON.FeatureCollection {
 
 const CLASS_COLOR: maplibregl.ExpressionSpecification = ["match", ["get", "class"], "clear", LINK_COLORS.clear, "marginal", LINK_COLORS.marginal, "obstructed", LINK_COLORS.obstructed, LINK_COLORS.none];
 
-const coarsePointer = () => typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches;
 const nodeLabel = (n: MeshNode) => `${n.letter ? n.letter + " · " : ""}${n.name.trim() || "node"}`;
 
 /** The nodes as map features: what the circle and label layers read (status, ticked, health marks, label, drawing priority). */
@@ -186,6 +186,17 @@ export function MapView(p: Props) {
       canvasContextAttributes: { antialias: true },
     });
     mapRef.current = map;
+    // the map credits (compact by default) start folded behind their (i) button: open, they covered the legend and
+    // the elevation readout until the first drag
+    const foldCredits = () => {
+      const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+      if (!el) return;
+      el.classList.remove("maplibregl-compact-show");
+      map.off("styledata", foldCredits);
+      map.off("sourcedata", foldCredits);
+    };
+    map.on("styledata", foldCredits);
+    map.on("sourcedata", foldCredits);
     // the map's box changes when the link drawer opens or the menu hides: follow it
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(container.current!);
@@ -666,7 +677,8 @@ export function MapView(p: Props) {
   useEffect(() => {
     const map = mapRef.current;
     const f = latest.current.focus;
-    if (map && f) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 11), duration: 500 });
+    if (map && f?.fit) map.fitBounds(f.fit, { padding: 40, maxZoom: 13, duration: 500 });
+    else if (map && f) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 11), duration: 500 });
   }, [p.focus?.key]);
 
   // zoom to the nodes when the open project / comparison changes (and on first load)

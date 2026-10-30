@@ -25,6 +25,9 @@ export interface TopBarProps {
   onPalette: () => void;
   status: ReactNode;
   onField: () => void;
+  /** Field mode is open (the switch shows it, and Plan goes back) */
+  inField: boolean;
+  onPlan: () => void;
   fieldDisabled: boolean;
   user: { displayName: string; isAdmin: boolean };
   onHelp: () => void;
@@ -97,10 +100,10 @@ export function TopBar(p: TopBarProps) {
       <span className="spacer" />
       <div className="topstatus">{p.status}</div>
       <div className="modeswitch" role="group" aria-label="Mode">
-        <button className="on" aria-pressed="true">
+        <button id="mode-plan" className={p.inField ? "" : "on"} aria-pressed={!p.inField} onClick={p.onPlan}>
           Plan
         </button>
-        <button id="mode-field" onClick={p.onField} disabled={p.fieldDisabled} aria-pressed="false" title="Standing at a site: GPS, predicted signal here, record readings">
+        <button id="mode-field" className={p.inField ? "on" : ""} onClick={p.onField} disabled={p.fieldDisabled} aria-pressed={p.inField} title="Standing at a site: GPS, predicted signal here, record readings">
           Field
         </button>
       </div>
