@@ -6,12 +6,14 @@ interface Props {
   onSnap: (s: Snap) => void;
   /** a line shown when the sheet is small */
   summary?: ReactNode;
+  /** show the summary line at every height, not only at peek */
+  summaryAlways?: boolean;
   label: string;
   children: ReactNode;
 }
 
 /** A panel that rises from the bottom of the screen: drag the handle (or tap it) between peek, half and full height. */
-export function BottomSheet({ snap, onSnap, summary, label, children }: Props) {
+export function BottomSheet({ snap, onSnap, summary, summaryAlways = false, label, children }: Props) {
   const box = useRef<HTMLElement>(null);
   const start = useRef<{ y: number; h: number; last: number; v: number } | null>(null);
   const [dragH, setDragH] = useState<number | null>(null);
@@ -55,7 +57,7 @@ export function BottomSheet({ snap, onSnap, summary, label, children }: Props) {
       >
         <i />
       </div>
-      {summary && snap === "peek" ? <div className="sheet-summary">{summary}</div> : null}
+      {summary && (snap === "peek" || summaryAlways) ? <div className="sheet-summary">{summary}</div> : null}
       <div className="sheet-body">{children}</div>
     </section>
   );

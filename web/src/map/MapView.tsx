@@ -32,8 +32,8 @@ interface Props {
   coverageImages: { id: string; url: string; bounds: { west: number; south: number; east: number; north: number }; opacity: number }[];
   /** Viewers can look but not move nodes. */
   readOnly: boolean;
-  /** Ask the map to centre on a point; a new `key` triggers a move. */
-  focus: { lat: number; lon: number; key: number } | null;
+  /** Ask the map to centre on a point (or to show the box `fit`, such as both ends of a link); a new `key` triggers a move. */
+  focus: { lat: number; lon: number; key: number; fit?: [[number, number], [number, number]] } | null;
   selectedLinkKey: string | null;
   /** The area being planned for and the sites suggested for it. */
   placement: { area: Area | null; sites: { rank: number; lat: number; lon: number }[] };
@@ -677,7 +677,8 @@ export function MapView(p: Props) {
   useEffect(() => {
     const map = mapRef.current;
     const f = latest.current.focus;
-    if (map && f) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 11), duration: 500 });
+    if (map && f?.fit) map.fitBounds(f.fit, { padding: 40, maxZoom: 13, duration: 500 });
+    else if (map && f) map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 11), duration: 500 });
   }, [p.focus?.key]);
 
   // zoom to the nodes when the open project / comparison changes (and on first load)

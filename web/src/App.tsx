@@ -97,7 +97,7 @@ export function App({ auth }: { auth: AuthContext }) {
   linkOpenRef.current = selectedLink !== null;
   const [compareId, setCompareId] = useState<string | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [focus, setFocus] = useState<{ lat: number; lon: number; key: number } | null>(null);
+  const [focus, setFocus] = useState<{ lat: number; lon: number; key: number; fit?: [[number, number], [number, number]] } | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [addMode, setAddMode] = useState(false);
   const addModeRef = useRef(false);
@@ -129,6 +129,8 @@ export function App({ auth }: { auth: AuthContext }) {
   phoneRef.current = phone;
   /** the phone's bottom sheet: which panel it shows, and how tall */
   const [sheet, setSheet] = useState<{ panel: "lists" | "details" | null; snap: Snap }>({ panel: null, snap: "half" });
+  /** a link picked in the phone's Lists sheet: marked on the map, its profile opens from the sheet's strip */
+  const [listLink, setListLink] = useState<string | null>(null);
   const [healthOpts, setHealthOpts] = useState<HealthOptions>({ hopLimit: NETWORKS.meshcore.hopLimit, highlight: true, failedId: "" });
   const [reportBusy, setReportBusy] = useState(false);
   const [section, setSection] = useState<"mine" | "published">("mine");
@@ -342,7 +344,8 @@ export function App({ auth }: { auth: AuthContext }) {
   useEffect(() => {
     if (selectedNode || checked.size > 0) {
       setInspectorTab("selection");
-      if (phoneRef.current) setSheet((s) => (s.panel === "details" ? s : { panel: "details", snap: "peek" }));
+      // on a phone the Lists sheet stays open (its strip offers the details); otherwise the details peek up
+      if (phoneRef.current) setSheet((s) => (s.panel === "details" || s.panel === "lists" ? s : { panel: "details", snap: "peek" }));
       else setInspectorOpen(true);
     }
   }, [selectedNode, checked, setInspectorOpen]);
@@ -354,6 +357,17 @@ export function App({ auth }: { auth: AuthContext }) {
     setInspectorTab(tab);
     if (phone) setSheet((c) => ({ panel: "details", snap: c.snap === "peek" ? "half" : c.snap }));
     else setInspectorOpen(true);
+  };
+  /** The link picked in the phone's Lists sheet, while that sheet is showing. */
+  const shownListLink = phone && sheet.panel === "lists" && listLink && links.some((l) => l.key === listLink) ? listLink : null;
+  /** A link picked in the Links list: its profile opens, except in the phone's Lists sheet, which stays and marks it on the map. */
+  const pickLink = (k: string) => {
+    if (!(phone && sheet.panel === "lists")) return setSelectedLink(k);
+    setListLink(k);
+    const l = links.find((x) => x.key === k);
+    const a = l && nodeById.get(l.a);
+    const b = l && nodeById.get(l.b);
+    if (a && b) setFocus({ lat: (a.lat + b.lat) / 2, lon: (a.lon + b.lon) / 2, key: Date.now(), fit: [[Math.min(a.lon, b.lon), Math.min(a.lat, b.lat)], [Math.max(a.lon, b.lon), Math.max(a.lat, b.lat)]] });
   };
   /** The phone's bottom sheet: show the lists or the details, or hide them when they are showing. */
   const openPanel = (panel: "lists" | "details") => {
@@ -747,7 +761,7 @@ export function App({ auth }: { auth: AuthContext }) {
             checked={checked}
             weakBelowDb={project.settings.marginalMarginDb}
             readOnly={readOnly}
-            onFocus={focusNode}
+            onFocus={(id) => (setListLink(null), focusNode(id))}
             onToggle={toggleChecked}
             onSetChecked={(ids) => setChecked(new Set(ids))}
             onAddAt={addNodeAt}
@@ -759,7 +773,7 @@ export function App({ auth }: { auth: AuthContext }) {
   );
   const linkListEl = (
     <>
-        <LinkList nodes={project.nodes} links={links} analysing={analysing} selectedKey={selectedLink} onSelect={(k) => setSelectedLink(k)} />
+        <LinkList nodes={project.nodes} links={links} analysing={analysing} selectedKey={selectedLink ?? shownListLink} onSelect={pickLink} />
     </>
   );
   const commentsEl = (
@@ -962,7 +976,7 @@ export function App({ auth }: { auth: AuthContext }) {
           coverageImages={coverageImages}
           readOnly={readOnly}
           focus={focus}
-          selectedLinkKey={selectedLink}
+          selectedLinkKey={selectedLink ?? shownListLink}
           addMode={addMode}
           reticle={phone && addMode}
           onCenter={setMapCenter}
@@ -1261,6 +1275,7 @@ export function App({ auth }: { auth: AuthContext }) {
   ) : null;
 
   if (phone) {
+    const pickedLink = shownListLink ? links.find((x) => x.key === shownListLink) ?? null : null;
     const showSheet = !!sheet.panel && !pairNodes && !fieldActive;
     const navActive: NavItem = fieldActive ? "field" : tool === "add" ? "add" : sheet.panel === "lists" ? "lists" : sheet.panel === "details" ? "details" : "map";
     const onNav = (i: NavItem) => {
@@ -1298,8 +1313,26 @@ export function App({ auth }: { auth: AuthContext }) {
                           Edit
                         </button>
                       </span>
+                    ) : sheet.panel === "lists" && pickedLink ? (
+                      <span id="list-pick">
+                        <b>
+                          {nodeById.get(pickedLink.a)?.name.trim() || "?"} – {nodeById.get(pickedLink.b)?.name.trim() || "?"}
+                        </b>{" "}
+                        · {pickedLink.class}
+                        <button className="on" onClick={() => setSelectedLink(pickedLink.key)}>
+                          Open details
+                        </button>
+                      </span>
+                    ) : sheet.panel === "lists" && sel ? (
+                      <span id="list-pick">
+                        <b>{sel.name.trim() || "(unnamed)"}</b> · {sel.status} · {connections.length} link{connections.length === 1 ? "" : "s"}
+                        <button className="on" onClick={() => setSheet({ panel: "details", snap: "half" })}>
+                          Open details
+                        </button>
+                      </span>
                     ) : null
                   }
+                  summaryAlways={sheet.panel === "lists"}
                 >
                   {sheet.panel === "lists" ? browserEl : inspectorEl}
                 </BottomSheet>
